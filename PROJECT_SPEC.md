@@ -16,7 +16,7 @@ Market-intelligence projects often fail by mixing research, prediction, backtest
 4. Convert model outputs into proposed long-or-cash signals.
 5. Backtest those signals with realistic execution timing, transaction costs, and slippage.
 6. Pass all proposed trades through an independent risk-management layer.
-7. In a later phase, submit only paper-trading orders after risk approval.
+7. In a later phase, submit only explicitly approved paper-trading orders after risk approval.
 
 ## Intended Users
 
@@ -38,7 +38,7 @@ This project is not intended for live-money trading, investment advice, or autom
 - Persist data and run metadata in SQLite.
 - Expose research and backtest results through a FastAPI backend.
 - Provide an interactive Streamlit dashboard.
-- Prepare for Alpaca paper trading in a later phase while explicitly prohibiting live-money trading.
+- Prepare for Alpaca paper-only order submission in a later phase while explicitly prohibiting live-money trading and automatic order submission.
 - Maintain a test suite with Pytest, formatting and linting with Ruff, and static type checking with MyPy.
 
 ## Version 1 Scope
@@ -77,6 +77,7 @@ This project is not intended for live-money trading, investment advice, or autom
 - No backward filling that introduces future information.
 - No signal execution on the same candle that generated the signal.
 - No hard-coded credentials or API keys.
+- No automatic paper-order submission when the application starts.
 
 ## Proposed Architecture
 
@@ -122,27 +123,67 @@ Core design rules:
 - Models produce predictions or scores only; they do not place orders.
 - Strategies convert predictions into proposed trades only; they do not execute trades directly.
 - Risk management independently validates every proposed trade.
-- Execution modules can only execute risk-approved paper trades.
+- Execution modules can only submit risk-approved paper orders when paper execution is deliberately enabled, dry-run mode is deliberately disabled, and explicit approval has been supplied.
 - Missing, stale, invalid, or uncertain required information must cause the system to refuse trading.
 
 ## Data Flow
 
 1. Load configuration from environment variables and typed settings objects.
-2. Ingest SPY daily OHLCV data from the configured source.
-3. Validate schema, date order, missing values, duplicate timestamps, price sanity, and volume sanity.
-4. Store validated raw data in SQLite.
-5. Generate features from historical observations without lookahead leakage.
-6. Generate labels for supervised learning, such as next-period return direction, while preserving chronological alignment.
-7. Split data chronologically into train, validation, and test periods.
-8. Train logistic regression and gradient boosting models.
-9. Evaluate models using time-aware metrics and store results.
-10. Convert model outputs into proposed long-or-cash signals.
-11. Shift signals so execution occurs no earlier than the next candle.
-12. Run proposed trades through risk management.
-13. Backtest approved trades with initial capital, cash accounting, transaction costs, and slippage.
-14. Persist backtest results, orders, positions, trades, metrics, and run metadata.
-15. Serve results through FastAPI and Streamlit.
-16. In a later phase, submit only risk-approved simulated orders to Alpaca paper trading.
+2. Ingest SPY daily OHLCV data through a market-data provider interface.
+3. Preserve the original vendor response as an immutable raw snapshot.
+4. Validate schema, NYSE trading-session order, missing values, duplicate trading-session dates, price sanity, and volume sanity.
+5. Build one consistently adjusted OHLCV series for features, labels, backtesting, and benchmark calculations.
+6. Store raw snapshots, adjusted datasets, dataset metadata, and validation results in SQLite.
+7. Generate features from historical observations available only through the close of trading day `t`.
+8. Generate the Version 1 label: whether entering SPY at the open of trading day `t + 1` and exiting at the open of trading day `t + 6` produces a positive return after estimated round-trip transaction costs and slippage.
+9. Split data chronologically into train, validation, and final test periods with at least five trading observations of gap between adjacent periods.
+10. Train logistic regression and gradient boosting models.
+11. Evaluate models using time-aware metrics and store results.
+12. Convert model outputs into proposed long-or-cash signals.
+13. Shift signals so entry occurs no earlier than the open of trading day `t + 1`.
+14. Run proposed trades through risk management.
+15. Backtest approved trades with initial capital, cash accounting, transaction costs, and slippage.
+16. Persist backtest results, orders, positions, trades, metrics, lineage, and run metadata.
+17. Serve results through FastAPI and Streamlit.
+18. In a later phase, submit only explicitly approved, risk-approved simulated orders to Alpaca paper trading.
+
+## Market-Data Provider and Adjusted-Price Policy
+
+- The data provider may remain undecided until Phase 3.
+- All market-data access must use a provider interface so vendor-specific behavior remains isolated.
+- Preserve the original vendor response as an immutable raw snapshot.
+- Use one consistently adjusted OHLCV series for features, labels, backtesting, and benchmark calculations.
+- Never mix raw and adjusted fields within one calculation.
+- Record the adjustment policy in dataset and model metadata.
+- Clearly document that adjusted-price backtesting approximates return distributions and corporate-action effects; it does not guarantee executable historical fills.
+
+## Exchange Calendar and Timezone Rules
+
+- Use the NYSE trading calendar.
+- Treat `America/New_York` as the market timezone.
+- Store timestamps in UTC when full timestamps are required.
+- Daily bars must correspond to valid exchange sessions.
+- Weekends and exchange holidays must not be treated as missing observations.
+- Reject duplicate trading-session dates.
+- Exclude incomplete current-session candles.
+
+## Data Lineage and Metadata Requirements
+
+Processed datasets and model runs should record the following when available:
+
+- Data provider.
+- Download timestamp.
+- Symbol.
+- Timeframe.
+- Adjustment policy.
+- First and last trading session.
+- Row count.
+- Dataset checksum.
+- Feature-schema version.
+- Label definition.
+- Git commit hash.
+- Python version.
+- Dependency versions.
 
 ## Module Responsibilities
 
@@ -150,22 +191,34 @@ Core design rules:
 
 - Load and validate runtime settings.
 - Use environment variables for secrets and external service settings.
-- Default paper trading to enabled.
-- Raise `RuntimeError` for any attempt to disable paper-trading mode.
+- Separate execution mode from execution permission.
+- Permit `EXECUTION_MODE` to be only `paper`.
+- Raise `RuntimeError` for any request for `live` execution.
+- Default `ENABLE_PAPER_EXECUTION` to `false`.
+- Default `DRY_RUN` to `true`.
+- Ensure application startup never automatically submits paper orders.
+- Require deliberate configuration and explicit approval before paper-order submission.
 - Provide typed configuration objects.
 
 ### Market Data
 
 - Fetch or load SPY daily OHLCV data.
+- Access market data only through a provider interface.
+- Keep provider-specific behavior isolated in provider adapters.
 - Normalize columns and timestamp handling.
 - Ensure all data is explicitly tied to SPY in Version 1.
+- Preserve immutable raw vendor snapshots.
+- Produce one consistently adjusted OHLCV series for downstream calculations.
 - Avoid embedding vendor-specific assumptions outside adapter modules.
 
 ### Data Validation
 
 - Validate required columns: date, open, high, low, close, adjusted close when available, and volume.
 - Validate chronological ordering.
-- Detect duplicate dates.
+- Validate that daily bars correspond to valid NYSE trading sessions.
+- Treat weekends and NYSE holidays as non-sessions, not missing observations.
+- Detect duplicate trading-session dates.
+- Exclude incomplete current-session candles.
 - Detect impossible OHLC values, non-positive prices, and invalid volumes.
 - Fail fast on missing data needed for modeling, backtesting, or trading decisions.
 
@@ -176,6 +229,7 @@ Core design rules:
 - Avoid centered windows.
 - Avoid backward filling that could introduce future information.
 - Preserve feature-to-label alignment explicitly.
+- Ensure future return and target columns never appear in model features.
 - Document each feature's economic or statistical intuition.
 
 ### Strategies
@@ -191,6 +245,9 @@ Core design rules:
 - Train only on chronologically valid training data.
 - Evaluate on later chronological periods.
 - Never randomly shuffle financial time-series observations.
+- Use at least five trading observations of gap between training and validation and between validation and final testing.
+- Apply the same minimum gap in time-series cross-validation.
+- Keep the final test period untouched until feature selection, model selection, probability calibration, and signal-threshold selection are complete.
 - Never communicate directly with broker or execution modules.
 
 ### Backtesting
@@ -199,7 +256,8 @@ Core design rules:
 - Include configurable transaction costs.
 - Include configurable estimated slippage.
 - Account for cash, position size, fills, equity curve, drawdown, and turnover.
-- Execute signals no earlier than the next candle after generation.
+- Execute entries no earlier than the open of trading day `t + 1` for predictions generated after the close of day `t`.
+- Use one consistently adjusted OHLCV series for features, labels, backtesting, and benchmarks.
 - Persist input parameters, assumptions, and results for reproducibility.
 
 ### Risk Management
@@ -207,6 +265,7 @@ Core design rules:
 - Independently evaluate every proposed trade before execution or backtesting.
 - Enforce no short selling.
 - Enforce no leverage.
+- Enforce a maximum of one open SPY position in Version 1.
 - Enforce maximum position and available-cash constraints.
 - Refuse trades when required price, cash, position, timestamp, or configuration information is missing or uncertain.
 - Ensure no model output can override risk limits.
@@ -215,10 +274,22 @@ Core design rules:
 
 - Reserved for a later development phase.
 - Support Alpaca paper trading only.
-- Default paper trading to enabled.
-- Raise `RuntimeError` if paper-trading mode is disabled.
+- `EXECUTION_MODE` may only be `paper`.
+- Raise `RuntimeError` for any request for `live` execution.
+- Default `ENABLE_PAPER_EXECUTION` to `false`.
+- Default `DRY_RUN` to `true`.
+- Starting the application must not automatically submit paper orders.
+- Paper-order submission must require deliberate configuration and explicit approval.
 - Refuse live-money endpoints, live account configuration, or any non-paper execution mode.
 - Accept only risk-approved orders.
+- Require unique signal identifiers.
+- Require unique client-order identifiers.
+- Reject duplicate orders.
+- Reject stale signals.
+- Provide a global kill switch.
+- Verify broker account type before order submission.
+- Verify paper endpoint before order submission.
+- Permit at most one open SPY position in Version 1.
 
 ### Database Persistence
 
@@ -252,14 +323,29 @@ Core design rules:
 
 ## Machine-Learning Objective
 
-The initial supervised-learning task should be a binary classification problem:
+The Version 1 supervised-learning task is exactly:
 
-- Predict whether SPY's next eligible return is positive after costs and execution assumptions, or alternatively whether the next-period close-to-close return is positive before costs if the distinction is clearly documented.
-- Use features available at candle `t`.
-- Generate predictions after candle `t` is complete.
-- Permit execution no earlier than candle `t + 1`.
+Using information available through the close of trading day `t`, predict whether entering SPY at the open of trading day `t + 1` and exiting at the open of trading day `t + 6` produces a positive return after estimated round-trip transaction costs and slippage.
+
+Target construction rules:
+
+- Features may use data only through the close of day `t`.
+- Prediction is generated after day `t` is complete.
+- Entry occurs no earlier than the open of `t + 1`.
+- Exit for the five-day target occurs at the open of `t + 6`.
+- The target is `1` only when the executable return after estimated costs is greater than zero.
+- Future return and target columns must never appear in model features.
+- The label definition must be recorded in dataset and model metadata.
 
 Model evaluation must preserve chronological order. Candidate metrics may include accuracy, precision, recall, F1, ROC AUC, calibration diagnostics, confusion matrix, directional hit rate, and strategy-level metrics from backtesting. Classification metrics must not be treated as evidence of profitability.
+
+## Chronological Splitting Requirements
+
+- Preserve chronological order.
+- Never randomly shuffle observations.
+- Use a gap of at least five trading observations between training and validation and between validation and final testing.
+- Apply the same minimum gap in time-series cross-validation.
+- Keep the final test period untouched until feature selection, model selection, probability calibration, and signal-threshold selection are complete.
 
 ## Backtesting Requirements
 
@@ -268,7 +354,8 @@ Model evaluation must preserve chronological order. Candidate metrics may includ
 - Support long-or-cash positions only.
 - Apply transaction costs on each trade.
 - Apply configurable slippage assumptions.
-- Use realistic execution timing: signals from candle `t` may execute no earlier than candle `t + 1`.
+- Use realistic execution timing: predictions generated after the close of day `t` may enter no earlier than the open of `t + 1`.
+- For the Version 1 target, model the five-trading-day exit at the open of `t + 6`.
 - Track cash, shares, market value, equity, returns, drawdown, orders, fills, and rejected trades.
 - Ensure the backtest engine cannot enter short positions or use leverage.
 - Keep backtest configuration and outputs reproducible.
@@ -284,6 +371,7 @@ Model evaluation must preserve chronological order. Candidate metrics may includ
   - Any symbol other than SPY.
   - Short positions.
   - Leverage.
+  - More than one open SPY position.
   - Orders that exceed available simulated cash after costs and slippage.
   - Orders not produced through the approved signal and risk workflow.
   - Any attempt to bypass risk limits using model confidence or model score.
@@ -291,11 +379,21 @@ Model evaluation must preserve chronological order. Candidate metrics may includ
 ## Paper-Trading Restrictions
 
 - Live-money trading must not be supported.
-- Paper trading must default to enabled.
-- Any attempt to disable paper-trading mode must raise `RuntimeError`.
+- Execution mode and execution permission are separate controls.
+- `EXECUTION_MODE` may only be `paper`.
+- Any request for `live` execution must raise `RuntimeError`.
+- `ENABLE_PAPER_EXECUTION` must default to `false`.
+- `DRY_RUN` must default to `true`.
+- Starting the application must not automatically submit paper orders.
+- Paper-order submission must require deliberate configuration and explicit approval.
 - Alpaca integration is deferred to a later development phase.
 - Paper execution adapters must never be imported by model modules.
 - Paper execution must accept only risk-approved order instructions.
+- Paper execution must reject duplicate orders and stale signals.
+- Paper execution must require unique signal identifiers and unique client-order identifiers.
+- Paper execution must include a global kill switch.
+- Paper execution must verify broker account type and paper endpoint before order submission.
+- Paper execution must permit at most one open SPY position in Version 1.
 - Credentials must be read only from secure runtime configuration sources and never hard-coded.
 - Credentials must never be logged, committed, or displayed in the dashboard.
 - If account type, endpoint, credentials, clock, market status, order state, or risk approval cannot be verified, the system must refuse to trade.
@@ -314,14 +412,27 @@ Test categories:
 
 Required safety tests:
 
-- Disabling paper-trading mode raises `RuntimeError`.
+- Requests for `live` execution raise `RuntimeError`.
 - Live-trading configuration is rejected.
+- `ENABLE_PAPER_EXECUTION` defaults to `false`.
+- `DRY_RUN` defaults to `true`.
+- Application startup does not submit paper orders.
+- Paper-order submission requires deliberate configuration and explicit approval.
 - Random train-test splitting is not used for market data.
 - Feature rows do not use future observations.
+- Future return and target columns are excluded from model features.
 - Centered rolling windows are not used.
 - Backward filling does not introduce future information.
-- Signals execute no earlier than the next candle.
+- Predictions generated after the close of day `t` may enter no earlier than the open of `t + 1`.
+- Chronological splits include at least five trading observations of gap between train, validation, and final test periods.
+- Time-series cross-validation applies the same minimum gap.
+- Final test data remains untouched until feature selection, model selection, probability calibration, and threshold selection are complete.
+- Daily bars map to valid NYSE trading sessions.
+- Duplicate trading-session dates are rejected.
+- Incomplete current-session candles are excluded.
 - Short selling and leverage are rejected.
+- More than one open SPY position is rejected.
+- Duplicate paper orders and stale paper signals are rejected.
 - Model output cannot bypass risk management.
 - Missing required trade information causes refusal to trade.
 
@@ -341,6 +452,7 @@ Required safety tests:
 - Pin or lock dependencies once the project is scaffolded.
 - Record Python version and tool versions.
 - Persist model parameters, feature configuration, split dates, backtest settings, transaction cost assumptions, slippage assumptions, and run timestamps.
+- Persist dataset lineage when available: data provider, download timestamp, symbol, timeframe, adjustment policy, first and last trading session, row count, dataset checksum, feature-schema version, label definition, Git commit hash, Python version, and dependency versions.
 - Use deterministic random seeds where applicable.
 - Preserve chronological data splits.
 - Store enough metadata to reproduce a model evaluation or backtest run from the same input data.
@@ -447,7 +559,7 @@ spy-market-agent/
 ### Phase 3: Configuration, Data Schema, and Validation
 
 - Implement typed settings.
-- Enforce paper-trading safety defaults.
+- Enforce execution-mode, paper-permission, and dry-run safety defaults.
 - Define SPY daily OHLCV schema.
 - Add validation logic and fixture tests.
 
@@ -509,7 +621,7 @@ Version 1 is done when:
 - Logistic regression and gradient boosting results are available.
 - Backtests run with USD 10,000 initial simulated capital.
 - Transaction costs and slippage are configurable and applied.
-- Signals execute no earlier than the next candle.
+- Predictions generated after the close of day `t` enter no earlier than the open of `t + 1`.
 - Risk management approves or rejects every proposed trade.
 - Short selling, leverage, non-SPY symbols, and live trading are rejected.
 - FastAPI exposes core read endpoints.
