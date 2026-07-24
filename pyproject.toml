@@ -1,0 +1,103 @@
+[build-system]
+requires = ["setuptools>=69,<81", "wheel>=0.43,<1"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spy-market-agent"
+version = "0.1.0"
+description = "Risk-controlled SPY market intelligence and paper-trading research scaffold."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+authors = [
+  { name = "Risk-Controlled SPY Market Intelligence Contributors" },
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "mypy>=1.10,<2",
+  "pytest>=8.2,<9",
+  "pytest-cov>=5,<8",
+  "ruff>=0.8,<1",
+]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["spy_market_agent*"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = [
+  "-q",
+  "-ra",
+  "--strict-config",
+  "--strict-markers",
+  "--cov=src/spy_market_agent",
+  "--cov-report=term-missing",
+]
+filterwarnings = [
+  "default",
+  "error::DeprecationWarning:spy_market_agent.*",
+  "error::PendingDeprecationWarning:spy_market_agent.*",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["src/spy_market_agent"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+  "ARG",
+  "B",
+  "C4",
+  "E",
+  "F",
+  "I",
+  "PTH",
+  "PT",
+  "RUF",
+  "SIM",
+  "UP",
+  "W",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["spy_market_agent"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "src"
+files = ["src", "tests"]
+exclude = [
+  "^\\.venv/",
+  "^venv/",
+]
+check_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+pretty = true
+show_error_codes = true
+strict_equality = true
+warn_redundant_casts = true
+warn_return_any = true
+warn_unreachable = true
+warn_unused_ignores = true

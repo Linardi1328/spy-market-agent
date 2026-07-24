@@ -3,26 +3,47 @@
 .env.*
 !.env.example
 
-# Python virtual environment
+# Python virtual environments
 .venv/
 venv/
 
 # Python-generated files
 __pycache__/
 *.py[cod]
+*$py.class
+
+# Tool caches and coverage
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
 
-# IDE and operating system
-.vscode/
-.DS_Store
+# Build, distribution, and editable-install output
+build/
+dist/
+*.egg-info/
+__editable__.*
 
-# Project-generated data
-data/raw/
-data/processed/
-artifacts/models/
-artifacts/reports/
-
-# Jupyter
+# Notebook checkpoints
 .ipynb_checkpoints/
+
+# IDE-local files
+.idea/
+.vscode/
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+
+# Downloaded data and generated artifacts
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+artifacts/models/*
+!artifacts/models/.gitkeep
+artifacts/reports/*
+!artifacts/reports/.gitkeep
