@@ -3,11 +3,13 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 from typing import Any, cast
 
 import pandas as pd
+from pydantic import ValidationError
 
-from spy_market_agent.market_data.calendar import TradingCalendar
+from spy_market_agent.market_data.calendar import CalendarDataError, TradingCalendar
 from spy_market_agent.market_data.checksum import compute_market_data_checksum
 from spy_market_agent.market_data.models import (
     ADJUSTMENT_POLICY,
@@ -126,6 +128,24 @@ def _is_finite_numeric_value(value: object) -> bool:
         return False
 
 
+def _is_missing_scalar(value: object) -> bool:
+    try:
+        missing = pd.isna(value)
+    except (TypeError, ValueError, AttributeError):
+        return False
+    if isinstance(missing, bool):
+        return missing
+    if getattr(missing, "ndim", None) != 0:
+        return False
+    item = getattr(missing, "item", None)
+    if callable(item):
+        try:
+            return bool(item())
+        except (TypeError, ValueError, AttributeError):
+            return False
+    return False
+
+
 def _validate_numeric_series(
     series: pd.Series,
     *,
@@ -186,6 +206,84 @@ def _validate_numeric_series(
             )
 
     return numeric, issues
+
+
+def _decimal_from_exact_scalar(value: object) -> Decimal:
+    if isinstance(value, Decimal):
+        return value
+    if isinstance(value, int):
+        return Decimal(value)
+    text = str(value).strip()
+    if not text:
+        raise InvalidOperation
+    return Decimal(text)
+
+
+def _validate_volume_series(series: pd.Series) -> tuple[pd.Series, list[ValidationIssue]]:
+    issues: list[ValidationIssue] = []
+    parsed_values: list[int | object] = []
+    max_int64 = Decimal(INT64_MAX)
+
+    for row_number, value in enumerate(series, start=1):
+        if _is_missing_scalar(value):
+            issues.append(_issue("missing_volume", "volume contains missing values."))
+            parsed_values.append(pd.NA)
+            continue
+
+        if _is_boolean_value(value):
+            issues.append(_issue("boolean_volume", "volume must not contain boolean values."))
+            parsed_values.append(pd.NA)
+            continue
+
+        try:
+            decimal_value = _decimal_from_exact_scalar(value)
+        except (InvalidOperation, ValueError) as exc:
+            issues.append(
+                _issue(
+                    "non_numeric_volume",
+                    f"row {row_number} volume is not an exact numeric value: {exc}",
+                )
+            )
+            parsed_values.append(pd.NA)
+            continue
+
+        if not decimal_value.is_finite():
+            issues.append(_issue("infinite_volume", "volume contains infinite values."))
+            parsed_values.append(pd.NA)
+            continue
+        if decimal_value < 0:
+            issues.append(_issue("negative_volume", "volume must not be negative."))
+            parsed_values.append(pd.NA)
+            continue
+
+        integral_value = decimal_value.to_integral_value()
+        if decimal_value != integral_value:
+            issues.append(_issue("non_integer_volume", "volume must be integer-compatible."))
+            parsed_values.append(pd.NA)
+            continue
+        if integral_value > max_int64:
+            issues.append(
+                _issue(
+                    "volume_out_of_int64_range",
+                    "volume must fit in a signed 64-bit integer.",
+                )
+            )
+            parsed_values.append(pd.NA)
+            continue
+
+        parsed_values.append(int(integral_value))
+
+    return pd.Series(parsed_values, index=series.index), issues
+
+
+def _pydantic_validation_issue(code: str, message: str, exc: ValidationError) -> ValidationIssue:
+    details = ", ".join(
+        ".".join(str(part) for part in error["loc"]) + f": {error['type']}"
+        for error in exc.errors(include_input=False)
+    )
+    if details:
+        return _issue(code, f"{message}: {details}")
+    return _issue(code, message)
 
 
 def validate_daily_spy_data(
@@ -322,7 +420,12 @@ def validate_daily_spy_data(
         issues.append(_issue("unordered_sessions", "session dates must be strictly increasing."))
 
     for session in sessions:
-        if not calendar.is_session(session):
+        try:
+            is_session = calendar.is_session(session)
+        except CalendarDataError as exc:
+            issues.append(_issue(exc.code, str(exc)))
+            continue
+        if not is_session:
             issues.append(
                 _issue(
                     "invalid_exchange_session",
@@ -331,7 +434,11 @@ def validate_daily_spy_data(
             )
 
     if not issues:
-        missing_sessions = calendar.missing_sessions(tuple(sessions))
+        try:
+            missing_sessions = calendar.missing_sessions(tuple(sessions))
+        except CalendarDataError as exc:
+            issues.append(_issue(exc.code, str(exc)))
+            missing_sessions = ()
         if missing_sessions:
             missing = [session.isoformat() for session in missing_sessions]
             issues.append(
@@ -341,13 +448,22 @@ def validate_daily_spy_data(
                 )
             )
 
-    if not issues and not calendar.is_session_complete(sessions[-1], as_of=as_of_datetime):
-        issues.append(
-            _issue(
-                "incomplete_or_future_session",
-                "latest session is incomplete or in the future at as_of.",
+    if not issues:
+        try:
+            latest_session_complete = calendar.is_session_complete(
+                sessions[-1],
+                as_of=as_of_datetime,
             )
-        )
+        except CalendarDataError as exc:
+            issues.append(_issue(exc.code, str(exc)))
+        else:
+            if not latest_session_complete:
+                issues.append(
+                    _issue(
+                        "incomplete_or_future_session",
+                        "latest session is incomplete or in the future at as_of.",
+                    )
+                )
 
     numeric_columns: dict[str, pd.Series] = {}
     for column in ("open", "high", "low", "close"):
@@ -359,12 +475,7 @@ def validate_daily_spy_data(
         numeric_columns[column] = numeric
         issues.extend(numeric_issues)
 
-    volume, volume_issues = _validate_numeric_series(
-        validated["volume"],
-        column="volume",
-        strictly_positive=False,
-        integer_compatible=True,
-    )
+    volume, volume_issues = _validate_volume_series(validated["volume"])
     numeric_columns["volume"] = volume
     issues.extend(volume_issues)
 
@@ -414,20 +525,48 @@ def validate_daily_spy_data(
 
     validated = validated.loc[:, list(CANONICAL_COLUMNS)]
 
-    checksum = compute_market_data_checksum(validated)
-    metadata = MarketDataMetadata(
-        provider_name=validated_provider_name or "",
-        symbol=symbol,
-        timeframe=timeframe,
-        adjustment_policy=adjustment_policy,
-        downloaded_at=calendar.to_utc(downloaded_at_datetime),
-        created_at=calendar.to_utc(created_at_datetime),
-        first_session=sessions[0],
-        last_session=sessions[-1],
-        row_count=len(validated),
-        dataset_checksum=checksum,
-        schema_version=SCHEMA_VERSION,
-        source_description=source_description,
-    )
+    try:
+        checksum = compute_market_data_checksum(validated)
+    except ValueError as exc:
+        raise MarketDataValidationError(
+            [_issue("checksum_generation_failed", f"canonical checksum generation failed: {exc}")]
+        ) from exc
 
-    return MarketDataBatch(data=validated, metadata=metadata)
+    try:
+        metadata = MarketDataMetadata(
+            provider_name=validated_provider_name or "",
+            symbol=symbol,
+            timeframe=timeframe,
+            adjustment_policy=adjustment_policy,
+            downloaded_at=calendar.to_utc(downloaded_at_datetime),
+            created_at=calendar.to_utc(created_at_datetime),
+            first_session=sessions[0],
+            last_session=sessions[-1],
+            row_count=len(validated),
+            dataset_checksum=checksum,
+            schema_version=SCHEMA_VERSION,
+            source_description=source_description,
+        )
+    except ValidationError as exc:
+        raise MarketDataValidationError(
+            [
+                _pydantic_validation_issue(
+                    "metadata_validation_failed",
+                    "metadata construction failed",
+                    exc,
+                )
+            ]
+        ) from exc
+
+    try:
+        return MarketDataBatch(data=validated, metadata=metadata)
+    except ValidationError as exc:
+        raise MarketDataValidationError(
+            [
+                _pydantic_validation_issue(
+                    "batch_validation_failed",
+                    "batch construction failed",
+                    exc,
+                )
+            ]
+        ) from exc

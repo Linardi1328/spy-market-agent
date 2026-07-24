@@ -30,6 +30,8 @@ def _require_exact(value: str, *, expected: str, field_name: str) -> str:
 class MarketDataRequest(BaseModel):
     """Provider-independent request for adjusted daily SPY bars."""
 
+    model_config = ConfigDict(frozen=True)
+
     symbol: str = MARKET_SYMBOL
     start_session: date
     end_session: date
@@ -66,6 +68,8 @@ class MarketDataRequest(BaseModel):
 class MarketDataMetadata(BaseModel):
     """Lineage metadata for a validated canonical daily SPY dataset."""
 
+    model_config = ConfigDict(frozen=True)
+
     provider_name: str
     symbol: str = MARKET_SYMBOL
     timeframe: str = MARKET_TIMEFRAME
@@ -82,10 +86,11 @@ class MarketDataMetadata(BaseModel):
     @field_validator("provider_name")
     @classmethod
     def _validate_provider_name(cls, value: str) -> str:
-        if not value.strip():
+        trimmed = value.strip()
+        if not trimmed:
             msg = "provider_name is required."
             raise ValueError(msg)
-        return value
+        return trimmed
 
     @field_validator("symbol")
     @classmethod
@@ -127,20 +132,31 @@ class MarketDataMetadata(BaseModel):
 
     @model_validator(mode="after")
     def _validate_session_bounds(self) -> Self:
+        if self.downloaded_at > self.created_at:
+            msg = "downloaded_at must not be after created_at."
+            raise ValueError(msg)
         if self.first_session > self.last_session:
             msg = "first_session must not be after last_session."
             raise ValueError(msg)
         return self
 
 
+def _require_plain_date(value: object, *, field_name: str) -> date:
+    if isinstance(value, datetime) or type(value) is not date:
+        msg = f"{field_name} must be a plain datetime.date value."
+        raise ValueError(msg)
+    return value
+
+
 class MarketDataBatch(BaseModel):
     """Validated canonical data plus metadata.
 
-    The DataFrame is not deeply immutable. Callers should treat a batch as owning its
-    returned DataFrame and avoid mutating it after validation.
+    The model attributes are frozen after construction, but the contained DataFrame is
+    not deeply immutable. Callers should treat a batch as owning its returned DataFrame
+    and avoid mutating it after validation.
     """
 
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    model_config = ConfigDict(arbitrary_types_allowed=True, frozen=True)
 
     data: pd.DataFrame
     metadata: MarketDataMetadata
@@ -150,7 +166,35 @@ class MarketDataBatch(BaseModel):
         if tuple(self.data.columns) != CANONICAL_COLUMNS:
             msg = "MarketDataBatch data must use canonical column order."
             raise ValueError(msg)
+        if self.data.empty:
+            msg = "MarketDataBatch data must not be empty."
+            raise ValueError(msg)
         if len(self.data) != self.metadata.row_count:
             msg = "metadata row_count must match data row count."
+            raise ValueError(msg)
+        first_session = _require_plain_date(
+            self.data.iloc[0]["session"],
+            field_name="first data session",
+        )
+        last_session = _require_plain_date(
+            self.data.iloc[-1]["session"],
+            field_name="last data session",
+        )
+        if first_session != self.metadata.first_session:
+            msg = "metadata first_session must match the first data session."
+            raise ValueError(msg)
+        if last_session != self.metadata.last_session:
+            msg = "metadata last_session must match the final data session."
+            raise ValueError(msg)
+
+        from spy_market_agent.market_data.checksum import compute_market_data_checksum
+
+        try:
+            checksum = compute_market_data_checksum(self.data)
+        except ValueError as exc:
+            msg = f"MarketDataBatch data cannot be checksummed: {exc}"
+            raise ValueError(msg) from exc
+        if checksum != self.metadata.dataset_checksum:
+            msg = "metadata dataset_checksum must match the recomputed data checksum."
             raise ValueError(msg)
         return self

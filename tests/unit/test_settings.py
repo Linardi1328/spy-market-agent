@@ -7,7 +7,7 @@ import pytest
 from pydantic import SecretStr, ValidationError
 
 import spy_market_agent
-from spy_market_agent.config.settings import Settings, load_settings
+from spy_market_agent.config.settings import REDACTED_DATABASE_URL, Settings, load_settings
 
 
 def test_defaults_load_without_env_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -153,14 +153,75 @@ def test_secret_values_are_redacted_from_repr_and_display_serialization() -> Non
     assert settings.display_safe_dict()["alpaca_secret_key"] == "**********"
 
 
-def test_database_url_userinfo_is_redacted_from_display_serialization() -> None:
+def test_database_url_is_excluded_from_settings_repr() -> None:
     settings = Settings(database_url="postgresql://db_user:db_password@localhost:5432/research")
 
-    display_values = settings.display_safe_dict()
+    settings_repr = repr(settings)
 
-    assert display_values["database_url"] == "postgresql://***:***@localhost:5432/research"
-    assert "db_user" not in str(display_values)
-    assert "db_password" not in str(display_values)
+    assert "database_url" not in settings_repr
+    assert "db_user" not in settings_repr
+    assert "db_password" not in settings_repr
+
+
+@pytest.mark.parametrize(
+    ("database_url", "forbidden_fragments"),
+    [
+        (
+            "postgresql://db_user:db_password@localhost/research",
+            ("db_user", "db_password"),
+        ),
+        (
+            "postgresql:db_user:db_password@localhost/research",
+            ("db_user", "db_password"),
+        ),
+        (
+            "postgresql:///db_user:db_password@localhost/research",
+            ("db_user", "db_password"),
+        ),
+        (
+            "postgresql://localhost/research?password=db_password",
+            ("password", "db_password"),
+        ),
+        (
+            "postgresql://localhost/research?access_token=token_value",
+            ("access_token", "token_value"),
+        ),
+        (
+            "postgresql://db_user:db_password@[::1]:5432/research",
+            ("db_user", "db_password"),
+        ),
+        (
+            "postgresql://db_user:db_password@localhost:notaport/research",
+            ("db_user", "db_password"),
+        ),
+        (
+            "postgresql://db_user:db_password@[::1/research",
+            ("db_user", "db_password"),
+        ),
+        (
+            "sqlite:///./spy_market_agent.db?password=db_password",
+            ("password", "db_password"),
+        ),
+    ],
+)
+def test_credential_bearing_database_urls_are_fully_redacted_from_display_serialization(
+    database_url: str,
+    forbidden_fragments: tuple[str, ...],
+) -> None:
+    settings = Settings(database_url=database_url)
+
+    display_values = settings.display_safe_dict()
+    display_text = str(display_values)
+
+    assert display_values["database_url"] == REDACTED_DATABASE_URL
+    for fragment in forbidden_fragments:
+        assert fragment not in display_text
+
+
+def test_sqlite_database_urls_remain_unchanged_in_display_serialization() -> None:
+    settings = Settings(database_url="sqlite:///./spy_market_agent.db")
+
+    assert settings.display_safe_dict()["database_url"] == "sqlite:///./spy_market_agent.db"
 
 
 @pytest.mark.parametrize(

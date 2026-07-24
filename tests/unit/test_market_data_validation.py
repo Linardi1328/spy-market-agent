@@ -1,20 +1,24 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
+from typing import Any
 
 import pandas as pd
 import pytest
+from pydantic import ValidationError
 
 from spy_market_agent.market_data.calendar import XNYSCalendar
-from spy_market_agent.market_data.checksum import compute_market_data_checksum
+from spy_market_agent.market_data.checksum import CHECKSUM_VERSION, compute_market_data_checksum
 from spy_market_agent.market_data.models import (
     ADJUSTMENT_POLICY,
     CANONICAL_COLUMNS,
     MARKET_SYMBOL,
     MARKET_TIMEFRAME,
     MarketDataBatch,
+    MarketDataMetadata,
     MarketDataRequest,
 )
+from spy_market_agent.validation import market_data_checks
 from spy_market_agent.validation.market_data_checks import (
     MarketDataValidationError,
     validate_daily_spy_data,
@@ -63,6 +67,28 @@ def validate_frame(frame: pd.DataFrame, calendar: XNYSCalendar) -> MarketDataBat
     )
 
 
+def make_metadata_for_frame(
+    frame: pd.DataFrame,
+    **overrides: object,
+) -> MarketDataMetadata:
+    values: dict[str, Any] = {
+        "provider_name": "synthetic-fixture",
+        "symbol": MARKET_SYMBOL,
+        "timeframe": MARKET_TIMEFRAME,
+        "adjustment_policy": ADJUSTMENT_POLICY,
+        "downloaded_at": DOWNLOADED_AT,
+        "created_at": CREATED_AT,
+        "first_session": frame.iloc[0]["session"] if not frame.empty else date(2024, 1, 2),
+        "last_session": frame.iloc[-1]["session"] if not frame.empty else date(2024, 1, 5),
+        "row_count": len(frame) if not frame.empty else 1,
+        "dataset_checksum": compute_market_data_checksum(frame) if not frame.empty else "0" * 64,
+        "schema_version": "spy-daily-ohlcv-v1",
+        "source_description": "unit-test synthetic data",
+    }
+    values.update(overrides)
+    return MarketDataMetadata(**values)
+
+
 def assert_validation_fails(
     frame: object,
     calendar: XNYSCalendar,
@@ -98,6 +124,23 @@ def test_market_data_request_accepts_daily_adjusted_spy() -> None:
     assert request.symbol == "SPY"
 
 
+@pytest.mark.parametrize(
+    ("field_name", "unsafe_value"),
+    [
+        ("symbol", "AAPL"),
+        ("timeframe", "1Hour"),
+    ],
+)
+def test_market_data_request_is_immutable(field_name: str, unsafe_value: object) -> None:
+    request = MarketDataRequest(
+        start_session=date(2024, 1, 2),
+        end_session=date(2024, 1, 5),
+    )
+
+    with pytest.raises(ValidationError, match="frozen"):
+        setattr(request, field_name, unsafe_value)
+
+
 def test_market_data_request_rejects_invalid_inputs() -> None:
     with pytest.raises(ValueError, match="start_session"):
         MarketDataRequest(start_session=date(2024, 1, 5), end_session=date(2024, 1, 2))
@@ -119,6 +162,97 @@ def test_market_data_request_rejects_invalid_inputs() -> None:
             end_session=date(2024, 1, 5),
             adjustment_policy="raw",
         )
+
+
+def test_market_data_metadata_trims_provider_name() -> None:
+    metadata = make_metadata_for_frame(make_frame(), provider_name="  synthetic-fixture  ")
+
+    assert metadata.provider_name == "synthetic-fixture"
+
+
+def test_market_data_metadata_rejects_blank_provider_name() -> None:
+    with pytest.raises(ValidationError, match="provider_name"):
+        make_metadata_for_frame(make_frame(), provider_name="   ")
+
+
+def test_market_data_metadata_rejects_downloaded_after_created() -> None:
+    with pytest.raises(ValidationError, match="downloaded_at"):
+        make_metadata_for_frame(
+            make_frame(),
+            downloaded_at=datetime(2024, 1, 6, 2, 0, tzinfo=UTC),
+            created_at=datetime(2024, 1, 6, 1, 0, tzinfo=UTC),
+        )
+
+
+@pytest.mark.parametrize(
+    ("field_name", "unsafe_value"),
+    [
+        ("row_count", 999),
+        ("first_session", date(2024, 1, 3)),
+    ],
+)
+def test_market_data_metadata_is_immutable(field_name: str, unsafe_value: object) -> None:
+    metadata = make_metadata_for_frame(make_frame())
+
+    with pytest.raises(ValidationError, match="frozen"):
+        setattr(metadata, field_name, unsafe_value)
+
+
+def test_market_data_batch_metadata_is_immutable() -> None:
+    frame = make_frame()
+    batch = MarketDataBatch(data=frame.copy(deep=True), metadata=make_metadata_for_frame(frame))
+
+    with pytest.raises(ValidationError, match="frozen"):
+        batch.metadata = make_metadata_for_frame(frame)
+
+
+def test_market_data_batch_dataframe_is_not_deeply_immutable() -> None:
+    frame = make_frame()
+    batch = MarketDataBatch(data=frame.copy(deep=True), metadata=make_metadata_for_frame(frame))
+
+    batch.data.loc[0, "close"] = 100.75
+
+    assert batch.data.loc[0, "close"] == 100.75
+
+
+def test_market_data_batch_direct_construction_rejects_bad_checksum() -> None:
+    frame = make_frame()
+    metadata = make_metadata_for_frame(frame, dataset_checksum="0" * 64)
+
+    with pytest.raises(ValidationError, match="dataset_checksum"):
+        MarketDataBatch(data=frame, metadata=metadata)
+
+
+def test_market_data_batch_direct_construction_rejects_bad_first_session() -> None:
+    frame = make_frame()
+    metadata = make_metadata_for_frame(frame, first_session=date(2024, 1, 3))
+
+    with pytest.raises(ValidationError, match="first_session"):
+        MarketDataBatch(data=frame, metadata=metadata)
+
+
+def test_market_data_batch_direct_construction_rejects_bad_last_session() -> None:
+    frame = make_frame()
+    metadata = make_metadata_for_frame(frame, last_session=date(2024, 1, 4))
+
+    with pytest.raises(ValidationError, match="last_session"):
+        MarketDataBatch(data=frame, metadata=metadata)
+
+
+def test_market_data_batch_direct_construction_rejects_bad_row_count() -> None:
+    frame = make_frame()
+    metadata = make_metadata_for_frame(frame, row_count=len(frame) + 1)
+
+    with pytest.raises(ValidationError, match="row_count"):
+        MarketDataBatch(data=frame, metadata=metadata)
+
+
+def test_market_data_batch_direct_construction_rejects_empty_data() -> None:
+    frame = make_frame().iloc[0:0]
+    metadata = make_metadata_for_frame(frame)
+
+    with pytest.raises(ValidationError, match="empty"):
+        MarketDataBatch(data=frame, metadata=metadata)
 
 
 def test_valid_canonical_dataset_passes(calendar: XNYSCalendar) -> None:
@@ -211,6 +345,40 @@ def test_completed_historical_bars_pass(calendar: XNYSCalendar) -> None:
     batch = validate_frame(frame, calendar)
 
     assert batch.metadata.last_session == date(2024, 1, 5)
+
+
+def test_historical_supported_session_before_2006_passes(calendar: XNYSCalendar) -> None:
+    frame = make_frame([date(1993, 1, 22)])
+
+    batch = validate_frame(frame, calendar)
+
+    assert batch.metadata.first_session == date(1993, 1, 22)
+    assert batch.metadata.last_session == date(1993, 1, 22)
+
+
+def test_calendar_out_of_range_date_fails_safely(calendar: XNYSCalendar) -> None:
+    assert_validation_fails(
+        make_frame([date(2051, 1, 3)]),
+        calendar,
+        "calendar_session_out_of_range",
+    )
+
+
+def test_extremely_old_calendar_date_fails_without_raw_calendar_exception(
+    calendar: XNYSCalendar,
+) -> None:
+    with pytest.raises(MarketDataValidationError) as exc_info:
+        validate_daily_spy_data(
+            make_frame([date(1, 1, 1)]),
+            provider_name="synthetic-fixture",
+            downloaded_at=DOWNLOADED_AT,
+            created_at=CREATED_AT,
+            as_of=COMPLETED_AS_OF,
+            calendar=calendar,
+        )
+
+    assert "calendar_session_out_of_range" in exc_info.value.codes
+    assert "DateOutOfBounds" not in str(exc_info.value)
 
 
 def test_naive_as_of_timestamp_fails(calendar: XNYSCalendar) -> None:
@@ -344,12 +512,70 @@ def test_infinite_volume_fails(calendar: XNYSCalendar) -> None:
     assert_validation_fails(frame, calendar, "infinite_volume")
 
 
+class ArbitraryVolume:
+    pass
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        [1, 2],
+        {"unexpected": "object"},
+        ArbitraryVolume(),
+    ],
+)
+def test_non_scalar_volume_values_fail_with_validation_error(
+    calendar: XNYSCalendar,
+    value: object,
+) -> None:
+    frame = make_frame()
+    frame["volume"] = frame["volume"].astype("object")
+    frame.at[0, "volume"] = value
+
+    assert_validation_fails(frame, calendar, "non_numeric_volume")
+
+
 def test_fractional_non_integer_compatible_volume_fails(calendar: XNYSCalendar) -> None:
     frame = make_frame()
     frame["volume"] = frame["volume"].astype("float64")
     frame.loc[0, "volume"] = 100.5
 
     assert_validation_fails(frame, calendar, "non_integer_volume")
+
+
+@pytest.mark.parametrize("value", ["9007199254740992.1", "1000.1"])
+def test_fractional_volume_strings_are_rejected_without_float_rounding(
+    calendar: XNYSCalendar,
+    value: str,
+) -> None:
+    frame = make_frame()
+    frame["volume"] = frame["volume"].astype("object")
+    frame.loc[0, "volume"] = value
+
+    assert_validation_fails(frame, calendar, "non_integer_volume")
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("1000.0", 1000),
+        (0, 0),
+        (9_223_372_036_854_775_807, 9_223_372_036_854_775_807),
+    ],
+)
+def test_exact_integer_compatible_volume_values_are_accepted(
+    calendar: XNYSCalendar,
+    value: object,
+    expected: int,
+) -> None:
+    frame = make_frame()
+    frame["volume"] = frame["volume"].astype("object")
+    frame.loc[0, "volume"] = value
+
+    batch = validate_frame(frame, calendar)
+
+    assert batch.data.loc[0, "volume"] == expected
+    assert str(batch.data["volume"].dtype) == "int64"
 
 
 def test_volume_outside_int64_range_fails(calendar: XNYSCalendar) -> None:
@@ -487,12 +713,49 @@ def test_metadata_matches_validated_dataset(calendar: XNYSCalendar) -> None:
     assert "secret" not in batch.metadata.model_dump_json()
 
 
+def test_metadata_construction_failures_are_structured_validation_errors(
+    calendar: XNYSCalendar,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(market_data_checks, "SCHEMA_VERSION", "invalid-schema-version")
+
+    assert_validation_fails(make_frame(), calendar, "metadata_validation_failed")
+
+
+def test_batch_construction_failures_are_structured_validation_errors(
+    calendar: XNYSCalendar,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def incorrect_checksum(_: pd.DataFrame) -> str:
+        return "0" * 64
+
+    monkeypatch.setattr(market_data_checks, "compute_market_data_checksum", incorrect_checksum)
+
+    assert_validation_fails(make_frame(), calendar, "batch_validation_failed")
+
+
 def test_equivalent_datasets_produce_identical_checksums(calendar: XNYSCalendar) -> None:
     first = validate_frame(make_frame(), calendar)
     second = validate_frame(make_frame(), calendar)
 
     assert first.metadata.dataset_checksum == second.metadata.dataset_checksum
     assert compute_market_data_checksum(first.data) == first.metadata.dataset_checksum
+
+
+def test_checksum_serialization_version_records_lossless_float_change() -> None:
+    assert CHECKSUM_VERSION == "canonical-daily-ohlcv-v2-sha256"
+
+
+def test_distinct_float64_prices_produce_different_checksums() -> None:
+    first = make_frame([date(2024, 1, 2)])
+    second = make_frame([date(2024, 1, 2)])
+    first.loc[0, "close"] = 100.123456789012
+    second.loc[0, "close"] = 100.123456789013
+    first.loc[0, "high"] = 101.0
+    second.loc[0, "high"] = 101.0
+
+    assert first.loc[0, "close"] != second.loc[0, "close"]
+    assert compute_market_data_checksum(first) != compute_market_data_checksum(second)
 
 
 def test_changed_ohlcv_value_changes_checksum(calendar: XNYSCalendar) -> None:
@@ -504,11 +767,38 @@ def test_changed_ohlcv_value_changes_checksum(calendar: XNYSCalendar) -> None:
     assert base.metadata.dataset_checksum != changed.metadata.dataset_checksum
 
 
+def test_changed_volume_value_changes_checksum(calendar: XNYSCalendar) -> None:
+    base = validate_frame(make_frame(), calendar)
+    changed_frame = make_frame()
+    changed_frame.loc[0, "volume"] = changed_frame.loc[0, "volume"] + 1
+    changed = validate_frame(changed_frame, calendar)
+
+    assert base.metadata.dataset_checksum != changed.metadata.dataset_checksum
+
+
 def test_changed_session_value_changes_checksum(calendar: XNYSCalendar) -> None:
     first = validate_frame(make_frame([date(2024, 1, 2), date(2024, 1, 3)]), calendar)
     second = validate_frame(make_frame([date(2024, 1, 3), date(2024, 1, 4)]), calendar)
 
     assert first.metadata.dataset_checksum != second.metadata.dataset_checksum
+
+
+def test_checksum_rejects_datetime_session_values() -> None:
+    frame = make_frame([date(2024, 1, 2)])
+    frame["session"] = frame["session"].astype("object")
+    frame.loc[0, "session"] = datetime(2024, 1, 2, 0, 0)
+
+    with pytest.raises(ValueError, match=r"plain datetime\.date"):
+        compute_market_data_checksum(frame)
+
+
+def test_checksum_rejects_string_session_values() -> None:
+    frame = make_frame([date(2024, 1, 2)])
+    frame["session"] = frame["session"].astype("object")
+    frame.loc[0, "session"] = "2024-01-02"
+
+    with pytest.raises(ValueError, match=r"plain datetime\.date"):
+        compute_market_data_checksum(frame)
 
 
 def test_reordered_rows_produce_different_checksum_when_generated_directly() -> None:

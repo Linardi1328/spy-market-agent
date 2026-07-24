@@ -550,3 +550,288 @@ Do not begin Phase 4 until Phase 3 is reviewed and approved.
 - [x] No live trading introduced.
 - [x] Documentation updated.
 - [x] Phase 4 not started.
+
+## Second corrective review addendum
+
+Corrective completion timestamp: 2026-07-24 19:49:28 UTC.
+
+Correction status: Completed. This addendum records the final Phase 3 data-integrity corrective pass only. Phase 4 was not started.
+
+Issues corrected:
+
+- Checksum collision correction: checksum serialization now uses `float(value).hex()` for OHLC prices so distinct canonical float64 values are represented losslessly. The checksum serialization version was updated to `canonical-daily-ohlcv-v2-sha256`.
+- Checksum session strictness: direct checksum generation now rejects full `datetime` session values and string session values. Checksum sessions must be plain `datetime.date` values.
+- Exact volume validation correction: volume validation now parses values with `Decimal` before converting to signed int64. It rejects boolean, missing, non-numeric, infinite, negative, fractional, and out-of-range values without float rounding, truncation, or silent repair.
+- Model immutability correction: `MarketDataRequest`, `MarketDataMetadata`, and `MarketDataBatch` are now frozen Pydantic models after construction. The DataFrame inside `MarketDataBatch` remains not deeply immutable by design and is documented/tested as such.
+- Metadata invariant correction: `MarketDataMetadata` now directly rejects blank provider names, trims valid provider names, and rejects `downloaded_at > created_at`.
+- Batch-integrity correction: `MarketDataBatch` now directly verifies canonical column order, non-empty data, metadata row count, first session, last session, and recomputed checksum.
+- URL-redaction correction: `display_safe_dict()` now redacts ordinary credential-bearing database URLs, preserves IPv6 host brackets, handles malformed ports without failing, returns a safe placeholder for malformed credential-bearing URLs, and leaves SQLite URLs unchanged.
+- Structured validation error correction: expected Pydantic construction failures from `MarketDataMetadata` or `MarketDataBatch` inside `validate_daily_spy_data()` are converted into `MarketDataValidationError` with non-secret structured issue codes.
+
+Files changed during this corrective pass:
+
+- `src/spy_market_agent/config/settings.py`: Hardened database URL redaction for IPv6, malformed ports, malformed credential-bearing URLs, and SQLite passthrough.
+- `src/spy_market_agent/market_data/checksum.py`: Updated checksum serialization version, changed price serialization to `float.hex()`, and rejected non-plain-date session inputs.
+- `src/spy_market_agent/market_data/models.py`: Froze market-data Pydantic models and added direct metadata/batch invariant validation.
+- `src/spy_market_agent/validation/market_data_checks.py`: Replaced volume float-based integer checks with exact `Decimal` parsing and wrapped expected metadata/batch validation failures.
+- `tests/unit/test_market_data_validation.py`: Added checksum, exact-volume, model immutability, metadata invariant, batch invariant, and structured-error regression tests.
+- `tests/unit/test_settings.py`: Added deterministic database URL redaction tests.
+- `reviews/PHASE_03_REVIEW.md`: Added this second corrective addendum.
+
+Tests added or updated:
+
+- Checksum tests now prove equivalent datasets still match, distinct prices `100.123456789012` and `100.123456789013` differ, changed sessions differ, changed volume differs, changed OHLC differs, and malformed session types fail.
+- Volume tests now prove `"9007199254740992.1"` and `"1000.1"` are rejected, `"1000.0"` is accepted as `1000`, `0` is accepted, signed int64 maximum is accepted, and signed int64 maximum plus one is rejected.
+- Model tests now prove frozen behavior for request symbol/timeframe, metadata row count/first session, and batch metadata replacement.
+- Batch tests now prove direct construction rejects incorrect checksum, first session, last session, row count, and empty data.
+- Metadata tests now prove blank provider names fail, valid provider names are trimmed, and `downloaded_at > created_at` fails.
+- URL tests now prove credential redaction for ordinary URLs, IPv6 URLs, malformed ports, malformed credential-bearing URLs, and SQLite passthrough.
+- Validator tests now prove expected internal metadata/batch construction failures are returned as `MarketDataValidationError` codes.
+
+Final verification results:
+
+- `pytest`: Passed. Result: 136 passed, 3 third-party warnings, 85% total coverage.
+- `pytest tests/unit -q`: Passed. Result: all unit tests passed under quiet output, 3 third-party warnings, 85% total coverage shown by coverage reporting.
+- `pytest tests/integration -q`: Passed. Result: 1 integration test passed, 3 third-party warnings.
+- `ruff check .`: Passed with `All checks passed!`.
+- `ruff format --check .`: Passed with `32 files already formatted`.
+- `mypy src tests`: Passed with `Success: no issues found in 27 source files`.
+- `python -c "import spy_market_agent; print(spy_market_agent.__version__)"`: Passed and printed `0.1.0`.
+- `git diff --check`: Passed with no whitespace errors.
+
+Remaining warnings and limitations:
+
+- Three visible third-party warnings remain from `exchange-calendars` / pandas / NumPy timedelta internals. They were not globally suppressed.
+- `MarketDataBatch` is a frozen Pydantic object, but pandas DataFrames are mutable internally; callers must still treat batch data as owned and avoid mutation after construction.
+- No market-data downloads, provider adapters, feature engineering, labels, models, strategies, backtesting, persistence, API routes, dashboard code, broker access, paper-order submission, or execution functionality was added.
+- The existing project `./.venv` directory was not deleted, recreated, replaced, or cleaned during this corrective pass.
+
+Corrective git summary:
+
+- Current commit hash: `a96bea5`.
+- `git status --short --untracked-files=all` showed:
+
+```text
+ M src/spy_market_agent/config/settings.py
+ M src/spy_market_agent/market_data/checksum.py
+ M src/spy_market_agent/market_data/models.py
+ M src/spy_market_agent/validation/market_data_checks.py
+ M tests/unit/test_market_data_validation.py
+ M tests/unit/test_settings.py
+```
+
+- `git diff --stat` before this report addendum showed:
+
+```text
+ src/spy_market_agent/config/settings.py            |  30 +--
+ src/spy_market_agent/market_data/checksum.py       |  71 +++++--
+ src/spy_market_agent/market_data/models.py         |  54 ++++-
+ .../validation/market_data_checks.py               | 160 ++++++++++++--
+ tests/unit/test_market_data_validation.py          | 235 ++++++++++++++++++++-
+ tests/unit/test_settings.py                        |  36 ++++
+ 6 files changed, 522 insertions(+), 64 deletions(-)
+```
+
+No commit or push was performed.
+
+Second corrective checklist:
+
+- [x] Checksum collision correction completed.
+- [x] Exact volume-validation correction completed.
+- [x] Market-data model immutability correction completed.
+- [x] Batch-integrity correction completed.
+- [x] URL-redaction correction completed.
+- [x] Tests added or updated.
+- [x] Pytest run.
+- [x] Unit tests run.
+- [x] Integration tests run.
+- [x] Ruff lint run.
+- [x] Ruff format check run.
+- [x] MyPy run.
+- [x] Import smoke test run.
+- [x] `git diff --check` run.
+- [x] No secrets exposed.
+- [x] No market-data network access introduced.
+- [x] No broker access introduced.
+- [x] No live trading introduced.
+- [x] Phase 4 not started.
+
+## Final Phase 3 security note
+
+Security correction timestamp: 2026-07-24 20:19:56 UTC.
+
+Correction status: Completed. This note records only the final Phase 3 settings security correction. Phase 4 was not started.
+
+Issues corrected:
+
+- `Settings.database_url` is now excluded from the Pydantic model representation with `repr=False`, preventing database URLs from appearing in `repr(settings)`.
+- `display_safe_dict()` now uses a fail-closed Version 1 database URL display policy. The normal local SQLite URL `sqlite:///./spy_market_agent.db` remains visible, while every non-SQLite database URL is replaced with `<redacted-database-url>`.
+- Suspicious SQLite URLs with user-information markers, query strings, fragments, or credential-like terms are also replaced with `<redacted-database-url>`.
+- The display-safe policy no longer attempts to partially preserve usernames, passwords, hosts, ports, query strings, fragments, or tokens from non-SQLite database URLs.
+
+Files changed during this security correction:
+
+- `src/spy_market_agent/config/settings.py`: Hid `database_url` from model repr and replaced partial URL redaction with fail-closed display-safe database URL handling.
+- `tests/unit/test_settings.py`: Added/updated tests proving database URL credentials are absent from `repr(settings)` and display output for credential-bearing or non-SQLite URLs.
+- `reviews/PHASE_03_REVIEW.md`: Added this final security note.
+
+Tests added or updated:
+
+- Added a repr test proving `db_user` and `db_password` from `postgresql://db_user:db_password@localhost/research` do not appear in `repr(settings)`.
+- Added display-safe tests proving full redaction for:
+  - `postgresql://db_user:db_password@localhost/research`
+  - `postgresql:db_user:db_password@localhost/research`
+  - `postgresql:///db_user:db_password@localhost/research`
+  - `postgresql://localhost/research?password=db_password`
+  - a URL containing `access_token` in its query
+  - additional non-SQLite and suspicious SQLite credential-bearing cases
+- Confirmed the normal local SQLite URL remains visible.
+
+Final verification results:
+
+- `pytest`: Passed. Result: 152 passed, 4 third-party warnings, 84% total coverage.
+- `ruff check .`: Passed with `All checks passed!`.
+- `ruff format --check .`: Passed with `32 files already formatted`.
+- `mypy src tests`: Passed with `Success: no issues found in 27 source files`.
+- `python -c "import spy_market_agent; print(spy_market_agent.__version__)"`: Passed and printed `0.1.0`.
+- `git diff --check`: Passed with no whitespace errors.
+
+Remaining warnings and limitations:
+
+- Four visible third-party warnings remain from `exchange-calendars` / pandas / NumPy timedelta internals. They were not globally suppressed.
+- No market-data, calendar, checksum, model, validation, provider, or execution behavior was changed during this security correction.
+- No market-data providers, downloads, feature engineering, labels, models, strategies, backtesting, persistence, API routes, dashboard code, broker access, paper-order submission, or execution functionality was added.
+- The existing project `./.venv` directory was not deleted, recreated, replaced, or cleaned.
+
+Security correction git summary:
+
+- Current commit hash: `a96bea5`.
+- `git status --short --untracked-files=all` before this note showed prior Phase 3 modified files plus unstaged security changes in `src/spy_market_agent/config/settings.py` and `tests/unit/test_settings.py`.
+- `git diff --stat` for the unstaged security correction before this note showed:
+
+```text
+ src/spy_market_agent/config/settings.py | 48 +++++++++++-------
+ tests/unit/test_settings.py             | 87 +++++++++++++++++++++------------
+ 2 files changed, 86 insertions(+), 49 deletions(-)
+```
+
+No commit or push was performed.
+
+Final security checklist:
+
+- [x] `database_url` hidden from `repr(settings)`.
+- [x] Display-safe database URL handling fails closed.
+- [x] Normal local SQLite URL remains visible.
+- [x] Credential-bearing database URL tests added.
+- [x] Pytest run.
+- [x] Ruff lint run.
+- [x] Ruff format check run.
+- [x] MyPy run.
+- [x] Import smoke test run.
+- [x] `git diff --check` run.
+- [x] No secrets exposed.
+- [x] No market-data behavior changed.
+- [x] No broker access introduced.
+- [x] No live trading introduced.
+- [x] Phase 4 not started.
+
+## Final calendar-and-scalar corrective addendum
+
+Corrective completion timestamp: 2026-07-24 20:06:44 UTC.
+
+Correction status: Completed. This addendum records only the final Phase 3 calendar-range and scalar-validation corrective pass. Phase 4 was not started.
+
+Issues corrected:
+
+- Explicit calendar range: `XNYSCalendar` now constructs the exchange calendar with explicit `CALENDAR_START = 1993-01-22` and `CALENDAR_END = 2050-12-30`. This covers SPY's inception session and a substantial future research horizon without relying on the library's default rolling range.
+- Calendar exception handling: the calendar adapter now raises project-owned `CalendarDataError` for expected out-of-range or unrepresentable calendar-query failures. The validator converts those failures into `MarketDataValidationError` with structured non-secret issue code `calendar_session_out_of_range`.
+- Non-scalar volume handling: `_is_missing_scalar()` now treats array-like/list-like missing checks as non-scalar and returns `False`, allowing exact numeric parsing to reject the value as `non_numeric_volume` instead of raising raw pandas or Python errors.
+
+Files changed during this corrective pass:
+
+- `src/spy_market_agent/market_data/calendar.py`: Added `CALENDAR_START`, `CALENDAR_END`, `CalendarDataError`, explicit `get_calendar(..., start=..., end=...)`, supported-range documentation, and narrow wrapping of expected calendar exceptions.
+- `src/spy_market_agent/validation/market_data_checks.py`: Converted expected `CalendarDataError` failures into structured validation issues and hardened `_is_missing_scalar()`.
+- `tests/unit/test_calendar.py`: Added explicit range, historical start, future horizon, out-of-range, extremely old date, weekend, and holiday coverage.
+- `tests/unit/test_market_data_validation.py`: Added validation coverage for a pre-2006 supported SPY session, safe out-of-range calendar failures, safe extremely old date failures, and non-scalar volume rejection.
+- `reviews/PHASE_03_REVIEW.md`: Added this final corrective addendum.
+
+Tests added or updated:
+
+- Calendar adapter tests now prove the documented range starts at `1993-01-22`, extends through `2050-12-30`, supports a future session beyond 2027, wraps dates outside the range in `CalendarDataError`, and still handles weekends and NYSE holidays correctly.
+- Validation tests now prove a supported historical XNYS session before 2006 validates successfully, out-of-range dates fail as `MarketDataValidationError`, extremely old dates do not expose raw third-party exceptions, and volume values `[1, 2]`, `{"unexpected": "object"}`, and an arbitrary object instance are rejected as validation errors.
+
+Final verification results:
+
+- `pytest`: Passed. Result: 146 passed, 4 third-party warnings, 84% total coverage.
+- `pytest tests/unit -q`: Passed. Result: quiet output completed successfully with all unit tests passing, 4 third-party warnings, 83% total coverage.
+- `pytest tests/integration -q`: Passed. Result: 1 integration test passed, 4 third-party warnings.
+- `ruff check .`: Passed with `All checks passed!`.
+- `ruff format --check .`: Passed with `32 files already formatted`.
+- `mypy src tests`: Passed with `Success: no issues found in 27 source files`.
+- `python -c "import spy_market_agent; print(spy_market_agent.__version__)"`: Passed and printed `0.1.0`.
+- `git diff --check`: Passed with no whitespace errors.
+
+Verification note:
+
+- An earlier attempt ran multiple pytest commands concurrently. Because pytest-cov writes to a shared coverage SQLite file by default, the full run hit a coverage combine internal error after the tests themselves reached `146 passed`. That concurrent run is not counted as the final verification result. Generated coverage data was cleared with `coverage erase`, and the required pytest commands were rerun sequentially in their normal command form and passed.
+
+Remaining warnings and limitations:
+
+- Four visible third-party warnings remain from `exchange-calendars` / pandas / NumPy timedelta internals. They were not globally suppressed.
+- The explicit calendar support range is intentionally finite: `1993-01-22` through `2050-12-30`. Data outside that range fails safely and must be handled by an approved future change if Version 1 research needs a wider horizon.
+- No market-data providers, downloads, feature engineering, labels, models, strategies, backtesting, persistence, API routes, dashboard code, broker access, paper-order submission, or execution functionality was added.
+- The existing project `./.venv` directory was not deleted, recreated, replaced, or cleaned during this corrective pass.
+
+Corrective git summary:
+
+- Current commit hash: `a96bea5`.
+- `git status --short --untracked-files=all` before this addendum showed:
+
+```text
+ M reviews/PHASE_03_REVIEW.md
+ M src/spy_market_agent/config/settings.py
+ M src/spy_market_agent/market_data/calendar.py
+ M src/spy_market_agent/market_data/checksum.py
+ M src/spy_market_agent/market_data/models.py
+ M src/spy_market_agent/validation/market_data_checks.py
+ M tests/unit/test_calendar.py
+ M tests/unit/test_market_data_validation.py
+ M tests/unit/test_settings.py
+```
+
+- `git diff --stat` before this addendum showed:
+
+```text
+ reviews/PHASE_03_REVIEW.md                         | 105 ++++++++
+ src/spy_market_agent/config/settings.py            |  30 +--
+ src/spy_market_agent/market_data/calendar.py       |  81 +++++-
+ src/spy_market_agent/market_data/checksum.py       |  71 +++--
+ src/spy_market_agent/market_data/models.py         |  54 +++-
+ .../validation/market_data_checks.py               | 201 +++++++++++---
+ tests/unit/test_calendar.py                        |  42 ++-
+ tests/unit/test_market_data_validation.py          | 292 ++++++++++++++++++++-
+ tests/unit/test_settings.py                        |  36 +++
+ 9 files changed, 830 insertions(+), 82 deletions(-)
+```
+
+No commit or push was performed.
+
+Final calendar-and-scalar checklist:
+
+- [x] Explicit XNYS calendar support range added.
+- [x] Calendar range failures handled safely.
+- [x] Non-scalar volume handling hardened.
+- [x] Tests added or updated.
+- [x] Pytest run.
+- [x] Unit tests run.
+- [x] Integration tests run.
+- [x] Ruff lint run.
+- [x] Ruff format check run.
+- [x] MyPy run.
+- [x] Import smoke test run.
+- [x] `git diff --check` run.
+- [x] No secrets exposed.
+- [x] No market-data network access introduced.
+- [x] No broker access introduced.
+- [x] No live trading introduced.
+- [x] Phase 4 not started.

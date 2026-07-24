@@ -2,10 +2,23 @@ from __future__ import annotations
 
 from decimal import Decimal
 from typing import Any
-from urllib.parse import SplitResult, urlsplit, urlunsplit
+from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+REDACTED_DATABASE_URL = "<redacted-database-url>"
+_CREDENTIAL_MARKERS = (
+    "access_token",
+    "api_key",
+    "apikey",
+    "credential",
+    "password",
+    "passwd",
+    "pwd",
+    "secret",
+    "token",
+)
 
 
 def _require_value(value: str, *, expected: str, field_name: str) -> str:
@@ -37,7 +50,7 @@ class Settings(BaseSettings):
     enable_paper_execution: bool = False
     dry_run: bool = True
     initial_capital_usd: Decimal = Field(default=Decimal("10000"), gt=Decimal("0"))
-    database_url: str = "sqlite:///./spy_market_agent.db"
+    database_url: str = Field(default="sqlite:///./spy_market_agent.db", repr=False)
     market_symbol: str = "SPY"
     market_timeframe: str = "1Day"
     exchange_calendar: str = "XNYS"
@@ -90,7 +103,7 @@ class Settings(BaseSettings):
         """Return settings suitable for display without revealing secret values."""
 
         safe_values = self.model_dump(mode="json")
-        safe_values["database_url"] = _redact_url_userinfo(self.database_url)
+        safe_values["database_url"] = _display_safe_database_url(self.database_url)
         return safe_values
 
 
@@ -100,21 +113,20 @@ def load_settings() -> Settings:
     return Settings()
 
 
-def _redact_url_userinfo(url: str) -> str:
-    parsed = urlsplit(url)
-    if "@" not in parsed.netloc:
-        return url
+def _display_safe_database_url(url: str) -> str:
+    try:
+        parsed = urlsplit(url)
+    except ValueError:
+        return REDACTED_DATABASE_URL
 
-    host = parsed.hostname or ""
-    if parsed.port is not None:
-        host = f"{host}:{parsed.port}"
-    netloc = f"***:***@{host}"
-    return urlunsplit(
-        SplitResult(
-            scheme=parsed.scheme,
-            netloc=netloc,
-            path=parsed.path,
-            query=parsed.query,
-            fragment=parsed.fragment,
-        )
-    )
+    if parsed.scheme.lower() != "sqlite":
+        return REDACTED_DATABASE_URL
+
+    candidate = f"{parsed.netloc}{parsed.path}{parsed.query}{parsed.fragment}".lower()
+    if "@" in candidate:
+        return REDACTED_DATABASE_URL
+    if parsed.query or parsed.fragment:
+        return REDACTED_DATABASE_URL
+    if any(marker in candidate for marker in _CREDENTIAL_MARKERS):
+        return REDACTED_DATABASE_URL
+    return url
