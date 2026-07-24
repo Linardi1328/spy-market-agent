@@ -3,6 +3,7 @@ from __future__ import annotations
 import subprocess
 import sys
 import tomllib
+from importlib.metadata import version
 from pathlib import Path
 
 import spy_market_agent
@@ -37,6 +38,10 @@ def test_package_can_be_imported() -> None:
 def test_package_version_is_non_empty_string() -> None:
     assert isinstance(spy_market_agent.__version__, str)
     assert spy_market_agent.__version__
+
+
+def test_package_version_matches_installed_metadata() -> None:
+    assert spy_market_agent.__version__ == version("spy-market-agent")
 
 
 def test_required_top_level_documentation_files_exist() -> None:

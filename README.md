@@ -6,15 +6,15 @@ The project is educational and experimental. It is not investment advice, and it
 
 ## Status
 
-Current development status: Phase 2 scaffold.
+Current development status: Phase 3 configuration, canonical schema, and validation.
 
-The repository currently contains project structure, packaging metadata, development tooling, placeholder directories, and minimal scaffold tests. Market analysis and trading functionality are not yet implemented.
+The repository currently contains typed configuration, paper-only configuration validation, a provider-independent daily SPY schema, an XNYS calendar adapter, deterministic dataset checksums, data-quality validation, and tests. Market downloading, model training, recommendations, backtesting, order submission, and broker communication are not implemented.
 
 ## Version 1 Scope
 
 - Python 3.12.
 - SPY ETF only.
-- Daily OHLCV market data in later phases.
+- Daily OHLCV market-data validation.
 - Long-or-cash positions only.
 - No short selling.
 - No leverage.
@@ -33,6 +33,7 @@ The repository currently contains project structure, packaging metadata, develop
 - `ENABLE_PAPER_EXECUTION` defaults to `false`.
 - `DRY_RUN` defaults to `true`.
 - Application startup must not submit paper orders.
+- The package import does not load settings or perform external actions.
 - Models must never communicate directly with brokers.
 - All future proposed trades must pass through an independent risk-management layer.
 - Version 1 must not permit short selling, leverage, or non-SPY assets.
@@ -40,7 +41,10 @@ The repository currently contains project structure, packaging metadata, develop
 ## Repository Structure
 
 ```text
-src/spy_market_agent/      Python package scaffold
+src/spy_market_agent/      Python package source
+src/spy_market_agent/config/       Typed settings
+src/spy_market_agent/market_data/  Canonical request, batch, checksum, calendar, and provider protocol
+src/spy_market_agent/validation/   Canonical SPY daily OHLCV validation
 tests/unit/                Unit tests
 tests/integration/         Integration tests
 tests/fixtures/            Deterministic test fixtures
@@ -71,7 +75,35 @@ python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
 ```
 
-Do not create a real `.env` file with credentials for Phase 2. Use `.env.example` only as a placeholder reference.
+Do not create a real `.env` file with credentials for Phase 3. Use `.env.example` only as a placeholder reference. Alpaca integration is not implemented.
+
+## Implemented Phase 3 Capabilities
+
+- Typed settings via Pydantic Settings.
+- Paper-only configuration validation.
+- Secret-aware optional future Alpaca credential fields.
+- Provider-independent daily SPY market-data request, metadata, and batch models.
+- Provider protocol for deterministic fake providers and future vendor adapters.
+- XNYS trading-session calendar adapter using `exchange-calendars`.
+- Canonical adjusted daily SPY OHLCV DataFrame schema.
+- Deterministic SHA-256 dataset checksums.
+- Deterministic validation of sessions, column schema, OHLC values, volume, metadata, and incomplete daily bars.
+
+## Not Implemented
+
+- Market-data downloading.
+- Investment recommendations.
+- Feature engineering or label generation.
+- Machine-learning model training.
+- Strategy generation.
+- Backtesting.
+- Risk calculations.
+- Paper-order submission.
+- Broker communication.
+- Live trading.
+- FastAPI endpoints.
+- Streamlit pages.
+- Database tables or persistence.
 
 ## Verification
 
@@ -110,4 +142,4 @@ python -c "import spy_market_agent; print(spy_market_agent.__version__)"
 - See `PROJECT_SPEC.md` for the approved architecture, safety requirements, phased plan, and known limitations.
 - See `AGENTS.md` for permanent instructions future Codex tasks must follow.
 
-No market-data downloading, feature engineering, model training, backtesting, risk calculations, API endpoints, dashboard functionality, database tables, or broker integration is implemented in this phase.
+No market-data downloading, feature engineering, model training, backtesting, risk calculations, API endpoints, dashboard functionality, database tables, paper-order submission, live trading, or broker integration is implemented in this phase.

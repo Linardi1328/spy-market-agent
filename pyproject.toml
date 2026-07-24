@@ -11,7 +11,12 @@ requires-python = ">=3.12,<3.13"
 authors = [
   { name = "Risk-Controlled SPY Market Intelligence Contributors" },
 ]
-dependencies = []
+dependencies = [
+  "exchange-calendars>=4.5,<5",
+  "pandas>=2.2,<3",
+  "pydantic>=2.8,<3",
+  "pydantic-settings>=2.4,<3",
+]
 
 [project.optional-dependencies]
 dev = [
@@ -101,3 +106,12 @@ warn_redundant_casts = true
 warn_return_any = true
 warn_unreachable = true
 warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = [
+  "exchange_calendars",
+  "exchange_calendars.*",
+  "pandas",
+  "pandas.*",
+]
+ignore_missing_imports = true

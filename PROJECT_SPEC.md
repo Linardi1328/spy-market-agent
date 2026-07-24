@@ -149,7 +149,7 @@ Core design rules:
 
 ## Market-Data Provider and Adjusted-Price Policy
 
-- The data provider may remain undecided until Phase 3.
+- The data provider may remain undecided through Phase 3.
 - All market-data access must use a provider interface so vendor-specific behavior remains isolated.
 - Preserve the original vendor response as an immutable raw snapshot.
 - Use one consistently adjusted OHLCV series for features, labels, backtesting, and benchmark calculations.
