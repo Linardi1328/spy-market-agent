@@ -1,0 +1,28 @@
+# Environment variables and credentials
+.env
+.env.*
+!.env.example
+
+# Python virtual environment
+.venv/
+venv/
+
+# Python-generated files
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# IDE and operating system
+.vscode/
+.DS_Store
+
+# Project-generated data
+data/raw/
+data/processed/
+artifacts/models/
+artifacts/reports/
+
+# Jupyter
+.ipynb_checkpoints/
