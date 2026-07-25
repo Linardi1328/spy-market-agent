@@ -6,9 +6,9 @@ The project is educational and experimental. It is not investment advice, and it
 
 ## Status
 
-Current development status: Phase 5 deterministic in-memory model training, validation-based model selection, and locked final test evaluation.
+Current development status: Phase 6 deterministic in-memory long-or-cash strategy signals, independent risk controls, and next-open backtesting.
 
-The repository currently contains typed configuration, paper-only configuration validation, a provider-independent daily SPY schema, an XNYS calendar adapter, deterministic dataset checksums, data-quality validation, deterministic trailing feature engineering, forward open-to-open net-positive labels, supervised feature/label alignment, leakage-safe chronological train/validation/test splits, deterministic logistic-regression and gradient-boosting candidate training, validation-only model selection, locked train+validation refit, explicit final test evaluation, and tests. Market downloading, investment recommendations, strategy generation, backtesting, order submission, and broker communication are not implemented.
+The repository currently contains typed configuration, paper-only configuration validation, a provider-independent daily SPY schema, an XNYS calendar adapter, deterministic dataset checksums, data-quality validation, deterministic trailing feature engineering, forward open-to-open net-positive labels, supervised feature/label alignment, leakage-safe chronological train/validation/test splits, deterministic logistic-regression and gradient-boosting candidate training, validation-only model selection, locked train+validation refit, explicit final test evaluation, fixed long-or-cash test signals, independent long-only risk decisions, in-memory next-open backtesting, and tests. Market downloading, investment recommendations, order submission, broker communication, persistence, APIs, and dashboards are not implemented.
 
 ## Version 1 Scope
 
@@ -18,7 +18,7 @@ The repository currently contains typed configuration, paper-only configuration 
 - Long-or-cash positions only.
 - No short selling.
 - No leverage.
-- Historical backtesting in later phases.
+- In-memory historical research backtesting.
 - Initial simulated capital of USD 10,000.
 - Logistic regression baseline and gradient boosting comparison.
 - FastAPI backend and Streamlit dashboard in later phases.
@@ -48,6 +48,9 @@ src/spy_market_agent/validation/   Canonical SPY daily OHLCV validation
 src/spy_market_agent/features/     Leakage-safe trailing feature engineering
 src/spy_market_agent/datasets/     Forward labels, supervised datasets, and chronological splits
 src/spy_market_agent/modeling/     Deterministic model training, validation selection, and test evaluation
+src/spy_market_agent/strategies/   Fixed long-or-cash signal policy
+src/spy_market_agent/risk/         Independent SPY-only long-only risk controls
+src/spy_market_agent/backtesting/  In-memory next-open backtest accounting and metrics
 tests/unit/                Unit tests
 tests/integration/         Integration tests
 tests/fixtures/            Deterministic test fixtures
@@ -120,23 +123,32 @@ Do not create a real `.env` file with credentials for Phase 3. Use `.env.example
 - Classification metrics for train, validation, and final test diagnostics. These are not trading-performance metrics and are not evidence of profitability.
 - Structured Phase 5 errors for expected malformed inputs, training failures, evaluation failures, selection failures, and locked-model failures.
 
+## Implemented Phase 6 Capabilities
+
+- Versioned fixed long-or-cash strategy schema: `spy-long-cash-strategy-v1`.
+- Strategy target positions derived from locked final-test `probability_positive` only, using the fixed `0.5` Phase 6 threshold.
+- Next-open execution mapping from signal session `t` to the immediate next validated market-data row, not calendar-day arithmetic.
+- Explicit immutable backtest cost assumptions for commission and slippage in basis points per side.
+- Independent SPY-only long-only risk configuration that rejects short selling, leverage, fractional shares, and non-SPY symbols.
+- Proposed orders, risk decisions, fills, portfolio/equity rows, and metrics as deterministic in-memory audit DataFrames.
+- Backtest accounting for cash, whole shares, market value, equity, daily return, drawdown, turnover, exposure, transaction costs, and rejected orders.
+- Rejected orders never create fills or alter portfolio state; every fill references an approved risk decision.
+- No model refit, probability generation, broker communication, persistence, API, dashboard, paper order, or live order behavior occurs in Phase 6.
+
 ## Not Implemented
 
 - Market-data downloading.
 - Investment recommendations.
 - Probability calibration.
 - Threshold optimization.
-- Trading thresholds.
-- Strategy generation.
-- Strategy signals.
-- Backtesting.
-- Position sizing.
-- Risk calculations.
+- Trading-threshold optimization.
 - Model persistence.
 - Database persistence.
+- SQLite persistence.
 - APIs.
 - Dashboards.
 - Broker communication.
+- Alpaca integration.
 - Paper-order submission.
 - Live trading.
 - Deployment.
@@ -178,4 +190,4 @@ python -c "import spy_market_agent; print(spy_market_agent.__version__)"
 - See `PROJECT_SPEC.md` for the approved architecture, safety requirements, phased plan, and known limitations.
 - See `AGENTS.md` for permanent instructions future Codex tasks must follow.
 
-No market-data downloading, probability calibration, threshold optimization, trading-threshold selection, strategy signal generation, recommendations, backtesting, position sizing, risk calculation, model persistence, database persistence, API endpoint, dashboard functionality, broker communication, paper-order submission, live trading, or deployment functionality is implemented in this phase.
+No market-data downloading, probability calibration, threshold optimization, hyperparameter tuning, recommendations, model persistence, database persistence, SQLite persistence, API endpoint, dashboard functionality, broker communication, Alpaca integration, paper-order submission, live trading, or deployment functionality is implemented in this phase.
