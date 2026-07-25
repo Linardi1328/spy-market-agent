@@ -6,9 +6,9 @@ The project is educational and experimental. It is not investment advice, and it
 
 ## Status
 
-Current development status: Phase 3 configuration, canonical schema, and validation.
+Current development status: Phase 4 leakage-safe features, forward labels, supervised dataset assembly, and chronological splits.
 
-The repository currently contains typed configuration, paper-only configuration validation, a provider-independent daily SPY schema, an XNYS calendar adapter, deterministic dataset checksums, data-quality validation, and tests. Market downloading, model training, recommendations, backtesting, order submission, and broker communication are not implemented.
+The repository currently contains typed configuration, paper-only configuration validation, a provider-independent daily SPY schema, an XNYS calendar adapter, deterministic dataset checksums, data-quality validation, deterministic trailing feature engineering, forward open-to-open net-positive labels, supervised feature/label alignment, leakage-safe chronological train/validation/test splits, and tests. Market downloading, model fitting, prediction, recommendations, backtesting, order submission, and broker communication are not implemented.
 
 ## Version 1 Scope
 
@@ -45,6 +45,8 @@ src/spy_market_agent/      Python package source
 src/spy_market_agent/config/       Typed settings
 src/spy_market_agent/market_data/  Canonical request, batch, checksum, calendar, and provider protocol
 src/spy_market_agent/validation/   Canonical SPY daily OHLCV validation
+src/spy_market_agent/features/     Leakage-safe trailing feature engineering
+src/spy_market_agent/datasets/     Forward labels, supervised datasets, and chronological splits
 tests/unit/                Unit tests
 tests/integration/         Integration tests
 tests/fixtures/            Deterministic test fixtures
@@ -89,21 +91,41 @@ Do not create a real `.env` file with credentials for Phase 3. Use `.env.example
 - Deterministic SHA-256 dataset checksums.
 - Deterministic validation of sessions, column schema, OHLC values, volume, metadata, and incomplete daily bars.
 
+## Implemented Phase 4 Capabilities
+
+- Versioned ordered daily SPY feature schema: `spy-daily-features-v1`.
+- Deterministic trailing features using only completed sessions through `t`.
+- Warm-up exclusion for the first 20 source rows, with fail-closed validation for non-finite post-warm-up values.
+- Versioned forward label schema: `spy-open-t1-to-open-t6-net-positive-v1`.
+- Explicit immutable cost assumptions for commission and slippage in basis points per side.
+- Label timeline: feature information through session `t`, entry at the open of `t + 1`, exit at the open of `t + 6`, and target `1` only when net return after costs is strictly positive.
+- Supervised dataset assembly that keeps feature columns separate from label audit columns.
+- `X` and `y` accessors that return ordered numerical features only and binary targets only.
+- Chronological train, validation, and test split specifications using explicit session-date boundaries.
+- Leakage-safe split assignment requiring each row's `exit_session` to remain inside the partition boundary.
+- Tests proving future rows cannot affect past features, labels use trading-session row offsets, and boundary-crossing labels are purged.
+
 ## Not Implemented
 
 - Market-data downloading.
 - Investment recommendations.
-- Feature engineering or label generation.
-- Machine-learning model training.
+- Model fitting.
+- Prediction.
+- Probability calibration.
+- Threshold selection.
 - Strategy generation.
+- Strategy signals.
 - Backtesting.
+- Risk sizing.
 - Risk calculations.
+- Database persistence.
+- APIs.
+- Dashboards.
 - Paper-order submission.
 - Broker communication.
 - Live trading.
 - FastAPI endpoints.
 - Streamlit pages.
-- Database tables or persistence.
 
 ## Verification
 
@@ -142,4 +164,4 @@ python -c "import spy_market_agent; print(spy_market_agent.__version__)"
 - See `PROJECT_SPEC.md` for the approved architecture, safety requirements, phased plan, and known limitations.
 - See `AGENTS.md` for permanent instructions future Codex tasks must follow.
 
-No market-data downloading, feature engineering, model training, backtesting, risk calculations, API endpoints, dashboard functionality, database tables, paper-order submission, live trading, or broker integration is implemented in this phase.
+No market-data downloading, model fitting, prediction, probability calibration, threshold selection, strategy signal generation, backtesting, risk sizing, API endpoint, dashboard functionality, database persistence, paper-order submission, live trading, or broker integration is implemented in this phase.
