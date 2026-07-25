@@ -16,6 +16,7 @@ dependencies = [
   "pandas>=2.2,<3",
   "pydantic>=2.8,<3",
   "pydantic-settings>=2.4,<3",
+  "scikit-learn>=1.7,<2",
 ]
 
 [project.optional-dependencies]
@@ -113,5 +114,7 @@ module = [
   "exchange_calendars.*",
   "pandas",
   "pandas.*",
+  "sklearn",
+  "sklearn.*",
 ]
 ignore_missing_imports = true

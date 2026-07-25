@@ -6,9 +6,9 @@ The project is educational and experimental. It is not investment advice, and it
 
 ## Status
 
-Current development status: Phase 4 leakage-safe features, forward labels, supervised dataset assembly, and chronological splits.
+Current development status: Phase 5 deterministic in-memory model training, validation-based model selection, and locked final test evaluation.
 
-The repository currently contains typed configuration, paper-only configuration validation, a provider-independent daily SPY schema, an XNYS calendar adapter, deterministic dataset checksums, data-quality validation, deterministic trailing feature engineering, forward open-to-open net-positive labels, supervised feature/label alignment, leakage-safe chronological train/validation/test splits, and tests. Market downloading, model fitting, prediction, recommendations, backtesting, order submission, and broker communication are not implemented.
+The repository currently contains typed configuration, paper-only configuration validation, a provider-independent daily SPY schema, an XNYS calendar adapter, deterministic dataset checksums, data-quality validation, deterministic trailing feature engineering, forward open-to-open net-positive labels, supervised feature/label alignment, leakage-safe chronological train/validation/test splits, deterministic logistic-regression and gradient-boosting candidate training, validation-only model selection, locked train+validation refit, explicit final test evaluation, and tests. Market downloading, investment recommendations, strategy generation, backtesting, order submission, and broker communication are not implemented.
 
 ## Version 1 Scope
 
@@ -20,7 +20,7 @@ The repository currently contains typed configuration, paper-only configuration 
 - No leverage.
 - Historical backtesting in later phases.
 - Initial simulated capital of USD 10,000.
-- Logistic regression baseline and gradient boosting comparison in later phases.
+- Logistic regression baseline and gradient boosting comparison.
 - FastAPI backend and Streamlit dashboard in later phases.
 - SQLite persistence in later phases.
 - Alpaca paper trading only in a later phase, after explicit approval.
@@ -47,6 +47,7 @@ src/spy_market_agent/market_data/  Canonical request, batch, checksum, calendar,
 src/spy_market_agent/validation/   Canonical SPY daily OHLCV validation
 src/spy_market_agent/features/     Leakage-safe trailing feature engineering
 src/spy_market_agent/datasets/     Forward labels, supervised datasets, and chronological splits
+src/spy_market_agent/modeling/     Deterministic model training, validation selection, and test evaluation
 tests/unit/                Unit tests
 tests/integration/         Integration tests
 tests/fixtures/            Deterministic test fixtures
@@ -105,27 +106,40 @@ Do not create a real `.env` file with credentials for Phase 3. Use `.env.example
 - Leakage-safe split assignment requiring each row's `exit_session` to remain inside the partition boundary.
 - Tests proving future rows cannot affect past features, labels use trading-session row offsets, and boundary-crossing labels are purged.
 
+## Implemented Phase 5 Capabilities
+
+- Versioned modeling schema: `spy-binary-models-v1`.
+- Frozen `ModelTrainingConfig` with deterministic random seed and diagnostic classification threshold.
+- Fixed logistic-regression baseline using a scikit-learn `Pipeline` with `StandardScaler` fitted on train features only.
+- Fixed `GradientBoostingClassifier` comparison model with no scaling, tuning, early stopping, class weighting, resampling, or synthetic observations.
+- Candidate comparison that accepts only train and validation partitions; the test partition is not part of the candidate-training API.
+- Validation-only model-selection rule: higher ROC AUC, then lower log loss, then lower Brier score, then logistic regression as the final tie-break.
+- Locked selected model refit on train plus validation only, using a fresh estimator.
+- Separate final test evaluation that never changes the selected model, parameters, preprocessing, threshold, or selection rationale.
+- Prediction audit frames for diagnostics only, with `session`, `probability_positive`, `predicted_class`, and `target`.
+- Classification metrics for train, validation, and final test diagnostics. These are not trading-performance metrics and are not evidence of profitability.
+- Structured Phase 5 errors for expected malformed inputs, training failures, evaluation failures, selection failures, and locked-model failures.
+
 ## Not Implemented
 
 - Market-data downloading.
 - Investment recommendations.
-- Model fitting.
-- Prediction.
 - Probability calibration.
-- Threshold selection.
+- Threshold optimization.
+- Trading thresholds.
 - Strategy generation.
 - Strategy signals.
 - Backtesting.
-- Risk sizing.
+- Position sizing.
 - Risk calculations.
+- Model persistence.
 - Database persistence.
 - APIs.
 - Dashboards.
-- Paper-order submission.
 - Broker communication.
+- Paper-order submission.
 - Live trading.
-- FastAPI endpoints.
-- Streamlit pages.
+- Deployment.
 
 ## Verification
 
@@ -164,4 +178,4 @@ python -c "import spy_market_agent; print(spy_market_agent.__version__)"
 - See `PROJECT_SPEC.md` for the approved architecture, safety requirements, phased plan, and known limitations.
 - See `AGENTS.md` for permanent instructions future Codex tasks must follow.
 
-No market-data downloading, model fitting, prediction, probability calibration, threshold selection, strategy signal generation, backtesting, risk sizing, API endpoint, dashboard functionality, database persistence, paper-order submission, live trading, or broker integration is implemented in this phase.
+No market-data downloading, probability calibration, threshold optimization, trading-threshold selection, strategy signal generation, recommendations, backtesting, position sizing, risk calculation, model persistence, database persistence, API endpoint, dashboard functionality, broker communication, paper-order submission, live trading, or deployment functionality is implemented in this phase.
