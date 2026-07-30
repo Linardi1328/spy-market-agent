@@ -1,16 +1,23 @@
 from __future__ import annotations
 
+import math
+from collections.abc import Iterator
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from typing import Any, Protocol
 
 import pandas as pd
 
 from spy_market_agent.dashboard.client import DashboardApiClient, DashboardApiError
+from spy_market_agent.run_ids import validate_run_id
 
 DASHBOARD_WARNING = (
     "Educational and experimental research dashboard. Not investment advice. Historical "
     "classification metrics and backtests do not prove profitability."
 )
+DASHBOARD_PREVIEW_LIMIT = 250
+DASHBOARD_MODEL_PREVIEW_LIMIT = 100
+DASHBOARD_EQUITY_PAGE_LIMIT = 500
 
 
 class DashboardClient(Protocol):
@@ -50,19 +57,47 @@ class DashboardClient(Protocol):
 
 
 @dataclass(frozen=True, slots=True)
+class PaginatedItems:
+    items: list[dict[str, Any]]
+    total: int
+    limit: int
+    offset: int
+
+    @classmethod
+    def empty(cls) -> PaginatedItems:
+        return cls(items=[], total=0, limit=1, offset=0)
+
+    @property
+    def visible_count(self) -> int:
+        return len(self.items)
+
+    def __bool__(self) -> bool:
+        return bool(self.items)
+
+    def __len__(self) -> int:
+        return len(self.items)
+
+    def __iter__(self) -> Iterator[dict[str, Any]]:
+        return iter(self.items)
+
+    def __getitem__(self, index: int) -> dict[str, Any]:
+        return self.items[index]
+
+
+@dataclass(frozen=True, slots=True)
 class DashboardState:
     api_available: bool
     health: dict[str, Any]
     data_status: dict[str, Any]
     model_runs: list[dict[str, Any]]
     selected_model_run: dict[str, Any] | None
-    model_predictions: list[dict[str, Any]]
+    model_predictions: PaginatedItems
     backtests: list[dict[str, Any]]
     selected_backtest: dict[str, Any] | None
-    equity_rows: list[dict[str, Any]]
-    order_rows: list[dict[str, Any]]
-    risk_decision_rows: list[dict[str, Any]]
-    fill_rows: list[dict[str, Any]]
+    equity_rows: PaginatedItems
+    order_rows: PaginatedItems
+    risk_decision_rows: PaginatedItems
+    fill_rows: PaginatedItems
     error_message: str | None = None
 
 
@@ -75,23 +110,25 @@ def load_dashboard_state(client: DashboardClient) -> DashboardState:
         model_runs = _items(model_runs_payload)
         backtests = _items(backtests_payload)
         selected_model = None
-        predictions: list[dict[str, Any]] = []
+        predictions = PaginatedItems.empty()
         if model_runs:
-            run_id = str(model_runs[0]["run_id"])
+            run_id = _run_id_from_api_item(model_runs[0])
             selected_model = client.model_run_detail(run_id)
-            predictions = _items(client.model_predictions(run_id, limit=100))
+            predictions = _paginated(
+                client.model_predictions(run_id, limit=DASHBOARD_MODEL_PREVIEW_LIMIT)
+            )
         selected_backtest = None
-        equity_rows: list[dict[str, Any]] = []
-        order_rows: list[dict[str, Any]] = []
-        risk_rows: list[dict[str, Any]] = []
-        fill_rows: list[dict[str, Any]] = []
+        equity_rows = PaginatedItems.empty()
+        order_rows = PaginatedItems.empty()
+        risk_rows = PaginatedItems.empty()
+        fill_rows = PaginatedItems.empty()
         if backtests:
-            run_id = str(backtests[0]["run_id"])
+            run_id = _run_id_from_api_item(backtests[0])
             selected_backtest = client.backtest_detail(run_id)
-            equity_rows = _items(client.equity(run_id, limit=250))
-            order_rows = _items(client.orders(run_id, limit=250))
-            risk_rows = _items(client.risk_decisions(run_id, limit=250))
-            fill_rows = _items(client.fills(run_id, limit=250))
+            equity_rows = _load_all_equity_pages(client, run_id)
+            order_rows = _paginated(client.orders(run_id, limit=DASHBOARD_PREVIEW_LIMIT))
+            risk_rows = _paginated(client.risk_decisions(run_id, limit=DASHBOARD_PREVIEW_LIMIT))
+            fill_rows = _paginated(client.fills(run_id, limit=DASHBOARD_PREVIEW_LIMIT))
         return DashboardState(
             api_available=True,
             health=health,
@@ -113,13 +150,13 @@ def load_dashboard_state(client: DashboardClient) -> DashboardState:
             data_status={"available": False},
             model_runs=[],
             selected_model_run=None,
-            model_predictions=[],
+            model_predictions=PaginatedItems.empty(),
             backtests=[],
             selected_backtest=None,
-            equity_rows=[],
-            order_rows=[],
-            risk_decision_rows=[],
-            fill_rows=[],
+            equity_rows=PaginatedItems.empty(),
+            order_rows=PaginatedItems.empty(),
+            risk_decision_rows=PaginatedItems.empty(),
+            fill_rows=PaginatedItems.empty(),
             error_message=str(exc) or "Read API is unavailable.",
         )
 
@@ -178,7 +215,7 @@ def _render_data_quality(st: Any, state: DashboardState) -> None:
         "schema_version",
         "downloaded_at",
     ]
-    st.dataframe(pd.DataFrame([state.data_status]).loc[:, fields])
+    st.dataframe(pd.DataFrame([state.data_status]).reindex(columns=fields))
 
 
 def _render_model_evaluation(st: Any, state: DashboardState) -> None:
@@ -193,7 +230,8 @@ def _render_model_evaluation(st: Any, state: DashboardState) -> None:
     st.dataframe(pd.DataFrame(model["validation_metric_snapshots"]))
     st.dataframe(pd.DataFrame([model["final_test_metrics"]]))
     if state.model_predictions:
-        prediction_frame = pd.DataFrame(state.model_predictions)
+        _write_page_status(st, "model predictions", state.model_predictions)
+        prediction_frame = pd.DataFrame(state.model_predictions.items)
         st.line_chart(prediction_frame.set_index("session")["probability_positive"])
         st.dataframe(prediction_frame)
 
@@ -212,11 +250,19 @@ def _render_backtest_results(st: Any, state: DashboardState) -> None:
     st.metric("Turnover", metrics["turnover_ratio"])
     st.metric("Exposure", metrics["exposure_fraction"])
     st.metric("Costs", metrics["total_transaction_cost"])
+    st.metric("Orders", metrics["proposed_order_count"])
+    st.metric("Fills", metrics["fill_count"])
     st.write("Historical backtests are approximations and do not guarantee future results.")
     if state.equity_rows:
-        equity_frame = pd.DataFrame(state.equity_rows)
-        st.line_chart(equity_frame.set_index("session")["equity"])
-        st.line_chart(equity_frame.set_index("session")["drawdown"])
+        _write_page_status(st, "equity rows", state.equity_rows)
+        equity_frame = pd.DataFrame(state.equity_rows.items)
+        try:
+            chart_frame = _equity_chart_frame(equity_frame)
+        except DashboardApiError:
+            st.error("Chart data is unavailable or invalid.")
+        else:
+            st.line_chart(chart_frame.set_index("session")["equity"])
+            st.line_chart(chart_frame.set_index("session")["drawdown"])
         st.dataframe(equity_frame)
 
 
@@ -228,15 +274,19 @@ def _render_risk_audit(st: Any, state: DashboardState) -> None:
         return
     st.dataframe(pd.DataFrame([backtest["risk_config"]]))
     st.write("SPY-only, long-only, no leverage, no fractional shares.")
+    metrics = backtest["metrics"]
+    st.write("Approved orders:", metrics["approved_order_count"])
+    st.write("Rejected orders:", metrics["rejected_order_count"])
     if state.risk_decision_rows:
-        risk_frame = pd.DataFrame(state.risk_decision_rows)
-        st.write("Approved decisions:", int(risk_frame["approved"].sum()))
-        st.write("Rejected decisions:", int((~risk_frame["approved"]).sum()))
+        _write_page_status(st, "risk decisions", state.risk_decision_rows)
+        risk_frame = pd.DataFrame(state.risk_decision_rows.items)
         st.dataframe(risk_frame)
     if state.order_rows:
-        st.dataframe(pd.DataFrame(state.order_rows))
+        _write_page_status(st, "orders", state.order_rows)
+        st.dataframe(pd.DataFrame(state.order_rows.items))
     if state.fill_rows:
-        st.dataframe(pd.DataFrame(state.fill_rows))
+        _write_page_status(st, "fills", state.fill_rows)
+        st.dataframe(pd.DataFrame(state.fill_rows.items))
 
 
 def _items(payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -244,6 +294,100 @@ def _items(payload: dict[str, Any]) -> list[dict[str, Any]]:
     if not isinstance(items, list) or any(not isinstance(item, dict) for item in items):
         raise ValueError("API payload items must be a list of objects.")
     return [dict(item) for item in items]
+
+
+def _paginated(payload: dict[str, Any]) -> PaginatedItems:
+    items = _items(payload)
+    total = _non_negative_int(payload.get("total"), field_name="total")
+    limit = _positive_int(payload.get("limit"), field_name="limit")
+    offset = _non_negative_int(payload.get("offset"), field_name="offset")
+    if offset + len(items) > total:
+        raise DashboardApiError("Read API returned inconsistent pagination metadata.")
+    return PaginatedItems(items=items, total=total, limit=limit, offset=offset)
+
+
+def _load_all_equity_pages(client: DashboardClient, run_id: str) -> PaginatedItems:
+    collected: list[dict[str, Any]] = []
+    expected_total: int | None = None
+    seen_sequences: set[int] = set()
+    offset = 0
+    while True:
+        page = _paginated(client.equity(run_id, limit=DASHBOARD_EQUITY_PAGE_LIMIT, offset=offset))
+        if page.limit != DASHBOARD_EQUITY_PAGE_LIMIT or page.offset != offset:
+            raise DashboardApiError("Read API returned inconsistent equity pagination metadata.")
+        if expected_total is None:
+            expected_total = page.total
+        elif page.total != expected_total:
+            raise DashboardApiError("Read API returned inconsistent equity pagination totals.")
+        if expected_total == 0:
+            return PaginatedItems(items=[], total=0, limit=page.limit, offset=0)
+        previous_count = len(collected)
+        for item in page.items:
+            sequence_number = item.get("sequence_number")
+            if isinstance(sequence_number, int):
+                if sequence_number in seen_sequences:
+                    raise DashboardApiError("Read API returned duplicate equity pagination rows.")
+                seen_sequences.add(sequence_number)
+            collected.append(item)
+        if len(collected) == expected_total:
+            return PaginatedItems(
+                items=collected,
+                total=expected_total,
+                limit=page.limit,
+                offset=0,
+            )
+        if len(collected) > expected_total or len(collected) == previous_count:
+            raise DashboardApiError("Read API equity pagination did not make progress.")
+        offset = len(collected)
+
+
+def _run_id_from_api_item(item: dict[str, Any]) -> str:
+    return validate_run_id(item.get("run_id"))
+
+
+def _non_negative_int(value: object, *, field_name: str) -> int:
+    if isinstance(value, bool) or type(value) is not int or value < 0:
+        raise DashboardApiError(f"Read API returned invalid {field_name} pagination metadata.")
+    return value
+
+
+def _positive_int(value: object, *, field_name: str) -> int:
+    if isinstance(value, bool) or type(value) is not int or value <= 0:
+        raise DashboardApiError(f"Read API returned invalid {field_name} pagination metadata.")
+    return value
+
+
+def _write_page_status(st: Any, label: str, page: PaginatedItems) -> None:
+    st.write(f"Showing {page.visible_count} of {page.total} {label}.")
+
+
+def _equity_chart_frame(equity_frame: pd.DataFrame) -> pd.DataFrame:
+    chart_frame = equity_frame.copy(deep=True)
+    for column in ("equity", "drawdown"):
+        if column not in chart_frame.columns:
+            raise DashboardApiError("Chart data is unavailable or invalid.")
+        chart_frame[column] = [
+            _finite_chart_number(value) for value in chart_frame[column].to_list()
+        ]
+        chart_frame[column] = chart_frame[column].astype("float64")
+    return chart_frame
+
+
+def _finite_chart_number(value: object) -> float:
+    if isinstance(value, bool):
+        raise DashboardApiError("Chart data is unavailable or invalid.")
+    if type(value) is str and value.strip() != value:
+        raise DashboardApiError("Chart data is unavailable or invalid.")
+    try:
+        parsed_decimal = value if isinstance(value, Decimal) else Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        raise DashboardApiError("Chart data is unavailable or invalid.") from None
+    if not parsed_decimal.is_finite():
+        raise DashboardApiError("Chart data is unavailable or invalid.")
+    parsed = float(parsed_decimal)
+    if not math.isfinite(parsed):
+        raise DashboardApiError("Chart data is unavailable or invalid.")
+    return parsed
 
 
 def create_default_client(

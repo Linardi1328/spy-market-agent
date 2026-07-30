@@ -62,15 +62,21 @@ from spy_market_agent.persistence.serialization import (
     date_to_text,
     datetime_to_text,
     decimal_to_text,
+    finite_float,
     finite_float_for_storage,
     int_for_storage,
+    int_from_storage,
     int_to_bool,
     json_to_string_tuple,
+    optional_text,
     require_run_id,
+    required_text,
+    stored_run_id,
     text_to_date,
     text_to_datetime,
     text_to_decimal,
     tuple_to_json,
+    validate_checksum,
 )
 from spy_market_agent.risk.models import RiskConfig, RiskError
 from spy_market_agent.strategies.models import StrategyError, StrategySignalSet
@@ -143,7 +149,7 @@ class SQLiteArtifactRepository:
             ).fetchone()
             if row is None:
                 return None
-            return _load_market_data_batch(connection, str(row["run_id"]))
+            return _load_market_data_batch(connection, stored_run_id(row["run_id"]))
         finally:
             connection.close()
 
@@ -189,12 +195,25 @@ class SQLiteArtifactRepository:
             ).fetchall()
             return tuple(
                 ModelRunSummary(
-                    run_id=str(row["run_id"]),
-                    selected_model_name=str(row["selected_model_name"]),
-                    selection_reason=str(row["selection_reason"]),
-                    created_at=str(row["created_at"]),
-                    source_market_data_checksum=str(row["source_market_data_checksum"]),
-                    test_row_count=int(row["test_row_count"]),
+                    run_id=stored_run_id(row["run_id"]),
+                    selected_model_name=required_text(
+                        row["selected_model_name"],
+                        field_name="selected_model_name",
+                    ),
+                    selection_reason=required_text(
+                        row["selection_reason"],
+                        field_name="selection_reason",
+                    ),
+                    created_at=required_text(row["created_at"], field_name="created_at"),
+                    source_market_data_checksum=validate_checksum(
+                        row["source_market_data_checksum"],
+                        field_name="source_market_data_checksum",
+                    ),
+                    test_row_count=int_from_storage(
+                        row["test_row_count"],
+                        field_name="test_row_count",
+                        minimum=0,
+                    ),
                 )
                 for row in rows
             )
@@ -245,15 +264,32 @@ class SQLiteArtifactRepository:
             ).fetchall()
             return tuple(
                 BacktestRunSummary(
-                    run_id=str(row["run_id"]),
-                    selected_model_name=str(row["selected_model_name"]),
-                    created_at=str(row["created_at"]),
-                    source_market_data_checksum=str(row["source_market_data_checksum"]),
-                    final_equity=float(row["final_equity"]),
-                    total_return=float(row["total_return"]),
-                    maximum_drawdown=float(row["maximum_drawdown"]),
-                    proposed_order_count=int(row["proposed_order_count"]),
-                    fill_count=int(row["fill_count"]),
+                    run_id=stored_run_id(row["run_id"]),
+                    selected_model_name=required_text(
+                        row["selected_model_name"],
+                        field_name="selected_model_name",
+                    ),
+                    created_at=required_text(row["created_at"], field_name="created_at"),
+                    source_market_data_checksum=validate_checksum(
+                        row["source_market_data_checksum"],
+                        field_name="source_market_data_checksum",
+                    ),
+                    final_equity=finite_float(row["final_equity"], field_name="final_equity"),
+                    total_return=finite_float(row["total_return"], field_name="total_return"),
+                    maximum_drawdown=finite_float(
+                        row["maximum_drawdown"],
+                        field_name="maximum_drawdown",
+                    ),
+                    proposed_order_count=int_from_storage(
+                        row["proposed_order_count"],
+                        field_name="proposed_order_count",
+                        minimum=0,
+                    ),
+                    fill_count=int_from_storage(
+                        row["fill_count"],
+                        field_name="fill_count",
+                        minimum=0,
+                    ),
                 )
                 for row in rows
             )
@@ -772,40 +808,58 @@ def _load_market_data_from_rows(
         f"SELECT * FROM {rows_table} WHERE {owner_column} = ? ORDER BY sequence_number",
         (owner_id,),
     ).fetchall()
-    data = pd.DataFrame(
-        [
-            {
-                "session": text_to_date(row["session"], field_name="session"),
-                "open": float(row["open"]),
-                "high": float(row["high"]),
-                "low": float(row["low"]),
-                "close": float(row["close"]),
-                "volume": int(row["volume"]),
-            }
-            for row in rows
-        ],
-        columns=list(CANONICAL_COLUMNS),
-    )
-    for column in ("open", "high", "low", "close"):
-        data[column] = data[column].astype("float64")
-    data["volume"] = data["volume"].astype("int64")
     try:
+        data = pd.DataFrame(
+            [
+                {
+                    "session": text_to_date(row["session"], field_name="session"),
+                    "open": finite_float(row["open"], field_name="open"),
+                    "high": finite_float(row["high"], field_name="high"),
+                    "low": finite_float(row["low"], field_name="low"),
+                    "close": finite_float(row["close"], field_name="close"),
+                    "volume": int_from_storage(
+                        row["volume"],
+                        field_name="volume",
+                        minimum=0,
+                    ),
+                }
+                for row in rows
+            ],
+            columns=list(CANONICAL_COLUMNS),
+        )
+        _astype_columns(data, columns=("open", "high", "low", "close"), dtype_name="float64")
+        _astype_columns(data, columns=("volume",), dtype_name="int64")
         metadata = MarketDataMetadata(
-            provider_name=str(metadata_row["provider_name"]),
-            symbol=str(metadata_row["symbol"]),
-            timeframe=str(metadata_row["timeframe"]),
-            adjustment_policy=str(metadata_row["adjustment_policy"]),
+            provider_name=required_text(metadata_row["provider_name"], field_name="provider_name"),
+            symbol=required_text(metadata_row["symbol"], field_name="symbol"),
+            timeframe=required_text(metadata_row["timeframe"], field_name="timeframe"),
+            adjustment_policy=required_text(
+                metadata_row["adjustment_policy"],
+                field_name="adjustment_policy",
+            ),
             downloaded_at=text_to_datetime(metadata_row["downloaded_at"]),
             created_at=text_to_datetime(metadata_row["created_at"]),
             first_session=text_to_date(metadata_row["first_session"], field_name="first_session"),
             last_session=text_to_date(metadata_row["last_session"], field_name="last_session"),
-            row_count=int(metadata_row["row_count"]),
-            dataset_checksum=str(metadata_row["dataset_checksum"]),
-            schema_version=str(metadata_row["schema_version"]),
-            source_description=cast(str | None, metadata_row["source_description"]),
+            row_count=int_from_storage(
+                metadata_row["row_count"],
+                field_name="row_count",
+                minimum=1,
+            ),
+            dataset_checksum=validate_checksum(
+                metadata_row["dataset_checksum"],
+                field_name="dataset_checksum",
+            ),
+            schema_version=required_text(
+                metadata_row["schema_version"], field_name="schema_version"
+            ),
+            source_description=optional_text(
+                metadata_row["source_description"],
+                field_name="source_description",
+            ),
         )
         return MarketDataBatch(data=data, metadata=metadata)
-    except (ValidationError, ValueError, TypeError) as exc:
+    except (ValidationError, ValueError, TypeError, OverflowError) as exc:
         raise PersistenceIntegrityError(
             "market_data_reconstruction_failed",
             "stored market data failed Phase 3 reconstruction.",
@@ -819,67 +873,116 @@ def _load_final_test_evaluation(
     row = connection.execute("SELECT * FROM model_runs WHERE run_id = ?", (run_id,)).fetchone()
     if row is None:
         raise PersistenceNotFoundError("model_run_not_found", "model run was not found.")
-    snapshots = _load_candidate_metric_snapshots(connection, run_id)
-    parameters = _load_model_parameter_sets(connection, run_id)
-    split_spec = _split_spec_from_json(row["split_spec_json"])
-    created_at = text_to_datetime(row["created_at"])
     try:
+        snapshots = _load_candidate_metric_snapshots(connection, run_id)
+        parameters = _load_model_parameter_sets(connection, run_id)
+        split_spec = _split_spec_from_json(row["split_spec_json"])
+        created_at = text_to_datetime(row["created_at"])
+        selected_model_name = required_text(
+            row["selected_model_name"], field_name="selected_model_name"
+        )
+        source_checksum = validate_checksum(
+            row["source_market_data_checksum"],
+            field_name="source_market_data_checksum",
+        )
+        feature_columns = json_to_string_tuple(
+            row["feature_columns_json"],
+            field_name="feature_columns_json",
+        )
+        diagnostic_threshold = finite_float(
+            row["diagnostic_classification_threshold"],
+            field_name="diagnostic_classification_threshold",
+        )
+        random_seed = int_from_storage(row["random_seed"], field_name="random_seed", minimum=0)
         locked = LockedModelSelection(
-            selected_model_name=cast(Any, str(row["selected_model_name"])),
-            selection_rule_version=str(row["selection_rule_version"]),
-            selection_reason=str(row["selection_reason"]),
+            selected_model_name=cast(Any, selected_model_name),
+            selection_rule_version=required_text(
+                row["selection_rule_version"],
+                field_name="selection_rule_version",
+            ),
+            selection_reason=required_text(row["selection_reason"], field_name="selection_reason"),
             roc_auc_tie_break_required=int_to_bool(row["roc_auc_tie_break_required"]),
             log_loss_tie_break_required=int_to_bool(row["log_loss_tie_break_required"]),
             brier_score_tie_break_required=int_to_bool(row["brier_score_tie_break_required"]),
             validation_metric_snapshots=snapshots,
             candidate_parameters=parameters,
-            source_market_data_checksum=str(row["source_market_data_checksum"]),
-            source_schema_version=str(row["source_schema_version"]),
-            feature_schema_version=str(row["feature_schema_version"]),
-            label_schema_version=str(row["label_schema_version"]),
-            feature_columns=json_to_string_tuple(
-                row["feature_columns_json"],
-                field_name="feature_columns_json",
+            source_market_data_checksum=source_checksum,
+            source_schema_version=required_text(
+                row["source_schema_version"],
+                field_name="source_schema_version",
             ),
+            feature_schema_version=required_text(
+                row["feature_schema_version"],
+                field_name="feature_schema_version",
+            ),
+            label_schema_version=required_text(
+                row["label_schema_version"],
+                field_name="label_schema_version",
+            ),
+            feature_columns=feature_columns,
             split_spec=split_spec,
-            train_row_count=int(row["train_row_count"]),
-            validation_row_count=int(row["validation_row_count"]),
+            train_row_count=int_from_storage(
+                row["train_row_count"],
+                field_name="train_row_count",
+                minimum=0,
+            ),
+            validation_row_count=int_from_storage(
+                row["validation_row_count"],
+                field_name="validation_row_count",
+                minimum=0,
+            ),
             train_first_session=text_to_date(row["train_first_session"]),
             train_last_session=text_to_date(row["train_last_session"]),
             validation_first_session=text_to_date(row["validation_first_session"]),
             validation_last_session=text_to_date(row["validation_last_session"]),
-            random_seed=int(row["random_seed"]),
-            diagnostic_classification_threshold=float(row["diagnostic_classification_threshold"]),
-            sklearn_version=str(row["sklearn_version"]),
-            model_schema_version=str(row["model_schema_version"]),
+            random_seed=random_seed,
+            diagnostic_classification_threshold=diagnostic_threshold,
+            sklearn_version=required_text(row["sklearn_version"], field_name="sklearn_version"),
+            model_schema_version=required_text(
+                row["model_schema_version"],
+                field_name="model_schema_version",
+            ),
             created_at=created_at,
         )
         prediction_set = _load_prediction_set(connection, run_id, row, created_at)
         metrics = _load_classification_metrics(connection, run_id)
         return FinalTestEvaluation(
-            selected_model_name=cast(Any, str(row["selected_model_name"])),
+            selected_model_name=cast(Any, selected_model_name),
             locked_selection=locked,
             prediction_set=prediction_set,
             metrics=metrics,
-            source_market_data_checksum=str(row["source_market_data_checksum"]),
-            source_schema_version=str(row["source_schema_version"]),
-            feature_schema_version=str(row["feature_schema_version"]),
-            label_schema_version=str(row["label_schema_version"]),
-            feature_columns=json_to_string_tuple(
-                row["feature_columns_json"],
-                field_name="feature_columns_json",
+            source_market_data_checksum=source_checksum,
+            source_schema_version=required_text(
+                row["source_schema_version"],
+                field_name="source_schema_version",
             ),
+            feature_schema_version=required_text(
+                row["feature_schema_version"],
+                field_name="feature_schema_version",
+            ),
+            label_schema_version=required_text(
+                row["label_schema_version"],
+                field_name="label_schema_version",
+            ),
+            feature_columns=feature_columns,
             split_spec=split_spec,
-            test_row_count=int(row["test_row_count"]),
+            test_row_count=int_from_storage(
+                row["test_row_count"],
+                field_name="test_row_count",
+                minimum=0,
+            ),
             test_first_session=text_to_date(row["test_first_session"]),
             test_last_session=text_to_date(row["test_last_session"]),
-            random_seed=int(row["random_seed"]),
-            diagnostic_classification_threshold=float(row["diagnostic_classification_threshold"]),
-            sklearn_version=str(row["sklearn_version"]),
-            model_schema_version=str(row["model_schema_version"]),
+            random_seed=random_seed,
+            diagnostic_classification_threshold=diagnostic_threshold,
+            sklearn_version=required_text(row["sklearn_version"], field_name="sklearn_version"),
+            model_schema_version=required_text(
+                row["model_schema_version"],
+                field_name="model_schema_version",
+            ),
             created_at=created_at,
         )
-    except ModelingError as exc:
+    except (ModelingError, ValueError, TypeError, OverflowError) as exc:
         raise PersistenceIntegrityError(
             "model_run_reconstruction_failed",
             "stored model run failed Phase 5 reconstruction.",
@@ -901,17 +1004,25 @@ def _load_candidate_metric_snapshots(
     try:
         return tuple(
             CandidateMetricSnapshot(
-                model_name=cast(Any, str(row["model_name"])),
-                row_count=int(row["row_count"]),
-                positive_count=int(row["positive_count"]),
-                negative_count=int(row["negative_count"]),
-                log_loss=float(row["log_loss"]),
-                brier_score=float(row["brier_score"]),
-                roc_auc=float(row["roc_auc"]),
+                model_name=cast(Any, required_text(row["model_name"], field_name="model_name")),
+                row_count=int_from_storage(row["row_count"], field_name="row_count", minimum=0),
+                positive_count=int_from_storage(
+                    row["positive_count"],
+                    field_name="positive_count",
+                    minimum=0,
+                ),
+                negative_count=int_from_storage(
+                    row["negative_count"],
+                    field_name="negative_count",
+                    minimum=0,
+                ),
+                log_loss=finite_float(row["log_loss"], field_name="log_loss"),
+                brier_score=finite_float(row["brier_score"], field_name="brier_score"),
+                roc_auc=finite_float(row["roc_auc"], field_name="roc_auc"),
             )
             for row in rows
         )
-    except ModelingError as exc:
+    except (ModelingError, ValueError, TypeError, OverflowError) as exc:
         raise PersistenceIntegrityError(
             "metric_snapshot_reconstruction_failed",
             "stored metric snapshots failed reconstruction.",
@@ -935,7 +1046,7 @@ def _load_model_parameter_sets(
         ).fetchall()
         parameters = tuple(
             (
-                str(row["parameter_name"]),
+                required_text(row["parameter_name"], field_name="parameter_name"),
                 _json_to_model_parameter_value(row["parameter_value_json"]),
             )
             for row in rows
@@ -944,7 +1055,7 @@ def _load_model_parameter_sets(
             parameter_sets.append(
                 ModelParameterSet(model_name=cast(Any, model_name), parameters=parameters)
             )
-        except ModelingError as exc:
+        except (ModelingError, ValueError, TypeError, OverflowError) as exc:
             raise PersistenceIntegrityError(
                 "parameter_snapshot_reconstruction_failed",
                 "stored model parameter snapshots failed reconstruction.",
@@ -966,31 +1077,53 @@ def _load_prediction_set(
         """,
         (run_id,),
     ).fetchall()
-    frame = pd.DataFrame(
-        [
-            {
-                "session": text_to_date(row["session"]),
-                "probability_positive": float(row["probability_positive"]),
-                "predicted_class": int(row["predicted_class"]),
-                "target": int(row["target"]),
-            }
-            for row in rows
-        ],
-        columns=["session", "probability_positive", "predicted_class", "target"],
-    )
-    frame["probability_positive"] = frame["probability_positive"].astype("float64")
-    frame["predicted_class"] = frame["predicted_class"].astype("int64")
-    frame["target"] = frame["target"].astype("int64")
-    return PredictionSet(
-        model_name=cast(Any, str(model_row["selected_model_name"])),
-        partition_name="test",
-        data=frame,
-        diagnostic_classification_threshold=float(model_row["diagnostic_classification_threshold"]),
-        row_count=int(model_row["test_row_count"]),
-        first_session=text_to_date(model_row["test_first_session"]),
-        last_session=text_to_date(model_row["test_last_session"]),
-        created_at=cast(Any, created_at),
-    )
+    try:
+        frame = pd.DataFrame(
+            [
+                {
+                    "session": text_to_date(row["session"]),
+                    "probability_positive": finite_float(
+                        row["probability_positive"],
+                        field_name="probability_positive",
+                    ),
+                    "predicted_class": int_from_storage(
+                        row["predicted_class"],
+                        field_name="predicted_class",
+                        minimum=0,
+                    ),
+                    "target": int_from_storage(row["target"], field_name="target", minimum=0),
+                }
+                for row in rows
+            ],
+            columns=["session", "probability_positive", "predicted_class", "target"],
+        )
+        _astype_columns(frame, columns=("probability_positive",), dtype_name="float64")
+        _astype_columns(frame, columns=("predicted_class", "target"), dtype_name="int64")
+        return PredictionSet(
+            model_name=cast(
+                Any,
+                required_text(model_row["selected_model_name"], field_name="selected_model_name"),
+            ),
+            partition_name="test",
+            data=frame,
+            diagnostic_classification_threshold=finite_float(
+                model_row["diagnostic_classification_threshold"],
+                field_name="diagnostic_classification_threshold",
+            ),
+            row_count=int_from_storage(
+                model_row["test_row_count"],
+                field_name="test_row_count",
+                minimum=0,
+            ),
+            first_session=text_to_date(model_row["test_first_session"]),
+            last_session=text_to_date(model_row["test_last_session"]),
+            created_at=cast(Any, created_at),
+        )
+    except (ModelingError, ValueError, TypeError, OverflowError) as exc:
+        raise PersistenceIntegrityError(
+            "prediction_reconstruction_failed",
+            "stored predictions failed reconstruction.",
+        ) from exc
 
 
 def _load_classification_metrics(
@@ -1006,28 +1139,70 @@ def _load_classification_metrics(
             "missing_model_metrics",
             "model run is missing final metrics.",
         )
-    return ClassificationMetrics(
-        model_name=cast(Any, str(row["model_name"])),
-        partition_name=cast(Any, str(row["partition_name"])),
-        diagnostic_classification_threshold=float(row["diagnostic_classification_threshold"]),
-        row_count=int(row["row_count"]),
-        positive_count=int(row["positive_count"]),
-        negative_count=int(row["negative_count"]),
-        positive_rate=float(row["positive_rate"]),
-        log_loss=float(row["log_loss"]),
-        brier_score=float(row["brier_score"]),
-        roc_auc=float(row["roc_auc"]),
-        average_precision=float(row["average_precision"]),
-        accuracy_at_0_5=float(row["accuracy_at_0_5"]),
-        precision_at_0_5=float(row["precision_at_0_5"]),
-        recall_at_0_5=float(row["recall_at_0_5"]),
-        f1_at_0_5=float(row["f1_at_0_5"]),
-        true_negative_count=int(row["true_negative_count"]),
-        false_positive_count=int(row["false_positive_count"]),
-        false_negative_count=int(row["false_negative_count"]),
-        true_positive_count=int(row["true_positive_count"]),
-        created_at=text_to_datetime(row["created_at"]),
-    )
+    try:
+        return ClassificationMetrics(
+            model_name=cast(Any, required_text(row["model_name"], field_name="model_name")),
+            partition_name=cast(
+                Any,
+                required_text(row["partition_name"], field_name="partition_name"),
+            ),
+            diagnostic_classification_threshold=finite_float(
+                row["diagnostic_classification_threshold"],
+                field_name="diagnostic_classification_threshold",
+            ),
+            row_count=int_from_storage(row["row_count"], field_name="row_count", minimum=0),
+            positive_count=int_from_storage(
+                row["positive_count"],
+                field_name="positive_count",
+                minimum=0,
+            ),
+            negative_count=int_from_storage(
+                row["negative_count"],
+                field_name="negative_count",
+                minimum=0,
+            ),
+            positive_rate=finite_float(row["positive_rate"], field_name="positive_rate"),
+            log_loss=finite_float(row["log_loss"], field_name="log_loss"),
+            brier_score=finite_float(row["brier_score"], field_name="brier_score"),
+            roc_auc=finite_float(row["roc_auc"], field_name="roc_auc"),
+            average_precision=finite_float(
+                row["average_precision"],
+                field_name="average_precision",
+            ),
+            accuracy_at_0_5=finite_float(row["accuracy_at_0_5"], field_name="accuracy_at_0_5"),
+            precision_at_0_5=finite_float(
+                row["precision_at_0_5"],
+                field_name="precision_at_0_5",
+            ),
+            recall_at_0_5=finite_float(row["recall_at_0_5"], field_name="recall_at_0_5"),
+            f1_at_0_5=finite_float(row["f1_at_0_5"], field_name="f1_at_0_5"),
+            true_negative_count=int_from_storage(
+                row["true_negative_count"],
+                field_name="true_negative_count",
+                minimum=0,
+            ),
+            false_positive_count=int_from_storage(
+                row["false_positive_count"],
+                field_name="false_positive_count",
+                minimum=0,
+            ),
+            false_negative_count=int_from_storage(
+                row["false_negative_count"],
+                field_name="false_negative_count",
+                minimum=0,
+            ),
+            true_positive_count=int_from_storage(
+                row["true_positive_count"],
+                field_name="true_positive_count",
+                minimum=0,
+            ),
+            created_at=text_to_datetime(row["created_at"]),
+        )
+    except (ModelingError, ValueError, TypeError, OverflowError) as exc:
+        raise PersistenceIntegrityError(
+            "classification_metric_reconstruction_failed",
+            "stored classification metrics failed reconstruction.",
+        ) from exc
 
 
 def _load_backtest_result(connection: sqlite3.Connection, run_id: str) -> BacktestResult:
@@ -1050,84 +1225,148 @@ def _load_backtest_result(connection: sqlite3.Connection, run_id: str) -> Backte
         owner_column="backtest_run_id",
         owner_id=run_id,
     )
-    split_spec = _split_spec_from_json(row["split_spec_json"])
-    created_at = text_to_datetime(row["created_at"])
-    signals = StrategySignalSet(
-        data=_load_frame(
-            connection,
-            table_name="backtest_strategy_signals",
-            owner_column="backtest_run_id",
-            owner_id=run_id,
-            columns=(
-                "signal_session",
-                "execution_session",
-                "probability_positive",
-                "target_position",
-            ),
-            date_columns=("signal_session", "execution_session"),
-            bool_columns=(),
-            json_tuple_columns=(),
-            int_columns=("target_position",),
-            float_columns=("probability_positive",),
-        ),
-        selected_model_name=str(row["selected_model_name"]),
-        strategy_threshold=float(row["strategy_threshold"]),
-        source_market_data_checksum=str(row["source_market_data_checksum"]),
-        source_schema_version=str(row["source_schema_version"]),
-        feature_schema_version=str(row["feature_schema_version"]),
-        label_schema_version=str(row["label_schema_version"]),
-        model_schema_version=str(row["model_schema_version"]),
-        strategy_schema_version=str(row["strategy_schema_version"]),
-        feature_columns=json_to_string_tuple(
+    try:
+        split_spec = _split_spec_from_json(row["split_spec_json"])
+        created_at = text_to_datetime(row["created_at"])
+        selected_model_name = required_text(
+            row["selected_model_name"],
+            field_name="selected_model_name",
+        )
+        source_checksum = validate_checksum(
+            row["source_market_data_checksum"],
+            field_name="source_market_data_checksum",
+        )
+        source_schema_version = required_text(
+            row["source_schema_version"],
+            field_name="source_schema_version",
+        )
+        feature_schema_version = required_text(
+            row["feature_schema_version"],
+            field_name="feature_schema_version",
+        )
+        label_schema_version = required_text(
+            row["label_schema_version"],
+            field_name="label_schema_version",
+        )
+        model_schema_version = required_text(
+            row["model_schema_version"],
+            field_name="model_schema_version",
+        )
+        strategy_schema_version = required_text(
+            row["strategy_schema_version"],
+            field_name="strategy_schema_version",
+        )
+        risk_schema_version = required_text(
+            row["risk_schema_version"],
+            field_name="risk_schema_version",
+        )
+        backtest_schema_version = required_text(
+            row["backtest_schema_version"],
+            field_name="backtest_schema_version",
+        )
+        feature_columns = json_to_string_tuple(
             row["feature_columns_json"],
             field_name="feature_columns_json",
-        ),
-        split_spec=split_spec,
-        market_sessions=tuple(source_batch.data["session"].to_list()),
-        first_signal_session=text_to_date(row["first_signal_session"]),
-        last_signal_session=text_to_date(row["last_signal_session"]),
-        first_execution_session=text_to_date(row["first_execution_session"]),
-        last_execution_session=text_to_date(row["last_execution_session"]),
-        row_count=_count_rows(connection, "backtest_strategy_signals", "backtest_run_id", run_id),
-        sklearn_version=str(row["sklearn_version"]),
-        created_at=created_at,
-    )
-    execution_prices = ExecutionPriceSet(
-        data=_load_frame(
-            connection,
-            table_name="backtest_execution_prices",
-            owner_column="backtest_run_id",
-            owner_id=run_id,
-            columns=EXECUTION_PRICE_COLUMNS,
-            date_columns=("execution_session",),
-            bool_columns=(),
-            json_tuple_columns=(),
-            int_columns=(),
-            float_columns=("reference_open", "close_price"),
-        ),
-        source_market_data_checksum=str(row["source_market_data_checksum"]),
-        source_schema_version=str(row["source_schema_version"]),
-        first_execution_session=text_to_date(row["first_execution_session"]),
-        last_execution_session=text_to_date(row["last_execution_session"]),
-        row_count=_count_rows(connection, "backtest_execution_prices", "backtest_run_id", run_id),
-        created_at=created_at,
-        execution_price_checksum=str(row["execution_price_checksum"]),
-    )
-    backtest_config = BacktestConfig(
-        cost_assumptions=BacktestCostAssumptions(
-            commission_bps_per_side=text_to_decimal(row["commission_bps_per_side"]),
-            slippage_bps_per_side=text_to_decimal(row["slippage_bps_per_side"]),
-        ),
-        initial_cash=text_to_decimal(row["initial_cash"]),
-    )
-    risk_config = RiskConfig(
-        supported_symbol=str(row["risk_supported_symbol"]),
-        allow_short_selling=int_to_bool(row["risk_allow_short_selling"]),
-        allow_leverage=int_to_bool(row["risk_allow_leverage"]),
-        allow_fractional_shares=int_to_bool(row["risk_allow_fractional_shares"]),
-        maximum_position_weight=float(row["risk_maximum_position_weight"]),
-    )
-    try:
+        )
+        strategy_threshold = finite_float(
+            row["strategy_threshold"], field_name="strategy_threshold"
+        )
+        first_signal_session = text_to_date(row["first_signal_session"])
+        last_signal_session = text_to_date(row["last_signal_session"])
+        first_execution_session = text_to_date(row["first_execution_session"])
+        last_execution_session = text_to_date(row["last_execution_session"])
+        sklearn_version = required_text(row["sklearn_version"], field_name="sklearn_version")
+        signals = StrategySignalSet(
+            data=_load_frame(
+                connection,
+                table_name="backtest_strategy_signals",
+                owner_column="backtest_run_id",
+                owner_id=run_id,
+                columns=(
+                    "signal_session",
+                    "execution_session",
+                    "probability_positive",
+                    "target_position",
+                ),
+                date_columns=("signal_session", "execution_session"),
+                bool_columns=(),
+                json_tuple_columns=(),
+                int_columns=("target_position",),
+                float_columns=("probability_positive",),
+            ),
+            selected_model_name=selected_model_name,
+            strategy_threshold=strategy_threshold,
+            source_market_data_checksum=source_checksum,
+            source_schema_version=source_schema_version,
+            feature_schema_version=feature_schema_version,
+            label_schema_version=label_schema_version,
+            model_schema_version=model_schema_version,
+            strategy_schema_version=strategy_schema_version,
+            feature_columns=feature_columns,
+            split_spec=split_spec,
+            market_sessions=tuple(source_batch.data["session"].to_list()),
+            first_signal_session=first_signal_session,
+            last_signal_session=last_signal_session,
+            first_execution_session=first_execution_session,
+            last_execution_session=last_execution_session,
+            row_count=_count_rows(
+                connection,
+                "backtest_strategy_signals",
+                "backtest_run_id",
+                run_id,
+            ),
+            sklearn_version=sklearn_version,
+            created_at=created_at,
+        )
+        execution_prices = ExecutionPriceSet(
+            data=_load_frame(
+                connection,
+                table_name="backtest_execution_prices",
+                owner_column="backtest_run_id",
+                owner_id=run_id,
+                columns=EXECUTION_PRICE_COLUMNS,
+                date_columns=("execution_session",),
+                bool_columns=(),
+                json_tuple_columns=(),
+                int_columns=(),
+                float_columns=("reference_open", "close_price"),
+            ),
+            source_market_data_checksum=source_checksum,
+            source_schema_version=source_schema_version,
+            first_execution_session=first_execution_session,
+            last_execution_session=last_execution_session,
+            row_count=_count_rows(
+                connection,
+                "backtest_execution_prices",
+                "backtest_run_id",
+                run_id,
+            ),
+            created_at=created_at,
+            execution_price_checksum=validate_checksum(
+                row["execution_price_checksum"],
+                field_name="execution_price_checksum",
+            ),
+        )
+        backtest_config = BacktestConfig(
+            cost_assumptions=BacktestCostAssumptions(
+                commission_bps_per_side=text_to_decimal(row["commission_bps_per_side"]),
+                slippage_bps_per_side=text_to_decimal(row["slippage_bps_per_side"]),
+            ),
+            initial_cash=text_to_decimal(row["initial_cash"]),
+        )
+        risk_config = RiskConfig(
+            supported_symbol=required_text(
+                row["risk_supported_symbol"],
+                field_name="risk_supported_symbol",
+            ),
+            allow_short_selling=int_to_bool(row["risk_allow_short_selling"]),
+            allow_leverage=int_to_bool(row["risk_allow_leverage"]),
+            allow_fractional_shares=int_to_bool(row["risk_allow_fractional_shares"]),
+            maximum_position_weight=finite_float(
+                row["risk_maximum_position_weight"],
+                field_name="risk_maximum_position_weight",
+            ),
+        )
         return BacktestResult(
             strategy_signal_set=signals,
             source_market_data=source_batch,
@@ -1210,31 +1449,28 @@ def _load_backtest_result(connection: sqlite3.Connection, run_id: str) -> Backte
             metrics=_load_backtest_metrics(connection, run_id),
             backtest_config=backtest_config,
             risk_config=risk_config,
-            selected_model_name=str(row["selected_model_name"]),
-            source_market_data_checksum=str(row["source_market_data_checksum"]),
-            source_schema_version=str(row["source_schema_version"]),
-            feature_schema_version=str(row["feature_schema_version"]),
-            label_schema_version=str(row["label_schema_version"]),
-            model_schema_version=str(row["model_schema_version"]),
-            strategy_schema_version=str(row["strategy_schema_version"]),
-            risk_schema_version=str(row["risk_schema_version"]),
-            backtest_schema_version=str(row["backtest_schema_version"]),
-            feature_columns=json_to_string_tuple(
-                row["feature_columns_json"],
-                field_name="feature_columns_json",
-            ),
+            selected_model_name=selected_model_name,
+            source_market_data_checksum=source_checksum,
+            source_schema_version=source_schema_version,
+            feature_schema_version=feature_schema_version,
+            label_schema_version=label_schema_version,
+            model_schema_version=model_schema_version,
+            strategy_schema_version=strategy_schema_version,
+            risk_schema_version=risk_schema_version,
+            backtest_schema_version=backtest_schema_version,
+            feature_columns=feature_columns,
             split_spec=split_spec,
-            strategy_threshold=float(row["strategy_threshold"]),
-            first_signal_session=text_to_date(row["first_signal_session"]),
-            last_signal_session=text_to_date(row["last_signal_session"]),
-            first_execution_session=text_to_date(row["first_execution_session"]),
-            last_execution_session=text_to_date(row["last_execution_session"]),
+            strategy_threshold=strategy_threshold,
+            first_signal_session=first_signal_session,
+            last_signal_session=last_signal_session,
+            first_execution_session=first_execution_session,
+            last_execution_session=last_execution_session,
             initial_cash=text_to_decimal(row["initial_cash"]),
             cost_assumptions=backtest_config.cost_assumptions,
-            sklearn_version=str(row["sklearn_version"]),
+            sklearn_version=sklearn_version,
             created_at=created_at,
         )
-    except (BacktestError, RiskError, StrategyError) as exc:
+    except (BacktestError, RiskError, StrategyError, ValueError, TypeError, OverflowError) as exc:
         raise PersistenceIntegrityError(
             "backtest_reconstruction_failed",
             "stored backtest failed Phase 6 audit reconstruction.",
@@ -1285,16 +1521,17 @@ def _load_frame(
                         f"{column} must be an ordered JSON list of strings.",
                     )
                 record[column] = tuple(parsed)
+            elif column in int_columns:
+                record[column] = int_from_storage(raw_value, field_name=column, minimum=0)
+            elif column in float_columns:
+                record[column] = finite_float(raw_value, field_name=column)
             else:
-                record[column] = raw_value
+                record[column] = required_text(raw_value, field_name=column)
         records.append(record)
     frame = pd.DataFrame.from_records(records, columns=list(columns))
-    for column in int_columns:
-        frame[column] = frame[column].astype("int64")
-    for column in float_columns:
-        frame[column] = frame[column].astype("float64")
-    for column in bool_columns:
-        frame[column] = frame[column].astype("bool")
+    _astype_columns(frame, columns=int_columns, dtype_name="int64")
+    _astype_columns(frame, columns=float_columns, dtype_name="float64")
+    _astype_columns(frame, columns=bool_columns, dtype_name="bool")
     return frame
 
 
@@ -1305,29 +1542,84 @@ def _load_backtest_metrics(connection: sqlite3.Connection, run_id: str) -> Backt
     ).fetchone()
     if row is None:
         raise PersistenceIntegrityError("missing_backtest_metrics", "backtest metrics are missing.")
-    return BacktestMetrics(
-        session_count=int(row["session_count"]),
-        initial_cash=float(row["initial_cash"]),
-        final_cash=float(row["final_cash"]),
-        final_shares=int(row["final_shares"]),
-        final_market_value=float(row["final_market_value"]),
-        final_equity=float(row["final_equity"]),
-        total_return=float(row["total_return"]),
-        maximum_drawdown=float(row["maximum_drawdown"]),
-        total_reference_notional=float(row["total_reference_notional"]),
-        total_execution_notional=float(row["total_execution_notional"]),
-        total_commission=float(row["total_commission"]),
-        total_slippage_cost=float(row["total_slippage_cost"]),
-        total_transaction_cost=float(row["total_transaction_cost"]),
-        turnover_ratio=float(row["turnover_ratio"]),
-        exposure_fraction=float(row["exposure_fraction"]),
-        proposed_order_count=int(row["proposed_order_count"]),
-        approved_order_count=int(row["approved_order_count"]),
-        rejected_order_count=int(row["rejected_order_count"]),
-        fill_count=int(row["fill_count"]),
-        buy_fill_count=int(row["buy_fill_count"]),
-        sell_fill_count=int(row["sell_fill_count"]),
-    )
+    try:
+        return BacktestMetrics(
+            session_count=int_from_storage(
+                row["session_count"],
+                field_name="session_count",
+                minimum=0,
+            ),
+            initial_cash=finite_float(row["initial_cash"], field_name="initial_cash"),
+            final_cash=finite_float(row["final_cash"], field_name="final_cash"),
+            final_shares=int_from_storage(
+                row["final_shares"],
+                field_name="final_shares",
+                minimum=0,
+            ),
+            final_market_value=finite_float(
+                row["final_market_value"],
+                field_name="final_market_value",
+            ),
+            final_equity=finite_float(row["final_equity"], field_name="final_equity"),
+            total_return=finite_float(row["total_return"], field_name="total_return"),
+            maximum_drawdown=finite_float(
+                row["maximum_drawdown"],
+                field_name="maximum_drawdown",
+            ),
+            total_reference_notional=finite_float(
+                row["total_reference_notional"],
+                field_name="total_reference_notional",
+            ),
+            total_execution_notional=finite_float(
+                row["total_execution_notional"],
+                field_name="total_execution_notional",
+            ),
+            total_commission=finite_float(row["total_commission"], field_name="total_commission"),
+            total_slippage_cost=finite_float(
+                row["total_slippage_cost"],
+                field_name="total_slippage_cost",
+            ),
+            total_transaction_cost=finite_float(
+                row["total_transaction_cost"],
+                field_name="total_transaction_cost",
+            ),
+            turnover_ratio=finite_float(row["turnover_ratio"], field_name="turnover_ratio"),
+            exposure_fraction=finite_float(
+                row["exposure_fraction"],
+                field_name="exposure_fraction",
+            ),
+            proposed_order_count=int_from_storage(
+                row["proposed_order_count"],
+                field_name="proposed_order_count",
+                minimum=0,
+            ),
+            approved_order_count=int_from_storage(
+                row["approved_order_count"],
+                field_name="approved_order_count",
+                minimum=0,
+            ),
+            rejected_order_count=int_from_storage(
+                row["rejected_order_count"],
+                field_name="rejected_order_count",
+                minimum=0,
+            ),
+            fill_count=int_from_storage(row["fill_count"], field_name="fill_count", minimum=0),
+            buy_fill_count=int_from_storage(
+                row["buy_fill_count"],
+                field_name="buy_fill_count",
+                minimum=0,
+            ),
+            sell_fill_count=int_from_storage(
+                row["sell_fill_count"],
+                field_name="sell_fill_count",
+                minimum=0,
+            ),
+        )
+    except (BacktestError, ValueError, TypeError, OverflowError) as exc:
+        raise PersistenceIntegrityError(
+            "backtest_metric_reconstruction_failed",
+            "stored backtest metrics failed reconstruction.",
+        ) from exc
 
 
 def _count_rows(
@@ -1340,7 +1632,25 @@ def _count_rows(
         f"SELECT COUNT(*) AS row_count FROM {table_name} WHERE {owner_column} = ?",
         (owner_id,),
     ).fetchone()
-    return 0 if row is None else int(row["row_count"])
+    if row is None:
+        return 0
+    return int_from_storage(row["row_count"], field_name="row_count", minimum=0)
+
+
+def _astype_columns(
+    frame: pd.DataFrame,
+    *,
+    columns: tuple[str, ...],
+    dtype_name: str,
+) -> None:
+    for column in columns:
+        try:
+            frame[column] = frame[column].astype(dtype_name)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise PersistenceIntegrityError(
+                f"invalid_{column}_dtype",
+                f"{column} could not be converted to {dtype_name}.",
+            ) from exc
 
 
 def _split_spec_to_json(spec: ChronologicalSplitSpec) -> str:
@@ -1362,6 +1672,19 @@ def _split_spec_from_json(value: object) -> ChronologicalSplitSpec:
         raise PersistenceIntegrityError(
             "invalid_split_spec_json",
             "split_spec_json must encode an object.",
+        )
+    expected_keys = {
+        "test_end_session",
+        "test_start_session",
+        "train_end_session",
+        "train_start_session",
+        "validation_end_session",
+        "validation_start_session",
+    }
+    if set(parsed) != expected_keys:
+        raise PersistenceIntegrityError(
+            "invalid_split_spec_json",
+            "split_spec_json must contain the exact split-session keys.",
         )
     return ChronologicalSplitSpec(
         train_start_session=text_to_date(parsed.get("train_start_session")),

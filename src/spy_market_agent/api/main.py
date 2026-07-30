@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, Query, Request
+from fastapi import Depends, FastAPI, Path, Query, Request
 from fastapi.responses import JSONResponse
 
 from spy_market_agent.api.schemas import (
@@ -23,11 +23,14 @@ from spy_market_agent.api.schemas import (
 from spy_market_agent.api.services import MAX_PAGE_LIMIT, ReadRepository, ReadService
 from spy_market_agent.persistence.models import (
     PersistenceError,
+    PersistenceInputError,
     PersistenceNotFoundError,
 )
 from spy_market_agent.persistence.repositories import SQLiteArtifactRepository
+from spy_market_agent.run_ids import RUN_ID_PATTERN
 
 DEFAULT_SQLITE_DATABASE_PATH = "./spy_market_agent.sqlite3"
+RunIdParam = Annotated[str, Path(pattern=RUN_ID_PATTERN, min_length=1, max_length=128)]
 LimitParam = Annotated[int, Query(ge=1, le=MAX_PAGE_LIMIT)]
 OffsetParam = Annotated[int, Query(ge=0)]
 
@@ -57,6 +60,19 @@ def create_app(
             content=ApiErrorResponse(code=exc.code, message=str(exc)).model_dump(),
         )
 
+    @app.exception_handler(PersistenceInputError)
+    async def _persistence_input_handler(
+        _request: Request,
+        exc: PersistenceInputError,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content=ApiErrorResponse(
+                code=exc.code,
+                message="Request parameters are invalid.",
+            ).model_dump(),
+        )
+
     @app.exception_handler(PersistenceError)
     async def _persistence_handler(_request: Request, exc: PersistenceError) -> JSONResponse:
         return JSONResponse(
@@ -68,10 +84,13 @@ def create_app(
         )
 
     @app.exception_handler(ValueError)
-    async def _value_error_handler(_request: Request, exc: ValueError) -> JSONResponse:
+    async def _value_error_handler(_request: Request, _exc: ValueError) -> JSONResponse:
         return JSONResponse(
             status_code=422,
-            content=ApiErrorResponse(code="invalid_request", message=str(exc)).model_dump(),
+            content=ApiErrorResponse(
+                code="invalid_request",
+                message="Request parameters are invalid.",
+            ).model_dump(),
         )
 
     def service_dependency() -> ReadService:
@@ -93,14 +112,14 @@ def create_app(
 
     @app.get("/api/v1/model-runs/{run_id}", response_model=ModelRunDetailResponse)
     def model_run_detail(
-        run_id: str,
+        run_id: RunIdParam,
         reads: ReadService = service_dependency_marker,
     ) -> ModelRunDetailResponse:
         return reads.model_run_detail(run_id)
 
     @app.get("/api/v1/model-runs/{run_id}/predictions", response_model=PredictionPageResponse)
     def model_predictions(
-        run_id: str,
+        run_id: RunIdParam,
         reads: ReadService = service_dependency_marker,
         limit: LimitParam = 100,
         offset: OffsetParam = 0,
@@ -113,14 +132,14 @@ def create_app(
 
     @app.get("/api/v1/backtests/{run_id}", response_model=BacktestDetailResponse)
     def backtest_detail(
-        run_id: str,
+        run_id: RunIdParam,
         reads: ReadService = service_dependency_marker,
     ) -> BacktestDetailResponse:
         return reads.backtest_detail(run_id)
 
     @app.get("/api/v1/backtests/{run_id}/equity", response_model=EquityPageResponse)
     def backtest_equity(
-        run_id: str,
+        run_id: RunIdParam,
         reads: ReadService = service_dependency_marker,
         limit: LimitParam = 100,
         offset: OffsetParam = 0,
@@ -129,7 +148,7 @@ def create_app(
 
     @app.get("/api/v1/backtests/{run_id}/orders", response_model=OrderPageResponse)
     def backtest_orders(
-        run_id: str,
+        run_id: RunIdParam,
         reads: ReadService = service_dependency_marker,
         limit: LimitParam = 100,
         offset: OffsetParam = 0,
@@ -141,7 +160,7 @@ def create_app(
         response_model=RiskDecisionPageResponse,
     )
     def backtest_risk_decisions(
-        run_id: str,
+        run_id: RunIdParam,
         reads: ReadService = service_dependency_marker,
         limit: LimitParam = 100,
         offset: OffsetParam = 0,
@@ -150,7 +169,7 @@ def create_app(
 
     @app.get("/api/v1/backtests/{run_id}/fills", response_model=FillPageResponse)
     def backtest_fills(
-        run_id: str,
+        run_id: RunIdParam,
         reads: ReadService = service_dependency_marker,
         limit: LimitParam = 100,
         offset: OffsetParam = 0,

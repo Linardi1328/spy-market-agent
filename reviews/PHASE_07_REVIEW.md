@@ -242,3 +242,170 @@ Staged diff summary before commit:
 Phase 8 was not started.
 
 No broker communication, Alpaca integration, broker SDK, broker account check, paper-order submission, live-order submission, execution adapter, order approval interface, kill-switch execution behavior, scheduler, background worker, authentication system, deployment configuration, market-data downloading, model retraining endpoint, backtest-running endpoint, signal-generation endpoint, probability calibration, threshold optimization, hyperparameter tuning, model binary persistence, non-SPY asset support, short selling, leverage, margin, or fractional-share behavior was introduced.
+
+## Phase 7 Correction Addendum
+
+Correction branch: `review/phase-07-corrections`.
+
+Starting main SHA: `d773fbb3b86b73dccd1644ab885f8c6f79c58574`.
+
+Original Phase 7 implementation SHA: `0c0137177101400ae33756cf46b214121ede5a17`.
+
+Cherry-picked Phase 7 commit SHA on the correction branch: `84da8c2fd95cb36503b5d0b35b8f1451cfcd1d8b`.
+
+Final correction commit SHA: recorded in the final Codex response after the commit is created and pushed.
+
+Findings corrected:
+
+- Added plain `uvicorn>=0.30,<1` as a runtime dependency because README documents `python -m uvicorn "spy_market_agent.api.main:create_app" --factory --host 127.0.0.1 --port 8000`.
+- Added a Uvicorn factory-resolution smoke test that loads `spy_market_agent.api.main:create_app` without creating SQLite files or starting a blocking server.
+- Added a shared URL-safe run-id contract: `^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`.
+- Applied the run-id contract to persistence save/load boundaries, FastAPI path parameters, and dashboard path construction.
+- Hardened public repository read paths so malformed stored values raise project-owned `PersistenceError` subclasses instead of raw `ValueError`, `TypeError`, `OverflowError`, pandas conversion errors, Pydantic `ValidationError`, `ModelingError`, `StrategyError`, `RiskError`, or `BacktestError`.
+- Updated `canonical_json_loads` to reject non-standard `NaN`, `Infinity`, and `-Infinity` constants.
+- Added storage-read helpers for required strings, optional strings, run IDs, finite floats, exact integer conversion, nonnegative integer constraints, canonical booleans, checksums, dates, timestamps, exact decimals, ordered string tuples, and pandas dtype conversions.
+- Updated corrupted-data API behavior so corrupted persistence returns sanitized `503` JSON with the fixed message `Persisted research data is unavailable or invalid.`
+- Updated API request-error behavior so invalid run IDs are client errors and generic `ValueError` messages are not echoed.
+- Preserved dashboard pagination metadata for paginated API responses and added a typed `PaginatedItems` representation.
+- Changed dashboard approved/rejected/order/fill totals to come from authoritative backtest detail metrics, not first-page risk decisions.
+- Added visible `Showing X of Y` labels for bounded prediction, order, risk-decision, fill, and equity tables.
+- Changed equity/drawdown chart loading to retrieve all equity pages using the maximum API page size and reject inconsistent totals, duplicate rows, and non-progressing pagination loops.
+- Added chart-only finite numeric conversion for equity and drawdown values while preserving exact monetary strings in rendered dataframes.
+
+Files modified or created in this correction:
+
+- `README.md`
+- `pyproject.toml`
+- `reviews/PHASE_07_REVIEW.md`
+- `src/spy_market_agent/run_ids.py`
+- `src/spy_market_agent/api/main.py`
+- `src/spy_market_agent/dashboard/app.py`
+- `src/spy_market_agent/dashboard/client.py`
+- `src/spy_market_agent/persistence/repositories.py`
+- `src/spy_market_agent/persistence/serialization.py`
+- `tests/unit/test_api_phase7.py`
+- `tests/unit/test_dashboard_phase7.py`
+- `tests/unit/test_persistence_repositories.py`
+- `tests/unit/test_persistence_serialization.py`
+
+Persistence conversion rules:
+
+- Required text must be stored as actual non-empty SQLite text. `NULL` is not converted to `"None"`.
+- Optional text accepts only SQLite `NULL` or actual text.
+- Floats must convert successfully and must reject booleans, NaN, positive infinity, and negative infinity.
+- Integers may be stored as SQLite integers, finite integral SQLite reals, or exact integer text without surrounding whitespace; booleans, non-integral floats, and malformed text are rejected. Nonnegative constraints are applied where required.
+- Booleans remain canonical SQLite integers `0` or `1`.
+- Pandas dtype conversion failures are translated to `PersistenceIntegrityError`.
+- Checksums must be lowercase 64-character SHA-256 values.
+- Canonical JSON loads reject non-standard/non-finite constants.
+
+Tampering regression coverage added for malformed values in:
+
+- Market-data OHLC values.
+- Market-data volume.
+- Market-data row counts.
+- Market-data metadata timestamps.
+- Model prediction probabilities.
+- Predicted classes and targets.
+- Candidate validation metrics.
+- Final classification metrics.
+- Model parameter JSON containing `NaN` and `Infinity`.
+- Backtest strategy rows.
+- Execution-price rows.
+- Proposed order rows.
+- Risk-decision booleans and numeric values.
+- Fill rows.
+- Portfolio rows.
+- Backtest metrics.
+- Model-run summary rows.
+- Backtest summary rows.
+
+Run-id regression coverage added for:
+
+- Valid alphanumeric IDs.
+- Valid period, underscore, and hyphen.
+- Empty IDs.
+- Whitespace-only IDs.
+- Leading whitespace.
+- Trailing whitespace.
+- Internal spaces.
+- Slash.
+- Backslash.
+- Percent character.
+- Question mark.
+- Hash.
+- Ampersand.
+- Colon.
+- Encoded path tricks.
+- 128-character valid ID.
+- 129-character ID.
+- Direct repository save/load validation.
+- FastAPI route validation.
+- Dashboard path construction.
+
+Dashboard regression coverage added for:
+
+- More than 250 risk decisions with authoritative approved/rejected totals.
+- More than 250 orders and fills with `Showing X of Y` labels.
+- More than 100 model predictions with a preview label.
+- More than 500 equity rows collected across pages in chronological order.
+- Inconsistent equity pagination totals.
+- Non-progressing equity pagination loops.
+- Empty paginated responses.
+- API unavailability during a later equity page request.
+- Valid decimal chart strings converted only in a plotting copy.
+- Exact-string table values preserved.
+- Malformed, NaN, and infinite chart values rejected gracefully.
+
+Baseline verification before corrections on the cherry-picked Phase 7 tree:
+
+- `pytest`: passed, `447 passed`, `5 warnings`, total coverage `80%`.
+- `pytest tests/unit -q`: exited `0`, unit suite passed with `5 warnings`, total coverage `80%`.
+- `pytest tests/integration -q`: exited `0`, `5` integration tests passed, `5 warnings`, integration-only coverage `71%`.
+- `ruff check .`: passed with `All checks passed!`.
+- `ruff format --check .`: passed with `92 files already formatted`.
+- `mypy src tests`: passed with `Success: no issues found in 83 source files`.
+- Package version check printed `0.1.0`.
+- Public `__all__` checks for `strategies`, `risk`, `backtesting`, `persistence`, `api`, and `dashboard` passed.
+- `git diff --check`: exited `0`.
+
+Final verification after corrections:
+
+- `python -m pip install -e ".[dev]"`: initial sandboxed run failed because PyPI DNS resolution was blocked; the approved escalated rerun passed and installed the editable package with `uvicorn>=0.30,<1` already satisfied as `0.52.0`.
+- `pytest`: passed, `531 passed`, `5 warnings in 59.89s`, total coverage `81%`.
+- `pytest tests/unit -q`: exited `0`, unit suite passed with `5 warnings`, total coverage `81%`. The command combines repo `-q` and CLI `-q`, so pytest suppresses the final pass-count line; full minus integration corresponds to `526` unit tests.
+- `pytest tests/integration -q`: exited `0`, `5` integration tests passed, `5 warnings`, integration-only coverage `71%`.
+- `ruff check .`: passed with `All checks passed!`.
+- `ruff format --check .`: passed with `93 files already formatted`.
+- `mypy src tests`: passed with `Success: no issues found in 84 source files`.
+- `python -m uvicorn --version`: printed `Running uvicorn 0.52.0 with CPython 3.12.13 on Darwin`.
+- `python -c "import spy_market_agent; print(spy_market_agent.__version__)"`: printed `0.1.0`.
+- Public `__all__` checks for `strategies`, `risk`, `backtesting`, `persistence`, `api`, and `dashboard` passed and the Phase 7 public exports remained unchanged.
+- `git diff --check`: exited `0`.
+- Smoke check loaded the FastAPI factory through TestClient, loaded the Uvicorn factory target, loaded dashboard state through an in-memory fake client, created no SQLite files, used no external network, and invoked no training, backtest, signal, risk, broker, paper-order, or live-order behavior.
+
+Coverage:
+
+- Final full-suite coverage: `81%`.
+- Final unit-suite coverage: `81%`.
+- Final integration-suite coverage: `71%`.
+
+Remaining warnings:
+
+- Existing third-party `exchange_calendars`/pandas/NumPy `DeprecationWarning` for generic timedeltas.
+- Existing third-party `StarletteDeprecationWarning` from `fastapi.testclient` recommending `httpx2`.
+
+Known limitations:
+
+- SQLite schema support remains version 1 only.
+- The API remains read-only and reads only initialized, already-populated SQLite databases.
+- The dashboard remains read-only and requires a reachable read API for populated views.
+- Prediction, order, risk-decision, and fill tables remain bounded previews with explicit counts.
+- No authentication, CORS policy, deployment configuration, scheduler, background worker, model binary persistence, write route, training route, backtest-running route, signal-generation route, market-data downloader, broker integration, or order submission is implemented.
+
+Confirmations:
+
+- `main` remained at `d773fbb3b86b73dccd1644ab885f8c6f79c58574` during correction work.
+- The original Phase 7 branch `review/phase-07-persistence-api-dashboard` was not modified.
+- Phase 8 was not started.
+- No Alpaca, broker SDK, broker communication, paper-order submission, live-order submission, execution adapter, order approval control, scheduler, background worker, deployment configuration, authentication, API write route, training route, backtest-running route, signal-generation route, market-data downloading, model binary persistence, additional assets, short selling, leverage, margin, fractional shares, or non-SPY asset behavior was introduced.
