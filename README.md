@@ -6,9 +6,9 @@ The project is educational and experimental. It is not investment advice, and it
 
 ## Status
 
-Current development status: Phase 6 deterministic in-memory long-or-cash strategy signals, independent risk controls, and next-open backtesting.
+Current development status: Phase 7 explicitly invoked local SQLite persistence, a read-only FastAPI presentation API, and a read-only Streamlit dashboard for completed research artifacts.
 
-The repository currently contains typed configuration, paper-only configuration validation, a provider-independent daily SPY schema, an XNYS calendar adapter, deterministic dataset checksums, data-quality validation, deterministic trailing feature engineering, forward open-to-open net-positive labels, supervised feature/label alignment, leakage-safe chronological train/validation/test splits, deterministic logistic-regression and gradient-boosting candidate training, validation-only model selection, locked train+validation refit, explicit final test evaluation, fixed long-or-cash test signals, independent long-only risk decisions, in-memory next-open backtesting, and tests. Market downloading, investment recommendations, order submission, broker communication, persistence, APIs, and dashboards are not implemented.
+The repository currently contains typed configuration, paper-only configuration validation, a provider-independent daily SPY schema, an XNYS calendar adapter, deterministic dataset checksums, data-quality validation, deterministic trailing feature engineering, forward open-to-open net-positive labels, supervised feature/label alignment, leakage-safe chronological train/validation/test splits, deterministic logistic-regression and gradient-boosting candidate training, validation-only model selection, locked train+validation refit, explicit final test evaluation, fixed long-or-cash test signals, independent long-only risk decisions, in-memory next-open backtesting, SQLite persistence for validated completed artifacts, a read-only FastAPI API, a read-only Streamlit dashboard, and tests. Market downloading, investment recommendations, order submission, broker communication, scheduling, deployment, and live trading are not implemented.
 
 ## Version 1 Scope
 
@@ -21,8 +21,9 @@ The repository currently contains typed configuration, paper-only configuration 
 - In-memory historical research backtesting.
 - Initial simulated capital of USD 10,000.
 - Logistic regression baseline and gradient boosting comparison.
-- FastAPI backend and Streamlit dashboard in later phases.
-- SQLite persistence in later phases.
+- SQLite persistence for completed validated research artifacts.
+- Read-only FastAPI backend for persisted results.
+- Read-only Streamlit dashboard that consumes the FastAPI API.
 - Alpaca paper trading only in a later phase, after explicit approval.
 
 ## Safety Restrictions
@@ -51,6 +52,9 @@ src/spy_market_agent/modeling/     Deterministic model training, validation sele
 src/spy_market_agent/strategies/   Fixed long-or-cash signal policy
 src/spy_market_agent/risk/         Independent SPY-only long-only risk controls
 src/spy_market_agent/backtesting/  In-memory next-open backtest accounting and metrics
+src/spy_market_agent/persistence/  Explicit SQLite schema, serialization, and artifact repositories
+src/spy_market_agent/api/          Read-only FastAPI application factory and response service
+src/spy_market_agent/dashboard/    Streamlit dashboard and typed HTTP API client
 tests/unit/                Unit tests
 tests/integration/         Integration tests
 tests/fixtures/            Deterministic test fixtures
@@ -81,7 +85,7 @@ python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
 ```
 
-Do not create a real `.env` file with credentials for Phase 3. Use `.env.example` only as a placeholder reference. Alpaca integration is not implemented.
+Do not create a real `.env` file with credentials for Phase 7. Use `.env.example` only as a placeholder reference. Alpaca integration is not implemented.
 
 ## Implemented Phase 3 Capabilities
 
@@ -135,6 +139,57 @@ Do not create a real `.env` file with credentials for Phase 3. Use `.env.example
 - Rejected orders never create fills or alter portfolio state; every fill references an approved risk decision.
 - No model refit, probability generation, broker communication, persistence, API, dashboard, paper order, or live order behavior occurs in Phase 6.
 
+## Implemented Phase 7 Capabilities
+
+- Versioned SQLite schema: `spy-sqlite-persistence-v1`.
+- Explicit idempotent database initialization through `initialize_database(...)`; imports, API startup, and dashboard startup do not create or migrate database files.
+- Persistence for validated `MarketDataBatch`, `FinalTestEvaluation`, and complete `BacktestResult` artifacts.
+- Load paths reconstruct existing validated domain objects and rerun existing validation, checksum, risk, execution-price, accounting, and metric checks.
+- Canonical serialization for dates, UTC datetimes, exact decimals, booleans, deterministic JSON, schema versions, SPY symbols, and SHA-256 checksums.
+- Structured project-owned persistence errors for malformed input, conflicts, schema issues, integrity failures, and missing records.
+- Read-only FastAPI application factory with typed Pydantic responses and bounded pagination.
+- Streamlit dashboard views for overview, data quality, model evaluation, backtest results, and risk/audit.
+- Dashboard data access goes through the FastAPI HTTP client only; it does not query SQLite directly.
+- Educational warnings are shown in API responses and dashboard views. Results are not investment advice and do not prove profitability.
+
+## Local Persistence, API, and Dashboard
+
+Initialize a local SQLite database explicitly:
+
+```bash
+python -c "from spy_market_agent.persistence import initialize_database; initialize_database('./spy_market_agent.sqlite3')"
+```
+
+Start the read-only API after a database has been initialized and populated by approved research code:
+
+```bash
+python -m uvicorn "spy_market_agent.api.main:create_app" --factory --host 127.0.0.1 --port 8000
+```
+
+Available read-only routes:
+
+```text
+GET /health
+GET /api/v1/data/status
+GET /api/v1/model-runs
+GET /api/v1/model-runs/{run_id}
+GET /api/v1/model-runs/{run_id}/predictions
+GET /api/v1/backtests
+GET /api/v1/backtests/{run_id}
+GET /api/v1/backtests/{run_id}/equity
+GET /api/v1/backtests/{run_id}/orders
+GET /api/v1/backtests/{run_id}/risk-decisions
+GET /api/v1/backtests/{run_id}/fills
+```
+
+Start the Streamlit dashboard:
+
+```bash
+streamlit run src/spy_market_agent/dashboard/streamlit_app.py
+```
+
+Configure the dashboard API URL with `DASHBOARD_API_BASE_URL`; it defaults to `http://127.0.0.1:8000`. Configure the SQLite path with `SQLITE_DATABASE_PATH`; database directories are created only by explicit initialization.
+
 ## Not Implemented
 
 - Market-data downloading.
@@ -142,15 +197,14 @@ Do not create a real `.env` file with credentials for Phase 3. Use `.env.example
 - Probability calibration.
 - Threshold optimization.
 - Trading-threshold optimization.
-- Model persistence.
-- Database persistence.
-- SQLite persistence.
-- APIs.
-- Dashboards.
+- Model binary persistence.
+- API write routes.
+- Dashboard write controls.
 - Broker communication.
 - Alpaca integration.
 - Paper-order submission.
 - Live trading.
+- Schedulers or background workers.
 - Deployment.
 
 ## Verification
@@ -190,4 +244,4 @@ python -c "import spy_market_agent; print(spy_market_agent.__version__)"
 - See `PROJECT_SPEC.md` for the approved architecture, safety requirements, phased plan, and known limitations.
 - See `AGENTS.md` for permanent instructions future Codex tasks must follow.
 
-No market-data downloading, probability calibration, threshold optimization, hyperparameter tuning, recommendations, model persistence, database persistence, SQLite persistence, API endpoint, dashboard functionality, broker communication, Alpaca integration, paper-order submission, live trading, or deployment functionality is implemented in this phase.
+No market-data downloading, probability calibration, threshold optimization, hyperparameter tuning, recommendations, model binary persistence, API write endpoint, dashboard write control, broker communication, Alpaca integration, paper-order submission, live trading, scheduling, or deployment functionality is implemented in this phase.

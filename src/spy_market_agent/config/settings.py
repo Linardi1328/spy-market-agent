@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     dry_run: bool = True
     initial_capital_usd: Decimal = Field(default=Decimal("10000"), gt=Decimal("0"))
     database_url: str = Field(default="sqlite:///./spy_market_agent.db", repr=False)
+    sqlite_database_path: str = "./spy_market_agent.sqlite3"
+    dashboard_api_base_url: str = "http://127.0.0.1:8000"
+    api_timeout_seconds: float = Field(default=5.0, gt=0.0, le=60.0)
     market_symbol: str = "SPY"
     market_timeframe: str = "1Day"
     exchange_calendar: str = "XNYS"
@@ -92,6 +95,15 @@ class Settings(BaseSettings):
     @classmethod
     def _validate_adjustment_policy(cls, value: str) -> str:
         return _require_value(value, expected="adjusted", field_name="adjustment_policy")
+
+    @field_validator("sqlite_database_path", "dashboard_api_base_url")
+    @classmethod
+    def _validate_non_empty_text(cls, value: str) -> str:
+        trimmed = value.strip()
+        if not trimmed:
+            msg = "setting value must not be blank."
+            raise ValueError(msg)
+        return trimmed
 
     @property
     def paper_order_submission_enabled(self) -> bool:
