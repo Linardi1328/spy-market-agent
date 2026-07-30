@@ -1,0 +1,60 @@
+from __future__ import annotations
+
+from datetime import UTC, date, datetime
+from decimal import Decimal
+
+import pytest
+
+from spy_market_agent.persistence import (
+    PersistenceInputError,
+    PersistenceIntegrityError,
+)
+from spy_market_agent.persistence.serialization import (
+    JsonValue,
+    bool_to_int,
+    canonical_json_dumps,
+    date_to_text,
+    datetime_to_text,
+    decimal_to_text,
+    finite_float_for_storage,
+    int_to_bool,
+    text_to_date,
+    text_to_datetime,
+    text_to_decimal,
+    validate_checksum,
+)
+
+
+def test_canonical_date_datetime_decimal_and_boolean_serialization() -> None:
+    timestamp = datetime(2025, 1, 2, 7, 30, tzinfo=UTC)
+
+    assert date_to_text(date(2025, 1, 2)) == "2025-01-02"
+    assert text_to_date("2025-01-02") == date(2025, 1, 2)
+    assert datetime_to_text(timestamp) == "2025-01-02T07:30:00Z"
+    assert text_to_datetime("2025-01-02T07:30:00Z") == timestamp.astimezone(UTC)
+    assert decimal_to_text(Decimal("123.4500")) == "123.4500"
+    assert text_to_decimal("123.4500") == Decimal("123.4500")
+    assert bool_to_int(True) == 1
+    assert bool_to_int(False) == 0
+    assert int_to_bool(1) is True
+    assert int_to_bool(0) is False
+
+
+def test_canonical_json_is_deterministic_and_rejects_non_finite_values() -> None:
+    left: JsonValue = {"b": [2, 1], "a": {"z": "value"}}
+    right: JsonValue = {"a": {"z": "value"}, "b": [2, 1]}
+
+    assert canonical_json_dumps(left) == canonical_json_dumps(right)
+    assert canonical_json_dumps(left) == '{"a":{"z":"value"},"b":[2,1]}'
+    with pytest.raises(PersistenceInputError, match="canonical JSON"):
+        canonical_json_dumps({"bad": float("nan")})
+    with pytest.raises(PersistenceIntegrityError, match="finite"):
+        finite_float_for_storage(float("inf"), field_name="bad_value")
+
+
+def test_checksum_validation_requires_lowercase_sha256() -> None:
+    checksum = "a" * 64
+
+    assert validate_checksum(checksum) == checksum
+    with pytest.raises(PersistenceIntegrityError, match="SHA-256"):
+        validate_checksum("A" * 64)
