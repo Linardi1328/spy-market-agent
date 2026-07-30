@@ -1,23 +1,36 @@
 from __future__ import annotations
 
 import inspect
+from datetime import date, timedelta
 from typing import Any
 
 import httpx
+import pandas as pd
 import pytest
 
 import spy_market_agent.dashboard as dashboard
 import spy_market_agent.dashboard.app as dashboard_app
 import spy_market_agent.dashboard.client as dashboard_client
 from spy_market_agent.dashboard import DASHBOARD_WARNING
-from spy_market_agent.dashboard.app import DashboardState, load_dashboard_state, render_dashboard
+from spy_market_agent.dashboard.app import (
+    DashboardState,
+    PaginatedItems,
+    load_dashboard_state,
+    render_dashboard,
+)
 from spy_market_agent.dashboard.client import DashboardApiClient, DashboardApiError
+
+
+def _session(index: int) -> str:
+    return (date(2025, 1, 2) + timedelta(days=index)).isoformat()
 
 
 class FakeClient:
     def __init__(self, *, populated: bool = True, fail: bool = False) -> None:
         self.populated = populated
         self.fail = fail
+        self.model_detail_called = False
+        self.backtest_detail_called = False
 
     def health(self) -> dict[str, Any]:
         if self.fail:
@@ -31,6 +44,7 @@ class FakeClient:
         return {"items": [{"run_id": "model-run-1"}] if self.populated else []}
 
     def model_run_detail(self, run_id: str) -> dict[str, Any]:
+        self.model_detail_called = True
         return {
             "run_id": run_id,
             "selected_model_name": "logistic_regression",
@@ -47,20 +61,26 @@ class FakeClient:
         offset: int = 0,
     ) -> dict[str, Any]:
         _ = (run_id, limit)
+        items = [
+            {
+                "sequence_number": offset,
+                "session": "2025-01-02",
+                "probability_positive": 0.5,
+            }
+        ]
         return {
-            "items": [
-                {
-                    "sequence_number": offset,
-                    "session": "2025-01-02",
-                    "probability_positive": 0.5,
-                }
-            ]
+            "run_id": run_id,
+            "total": len(items),
+            "limit": limit,
+            "offset": offset,
+            "items": items,
         }
 
     def backtests(self) -> dict[str, Any]:
         return {"items": [{"run_id": "backtest-run-1"}] if self.populated else []}
 
     def backtest_detail(self, run_id: str) -> dict[str, Any]:
+        self.backtest_detail_called = True
         return {
             "run_id": run_id,
             "metrics": {
@@ -71,6 +91,10 @@ class FakeClient:
                 "turnover_ratio": 0.2,
                 "exposure_fraction": 0.5,
                 "total_transaction_cost": "1.25",
+                "proposed_order_count": 1,
+                "approved_order_count": 1,
+                "rejected_order_count": 0,
+                "fill_count": 1,
             },
             "risk_config": {
                 "supported_symbol": "SPY",
@@ -82,22 +106,163 @@ class FakeClient:
         }
 
     def equity(self, run_id: str, *, limit: int = 250, offset: int = 0) -> dict[str, Any]:
-        _ = (run_id, limit, offset)
-        return {"items": [{"session": "2025-01-03", "equity": "10050", "drawdown": 0.0}]}
+        items = [{"session": "2025-01-03", "equity": "10050", "drawdown": 0.0}]
+        return {
+            "run_id": run_id,
+            "total": len(items),
+            "limit": limit,
+            "offset": offset,
+            "items": items,
+        }
 
     def orders(self, run_id: str, *, limit: int = 250, offset: int = 0) -> dict[str, Any]:
-        _ = (run_id, limit, offset)
-        return {"items": [{"sequence_number": 1, "symbol": "SPY"}]}
+        items = [{"sequence_number": 1, "symbol": "SPY"}]
+        return {
+            "run_id": run_id,
+            "total": len(items),
+            "limit": limit,
+            "offset": offset,
+            "items": items,
+        }
 
     def risk_decisions(self, run_id: str, *, limit: int = 250, offset: int = 0) -> dict[str, Any]:
-        _ = (run_id, limit, offset)
+        items = [{"order_sequence_number": 1, "approved": True, "reason_codes": ["approved"]}]
         return {
-            "items": [{"order_sequence_number": 1, "approved": True, "reason_codes": ["approved"]}]
+            "run_id": run_id,
+            "total": len(items),
+            "limit": limit,
+            "offset": offset,
+            "items": items,
         }
 
     def fills(self, run_id: str, *, limit: int = 250, offset: int = 0) -> dict[str, Any]:
-        _ = (run_id, limit, offset)
-        return {"items": [{"order_sequence_number": 1, "risk_approved": True}]}
+        items = [{"order_sequence_number": 1, "risk_approved": True}]
+        return {
+            "run_id": run_id,
+            "total": len(items),
+            "limit": limit,
+            "offset": offset,
+            "items": items,
+        }
+
+
+class PaginatedFakeClient(FakeClient):
+    def __init__(
+        self,
+        *,
+        prediction_total: int = 150,
+        equity_total: int = 501,
+        order_total: int = 1200,
+        risk_total: int = 1200,
+        fill_total: int = 900,
+        approved_order_count: int = 700,
+        rejected_order_count: int = 500,
+        inconsistent_equity_total: bool = False,
+        stalled_equity_page: bool = False,
+        fail_equity_offset: int | None = None,
+    ) -> None:
+        super().__init__(populated=True)
+        self.prediction_total = prediction_total
+        self.equity_total = equity_total
+        self.order_total = order_total
+        self.risk_total = risk_total
+        self.fill_total = fill_total
+        self.approved_order_count = approved_order_count
+        self.rejected_order_count = rejected_order_count
+        self.inconsistent_equity_total = inconsistent_equity_total
+        self.stalled_equity_page = stalled_equity_page
+        self.fail_equity_offset = fail_equity_offset
+        self.equity_offsets: list[int] = []
+
+    def model_predictions(
+        self,
+        run_id: str,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        items = [
+            {
+                "sequence_number": index,
+                "session": _session(index),
+                "probability_positive": 0.5,
+            }
+            for index in range(offset, min(offset + limit, self.prediction_total))
+        ]
+        return _page(
+            run_id=run_id, total=self.prediction_total, limit=limit, offset=offset, items=items
+        )
+
+    def backtest_detail(self, run_id: str) -> dict[str, Any]:
+        detail = super().backtest_detail(run_id)
+        detail["metrics"].update(
+            {
+                "proposed_order_count": self.order_total,
+                "approved_order_count": self.approved_order_count,
+                "rejected_order_count": self.rejected_order_count,
+                "fill_count": self.fill_total,
+            }
+        )
+        return detail
+
+    def equity(self, run_id: str, *, limit: int = 250, offset: int = 0) -> dict[str, Any]:
+        self.equity_offsets.append(offset)
+        if self.fail_equity_offset is not None and offset >= self.fail_equity_offset:
+            raise DashboardApiError("later equity page failed")
+        total = (
+            self.equity_total - 1
+            if self.inconsistent_equity_total and offset
+            else self.equity_total
+        )
+        if self.stalled_equity_page and offset:
+            items: list[dict[str, Any]] = []
+        else:
+            items = [
+                {
+                    "sequence_number": index,
+                    "session": _session(index),
+                    "equity": str(10000 + index),
+                    "drawdown": -0.001 * index,
+                }
+                for index in range(offset, min(offset + limit, self.equity_total))
+            ]
+        return _page(run_id=run_id, total=total, limit=limit, offset=offset, items=items)
+
+    def orders(self, run_id: str, *, limit: int = 250, offset: int = 0) -> dict[str, Any]:
+        items = [
+            {"sequence_number": index + 1, "symbol": "SPY"}
+            for index in range(offset, min(offset + limit, self.order_total))
+        ]
+        return _page(run_id=run_id, total=self.order_total, limit=limit, offset=offset, items=items)
+
+    def risk_decisions(self, run_id: str, *, limit: int = 250, offset: int = 0) -> dict[str, Any]:
+        items = [
+            {
+                "order_sequence_number": index + 1,
+                "approved": True,
+                "reason_codes": ["approved"],
+            }
+            for index in range(offset, min(offset + limit, self.risk_total))
+        ]
+        return _page(run_id=run_id, total=self.risk_total, limit=limit, offset=offset, items=items)
+
+    def fills(self, run_id: str, *, limit: int = 250, offset: int = 0) -> dict[str, Any]:
+        items = [
+            {"order_sequence_number": index + 1, "risk_approved": True}
+            for index in range(offset, min(offset + limit, self.fill_total))
+        ]
+        return _page(run_id=run_id, total=self.fill_total, limit=limit, offset=offset, items=items)
+
+
+def _page(
+    *,
+    run_id: str,
+    total: int,
+    limit: int,
+    offset: int,
+    items: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {"run_id": run_id, "total": total, "limit": limit, "offset": offset, "items": items}
 
 
 class FakeTab:
@@ -111,12 +276,18 @@ class FakeTab:
 class FakeStreamlit:
     def __init__(self) -> None:
         self.text: list[str] = []
+        self.line_charts: list[Any] = []
+        self.dataframes: list[pd.DataFrame] = []
 
     def __getattr__(self, name: str) -> Any:
         def recorder(*args: object, **_kwargs: object) -> object:
             self.text.extend(str(arg) for arg in args)
             if name == "tabs":
                 return [FakeTab(), FakeTab(), FakeTab(), FakeTab(), FakeTab()]
+            if name == "line_chart" and args:
+                self.line_charts.append(args[0])
+            if name == "dataframe" and args and isinstance(args[0], pd.DataFrame):
+                self.dataframes.append(args[0].copy(deep=True))
             return None
 
         return recorder
@@ -148,6 +319,8 @@ def test_dashboard_state_handles_empty_populated_and_unavailable_api() -> None:
     assert empty.selected_model_run is None
     assert populated.selected_model_run is not None
     assert populated.selected_backtest is not None
+    assert populated.model_predictions.total == 1
+    assert populated.equity_rows.total == 1
     assert unavailable.api_available is False
 
 
@@ -159,13 +332,13 @@ def test_dashboard_rendering_shows_required_warning_and_no_write_controls() -> N
         data_status={"available": False},
         model_runs=[],
         selected_model_run=None,
-        model_predictions=[],
+        model_predictions=PaginatedItems.empty(),
         backtests=[],
         selected_backtest=None,
-        equity_rows=[],
-        order_rows=[],
-        risk_decision_rows=[],
-        fill_rows=[],
+        equity_rows=PaginatedItems.empty(),
+        order_rows=PaginatedItems.empty(),
+        risk_decision_rows=PaginatedItems.empty(),
+        fill_rows=PaginatedItems.empty(),
     )
 
     render_dashboard(streamlit, state)
@@ -186,3 +359,169 @@ def test_dashboard_import_smoke_public_exports_and_no_database_access() -> None:
     assert "button" not in (source + app_source + client_source).lower()
     assert "broker" not in (source + app_source + client_source).lower()
     assert "not investment advice" in DASHBOARD_WARNING.lower()
+
+
+def test_dashboard_validates_api_run_ids_before_building_detail_paths() -> None:
+    client = FakeClient(populated=True)
+    client.model_runs = lambda: {"items": [{"run_id": "bad/slash"}]}  # type: ignore[method-assign]
+
+    state = load_dashboard_state(client)
+
+    assert state.api_available is False
+    assert client.model_detail_called is False
+
+
+def test_dashboard_client_validates_run_ids_before_requesting_paths() -> None:
+    requests: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request.url.path)
+        return httpx.Response(200, json={})
+
+    client = DashboardApiClient(
+        base_url="http://testserver",
+        transport=httpx.MockTransport(handler),
+    )
+
+    client.model_run_detail("run.01_test-02")
+    with pytest.raises(ValueError, match="run_id"):
+        client.backtest_detail("bad/slash")
+    client.close()
+
+    assert requests == ["/api/v1/model-runs/run.01_test-02"]
+
+
+def test_dashboard_preserves_paginated_metadata_and_fetches_all_equity_pages() -> None:
+    client = PaginatedFakeClient(equity_total=501)
+    state = load_dashboard_state(client)
+
+    assert state.api_available is True
+    assert state.model_predictions.total == 150
+    assert state.model_predictions.visible_count == 100
+    assert state.order_rows.total == 1200
+    assert state.order_rows.visible_count == 250
+    assert state.risk_decision_rows.total == 1200
+    assert state.fill_rows.total == 900
+    assert state.equity_rows.total == 501
+    assert state.equity_rows.visible_count == 501
+    assert client.equity_offsets == [0, 500]
+    assert [row["session"] for row in state.equity_rows.items] == [
+        _session(index) for index in range(501)
+    ]
+
+
+def test_dashboard_rendering_uses_authoritative_metrics_and_preview_labels() -> None:
+    state = load_dashboard_state(PaginatedFakeClient())
+    streamlit = FakeStreamlit()
+
+    render_dashboard(streamlit, state)
+    rendered_text = " ".join(streamlit.text)
+
+    assert "Approved orders: 700" in rendered_text
+    assert "Rejected orders: 500" in rendered_text
+    assert "Showing 100 of 150 model predictions." in rendered_text
+    assert "Showing 250 of 1200 orders." in rendered_text
+    assert "Showing 250 of 1200 risk decisions." in rendered_text
+    assert "Showing 250 of 900 fills." in rendered_text
+
+
+@pytest.mark.parametrize(
+    "client",
+    [
+        PaginatedFakeClient(inconsistent_equity_total=True),
+        PaginatedFakeClient(stalled_equity_page=True),
+        PaginatedFakeClient(fail_equity_offset=500),
+    ],
+)
+def test_dashboard_rejects_inconsistent_or_non_progressing_equity_pagination(
+    client: PaginatedFakeClient,
+) -> None:
+    state = load_dashboard_state(client)
+
+    assert state.api_available is False
+    assert state.error_message
+
+
+def test_dashboard_handles_empty_paginated_response() -> None:
+    state = load_dashboard_state(
+        PaginatedFakeClient(
+            prediction_total=0,
+            equity_total=0,
+            order_total=0,
+            risk_total=0,
+            fill_total=0,
+            approved_order_count=0,
+            rejected_order_count=0,
+        )
+    )
+
+    assert state.api_available is True
+    assert state.model_predictions.total == 0
+    assert state.equity_rows.items == []
+    assert state.order_rows.items == []
+
+
+def test_dashboard_charts_convert_valid_exact_strings_without_mutating_tables() -> None:
+    streamlit = FakeStreamlit()
+    state = DashboardState(
+        api_available=True,
+        health={"status": "ok"},
+        data_status={"available": False},
+        model_runs=[],
+        selected_model_run=None,
+        model_predictions=PaginatedItems.empty(),
+        backtests=[{"run_id": "backtest-run-1"}],
+        selected_backtest=FakeClient().backtest_detail("backtest-run-1"),
+        equity_rows=PaginatedItems(
+            items=[
+                {"session": "2025-01-02", "equity": "10000.50", "drawdown": "0"},
+                {"session": "2025-01-03", "equity": "10001.75", "drawdown": "-0.01"},
+            ],
+            total=2,
+            limit=500,
+            offset=0,
+        ),
+        order_rows=PaginatedItems.empty(),
+        risk_decision_rows=PaginatedItems.empty(),
+        fill_rows=PaginatedItems.empty(),
+    )
+
+    render_dashboard(streamlit, state)
+
+    assert list(streamlit.line_charts[0].index) == ["2025-01-02", "2025-01-03"]
+    assert streamlit.line_charts[0].dtype == "float64"
+    assert float(streamlit.line_charts[0].iloc[0]) == 10000.5
+    equity_table = next(frame for frame in streamlit.dataframes if "equity" in frame.columns)
+    assert isinstance(equity_table.loc[0, "equity"], str)
+    assert equity_table.loc[0, "equity"] == "10000.50"
+
+
+@pytest.mark.parametrize("bad_value", ["not-a-number", "NaN", "Infinity", "-Infinity"])
+def test_dashboard_rejects_malformed_nan_and_infinite_chart_values_gracefully(
+    bad_value: str,
+) -> None:
+    streamlit = FakeStreamlit()
+    state = DashboardState(
+        api_available=True,
+        health={"status": "ok"},
+        data_status={"available": False},
+        model_runs=[],
+        selected_model_run=None,
+        model_predictions=PaginatedItems.empty(),
+        backtests=[{"run_id": "backtest-run-1"}],
+        selected_backtest=FakeClient().backtest_detail("backtest-run-1"),
+        equity_rows=PaginatedItems(
+            items=[{"session": "2025-01-02", "equity": bad_value, "drawdown": 0.0}],
+            total=1,
+            limit=500,
+            offset=0,
+        ),
+        order_rows=PaginatedItems.empty(),
+        risk_decision_rows=PaginatedItems.empty(),
+        fill_rows=PaginatedItems.empty(),
+    )
+
+    render_dashboard(streamlit, state)
+
+    assert "Chart data is unavailable or invalid." in " ".join(streamlit.text)
+    assert streamlit.line_charts == []

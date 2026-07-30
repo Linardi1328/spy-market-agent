@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import tomllib
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
+from uvicorn import Config
 
 from spy_market_agent.api import create_app
 from spy_market_agent.persistence import initialize_database
@@ -18,6 +21,23 @@ def test_app_factory_health_does_not_initialize_database(tmp_path: Path) -> None
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
     assert not database_path.exists()
+
+
+def test_uvicorn_dependency_and_factory_resolution_do_not_create_database(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    dependencies = pyproject["project"]["dependencies"]
+
+    monkeypatch.chdir(tmp_path)
+    config = Config("spy_market_agent.api.main:create_app", factory=True, lifespan="off")
+    config.load()
+
+    assert "uvicorn>=0.30,<1" in dependencies
+    assert config.loaded is True
+    assert type(config.loaded_app).__name__ == "ProxyHeadersMiddleware"
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_empty_initialized_database_returns_safe_empty_responses(tmp_path: Path) -> None:
@@ -108,3 +128,70 @@ def test_pagination_validation_and_read_only_routes(tmp_path: Path) -> None:
     for route in app.routes:
         methods: set[str] = set(getattr(route, "methods", set()) or set())
         assert not state_changing.intersection(methods)
+
+
+@pytest.mark.parametrize(
+    "path_run_id",
+    [
+        "A1",
+        "run.01_test-02",
+        "a" * 128,
+    ],
+)
+def test_fastapi_route_validation_accepts_url_safe_run_ids(
+    tmp_path: Path,
+    path_run_id: str,
+) -> None:
+    database_path = tmp_path / "phase7.sqlite3"
+    initialize_database(database_path)
+    client = TestClient(create_app(database_path=str(database_path)))
+
+    response = client.get(f"/api/v1/model-runs/{path_run_id}")
+
+    assert response.status_code == 404
+    assert response.json()["code"] == "model_run_not_found"
+
+
+@pytest.mark.parametrize(
+    "path_run_id",
+    [
+        "%20leading",
+        "trailing%20",
+        "internal%20space",
+        "bad%5Cslash",
+        "bad%25percent",
+        "bad%3Fquery",
+        "bad%23hash",
+        "bad%26amp",
+        "bad:colon",
+        "a" * 129,
+    ],
+)
+def test_fastapi_route_validation_rejects_unsafe_run_ids_without_503(
+    tmp_path: Path,
+    path_run_id: str,
+) -> None:
+    database_path = tmp_path / "phase7.sqlite3"
+    initialize_database(database_path)
+    client = TestClient(create_app(database_path=str(database_path)))
+
+    response = client.get(f"/api/v1/model-runs/{path_run_id}")
+
+    assert response.status_code == 422
+    assert response.json()["detail"]
+    assert response.status_code != 503
+
+
+def test_fastapi_encoded_and_raw_path_separators_never_retrieve_or_503(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "phase7.sqlite3"
+    initialize_database(database_path)
+    client = TestClient(create_app(database_path=str(database_path)))
+
+    raw_slash = client.get("/api/v1/model-runs/bad/slash")
+    encoded_slash = client.get("/api/v1/model-runs/bad%2Fslash")
+
+    assert raw_slash.status_code == 404
+    assert encoded_slash.status_code in {404, 422}
+    assert encoded_slash.status_code != 503

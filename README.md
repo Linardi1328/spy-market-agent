@@ -85,6 +85,8 @@ python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
 ```
 
+The runtime dependencies include plain `uvicorn>=0.30,<1` for the documented local FastAPI startup command.
+
 Do not create a real `.env` file with credentials for Phase 7. Use `.env.example` only as a placeholder reference. Alpaca integration is not implemented.
 
 ## Implemented Phase 3 Capabilities
@@ -149,6 +151,9 @@ Do not create a real `.env` file with credentials for Phase 7. Use `.env.example
 - Structured project-owned persistence errors for malformed input, conflicts, schema issues, integrity failures, and missing records.
 - Read-only FastAPI application factory with typed Pydantic responses and bounded pagination.
 - Streamlit dashboard views for overview, data quality, model evaluation, backtest results, and risk/audit.
+- API and dashboard run IDs use the shared URL-safe contract `^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`.
+- Dashboard predictions, orders, risk decisions, and fills are bounded previews with visible `Showing X of Y` labels from API pagination metadata.
+- Dashboard equity and drawdown charts fetch all equity pages from the API before plotting and fail visibly if pagination is inconsistent or chart values are non-finite.
 - Dashboard data access goes through the FastAPI HTTP client only; it does not query SQLite directly.
 - Educational warnings are shown in API responses and dashboard views. Results are not investment advice and do not prove profitability.
 
@@ -182,6 +187,8 @@ GET /api/v1/backtests/{run_id}/risk-decisions
 GET /api/v1/backtests/{run_id}/fills
 ```
 
+Route `{run_id}` values must be 1 to 128 characters, start with an ASCII letter or digit, and contain only ASCII letters, digits, period, underscore, and hyphen. Values with whitespace, slashes, percent characters, query/fragment separators, colons, or other path-unsafe characters are rejected rather than normalized.
+
 Start the Streamlit dashboard:
 
 ```bash
@@ -189,6 +196,8 @@ streamlit run src/spy_market_agent/dashboard/streamlit_app.py
 ```
 
 Configure the dashboard API URL with `DASHBOARD_API_BASE_URL`; it defaults to `http://127.0.0.1:8000`. Configure the SQLite path with `SQLITE_DATABASE_PATH`; database directories are created only by explicit initialization.
+
+Dashboard tables for predictions, orders, risk decisions, and fills are previews when the API total exceeds the visible rows. Equity and drawdown charts are intended to be complete; the dashboard retrieves all equity pages using the maximum API page size and shows an error instead of silently plotting partial or malformed chart data.
 
 ## Not Implemented
 

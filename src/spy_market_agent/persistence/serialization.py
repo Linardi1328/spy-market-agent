@@ -7,14 +7,43 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, cast
 
 from spy_market_agent.persistence.models import PersistenceInputError, PersistenceIntegrityError
+from spy_market_agent.run_ids import RUN_ID_ERROR_MESSAGE, validate_run_id
 
 type JsonValue = bool | int | float | str | list[JsonValue] | dict[str, JsonValue] | None
 
 
 def require_run_id(value: object) -> str:
-    if type(value) is not str or not value.strip():
-        raise PersistenceInputError("invalid_run_id", "run_id must be a non-empty string.")
-    return value.strip()
+    try:
+        return validate_run_id(value)
+    except ValueError as exc:
+        raise PersistenceInputError("invalid_run_id", RUN_ID_ERROR_MESSAGE) from exc
+
+
+def stored_run_id(value: object, *, field_name: str = "run_id") -> str:
+    try:
+        return validate_run_id(value)
+    except ValueError as exc:
+        raise PersistenceIntegrityError(f"invalid_{field_name}", RUN_ID_ERROR_MESSAGE) from exc
+
+
+def required_text(value: object, *, field_name: str) -> str:
+    if type(value) is not str or value == "":
+        raise PersistenceIntegrityError(
+            f"invalid_{field_name}",
+            f"{field_name} must be stored as non-empty text.",
+        )
+    return value
+
+
+def optional_text(value: object, *, field_name: str) -> str | None:
+    if value is None:
+        return None
+    if type(value) is not str:
+        raise PersistenceIntegrityError(
+            f"invalid_{field_name}",
+            f"{field_name} must be stored as text or NULL.",
+        )
+    return value
 
 
 def date_to_text(value: date) -> str:
@@ -138,6 +167,54 @@ def finite_float_for_storage(value: object, *, field_name: str) -> float:
     return parsed
 
 
+def int_from_storage(
+    value: object,
+    *,
+    field_name: str,
+    minimum: int | None = None,
+) -> int:
+    """Read an integer stored as SQLite INTEGER, integral REAL, or exact integer text."""
+
+    if isinstance(value, bool):
+        raise PersistenceIntegrityError(
+            f"invalid_{field_name}",
+            f"{field_name} must be an integer.",
+        )
+    if type(value) is int:
+        parsed = value
+    elif type(value) is float:
+        if not math.isfinite(value) or not value.is_integer():
+            raise PersistenceIntegrityError(
+                f"invalid_{field_name}",
+                f"{field_name} must be an integer.",
+            )
+        parsed = int(value)
+    elif type(value) is str:
+        if not value or value.strip() != value:
+            raise PersistenceIntegrityError(
+                f"invalid_{field_name}",
+                f"{field_name} must be exact integer text.",
+            )
+        digits = value[1:] if value[0] in "+-" else value
+        if not digits or not digits.isdecimal():
+            raise PersistenceIntegrityError(
+                f"invalid_{field_name}",
+                f"{field_name} must be exact integer text.",
+            )
+        parsed = int(value, 10)
+    else:
+        raise PersistenceIntegrityError(
+            f"invalid_{field_name}",
+            f"{field_name} must be an integer.",
+        )
+    if minimum is not None and parsed < minimum:
+        raise PersistenceIntegrityError(
+            f"invalid_{field_name}",
+            f"{field_name} must be greater than or equal to {minimum}.",
+        )
+    return parsed
+
+
 def int_for_storage(value: object, *, field_name: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int):
         raise PersistenceInputError(
@@ -164,13 +241,17 @@ def canonical_json_loads(value: object, *, field_name: str = "json") -> JsonValu
             f"{field_name} must be canonical JSON text.",
         )
     try:
-        parsed = json.loads(value)
-    except json.JSONDecodeError as exc:
+        parsed = json.loads(value, parse_constant=_reject_non_standard_json_constant)
+    except (json.JSONDecodeError, ValueError) as exc:
         raise PersistenceIntegrityError(
             f"invalid_{field_name}",
             f"{field_name} must be canonical JSON text.",
         ) from exc
     return cast(JsonValue, parsed)
+
+
+def _reject_non_standard_json_constant(value: str) -> None:
+    raise ValueError(f"non-standard JSON constant {value!r} is not allowed")
 
 
 def validate_checksum(value: object, *, field_name: str = "checksum") -> str:
@@ -216,9 +297,13 @@ __all__ = [
     "finite_float",
     "finite_float_for_storage",
     "int_for_storage",
+    "int_from_storage",
     "int_to_bool",
     "json_to_string_tuple",
+    "optional_text",
     "require_run_id",
+    "required_text",
+    "stored_run_id",
     "text_to_date",
     "text_to_datetime",
     "text_to_decimal",

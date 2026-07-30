@@ -13,11 +13,13 @@ from spy_market_agent.persistence.serialization import (
     JsonValue,
     bool_to_int,
     canonical_json_dumps,
+    canonical_json_loads,
     date_to_text,
     datetime_to_text,
     decimal_to_text,
     finite_float_for_storage,
     int_to_bool,
+    require_run_id,
     text_to_date,
     text_to_datetime,
     text_to_decimal,
@@ -50,6 +52,12 @@ def test_canonical_json_is_deterministic_and_rejects_non_finite_values() -> None
         canonical_json_dumps({"bad": float("nan")})
     with pytest.raises(PersistenceIntegrityError, match="finite"):
         finite_float_for_storage(float("inf"), field_name="bad_value")
+    with pytest.raises(PersistenceIntegrityError, match="canonical JSON"):
+        canonical_json_loads("NaN")
+    with pytest.raises(PersistenceIntegrityError, match="canonical JSON"):
+        canonical_json_loads("Infinity")
+    with pytest.raises(PersistenceIntegrityError, match="canonical JSON"):
+        canonical_json_loads("-Infinity")
 
 
 def test_checksum_validation_requires_lowercase_sha256() -> None:
@@ -58,3 +66,40 @@ def test_checksum_validation_requires_lowercase_sha256() -> None:
     assert validate_checksum(checksum) == checksum
     with pytest.raises(PersistenceIntegrityError, match="SHA-256"):
         validate_checksum("A" * 64)
+
+
+@pytest.mark.parametrize(
+    "run_id",
+    [
+        "a",
+        "A1",
+        "run.01_test-02",
+        "a" * 128,
+    ],
+)
+def test_run_id_contract_accepts_url_safe_identifiers(run_id: str) -> None:
+    assert require_run_id(run_id) == run_id
+
+
+@pytest.mark.parametrize(
+    "run_id",
+    [
+        "",
+        "   ",
+        " leading",
+        "trailing ",
+        "internal space",
+        "bad/slash",
+        "bad\\slash",
+        "bad%percent",
+        "bad?query",
+        "bad#hash",
+        "bad&amp",
+        "bad:colon",
+        "%2Fencoded",
+        "a" * 129,
+    ],
+)
+def test_run_id_contract_rejects_unsafe_identifiers_without_normalizing(run_id: str) -> None:
+    with pytest.raises(PersistenceInputError, match="run_id"):
+        require_run_id(run_id)

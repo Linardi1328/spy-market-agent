@@ -4,6 +4,8 @@ from typing import Any, cast
 
 import httpx
 
+from spy_market_agent.run_ids import validate_run_id
+
 
 class DashboardApiError(RuntimeError):
     """Raised when the read API is unavailable or returns an invalid response."""
@@ -40,7 +42,8 @@ class DashboardApiClient:
         return self._get("/api/v1/model-runs")
 
     def model_run_detail(self, run_id: str) -> dict[str, Any]:
-        return self._get(f"/api/v1/model-runs/{run_id}")
+        parsed_run_id = validate_run_id(run_id)
+        return self._get(f"/api/v1/model-runs/{parsed_run_id}")
 
     def model_predictions(
         self,
@@ -49,8 +52,9 @@ class DashboardApiClient:
         limit: int = 100,
         offset: int = 0,
     ) -> dict[str, Any]:
+        parsed_run_id = validate_run_id(run_id)
         return self._get(
-            f"/api/v1/model-runs/{run_id}/predictions",
+            f"/api/v1/model-runs/{parsed_run_id}/predictions",
             params={"limit": limit, "offset": offset},
         )
 
@@ -58,29 +62,34 @@ class DashboardApiClient:
         return self._get("/api/v1/backtests")
 
     def backtest_detail(self, run_id: str) -> dict[str, Any]:
-        return self._get(f"/api/v1/backtests/{run_id}")
+        parsed_run_id = validate_run_id(run_id)
+        return self._get(f"/api/v1/backtests/{parsed_run_id}")
 
     def equity(self, run_id: str, *, limit: int = 250, offset: int = 0) -> dict[str, Any]:
+        parsed_run_id = validate_run_id(run_id)
         return self._get(
-            f"/api/v1/backtests/{run_id}/equity",
+            f"/api/v1/backtests/{parsed_run_id}/equity",
             params={"limit": limit, "offset": offset},
         )
 
     def orders(self, run_id: str, *, limit: int = 250, offset: int = 0) -> dict[str, Any]:
+        parsed_run_id = validate_run_id(run_id)
         return self._get(
-            f"/api/v1/backtests/{run_id}/orders",
+            f"/api/v1/backtests/{parsed_run_id}/orders",
             params={"limit": limit, "offset": offset},
         )
 
     def risk_decisions(self, run_id: str, *, limit: int = 250, offset: int = 0) -> dict[str, Any]:
+        parsed_run_id = validate_run_id(run_id)
         return self._get(
-            f"/api/v1/backtests/{run_id}/risk-decisions",
+            f"/api/v1/backtests/{parsed_run_id}/risk-decisions",
             params={"limit": limit, "offset": offset},
         )
 
     def fills(self, run_id: str, *, limit: int = 250, offset: int = 0) -> dict[str, Any]:
+        parsed_run_id = validate_run_id(run_id)
         return self._get(
-            f"/api/v1/backtests/{run_id}/fills",
+            f"/api/v1/backtests/{parsed_run_id}/fills",
             params={"limit": limit, "offset": offset},
         )
 
