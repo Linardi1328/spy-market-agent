@@ -390,6 +390,13 @@ TAMPER_CASES = (
         api_path=f"/api/v1/model-runs/{MODEL_RUN_ID}",
     ),
     TamperCase(
+        name="model_parameter_json_overflow",
+        sql="UPDATE model_candidate_parameters SET parameter_value_json = ? WHERE run_id = ?",
+        params=("1e999", MODEL_RUN_ID),
+        repository_read=_load_model,
+        api_path=f"/api/v1/model-runs/{MODEL_RUN_ID}",
+    ),
+    TamperCase(
         name="backtest_strategy_row",
         sql=(
             "UPDATE backtest_strategy_signals SET probability_positive = ? "
@@ -505,6 +512,52 @@ def test_corrupted_storage_values_raise_project_errors_and_api_is_sanitized(
         "ValueError",
         "Traceback",
         "sqlite",
+        str(database_path),
+    ):
+        assert forbidden not in response.text
+
+
+def test_overflowing_model_parameter_json_fails_closed_and_api_is_sanitized(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "phase7.sqlite3"
+    repository = initialized_repository(database_path)
+    artifacts = make_phase7_artifacts()
+    repository.save_final_test_evaluation(MODEL_RUN_ID, artifacts.evaluation)
+
+    connection = connect_database(database_path)
+    try:
+        connection.execute("PRAGMA ignore_check_constraints = ON")
+        connection.execute(
+            "UPDATE model_candidate_parameters SET parameter_value_json = ? WHERE run_id = ?",
+            ("1e999", MODEL_RUN_ID),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    with pytest.raises(PersistenceIntegrityError) as exc_info:
+        repository.load_final_test_evaluation(MODEL_RUN_ID)
+
+    assert not isinstance(exc_info.value, ValueError | OverflowError)
+    assert "1e999" not in str(exc_info.value)
+    assert "inf" not in str(exc_info.value).lower()
+
+    response = TestClient(create_app(database_path=str(database_path))).get(
+        f"/api/v1/model-runs/{MODEL_RUN_ID}"
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "code": response.json()["code"],
+        "message": "Persisted research data is unavailable or invalid.",
+    }
+    for forbidden in (
+        "1e999",
+        "Infinity",
+        "inf",
+        "ValueError",
+        "OverflowError",
         str(database_path),
     ):
         assert forbidden not in response.text

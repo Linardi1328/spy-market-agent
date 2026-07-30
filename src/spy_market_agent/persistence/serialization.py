@@ -247,11 +247,26 @@ def canonical_json_loads(value: object, *, field_name: str = "json") -> JsonValu
             f"invalid_{field_name}",
             f"{field_name} must be canonical JSON text.",
         ) from exc
+    _validate_json_numbers_are_finite(parsed, field_name=field_name)
     return cast(JsonValue, parsed)
 
 
 def _reject_non_standard_json_constant(value: str) -> None:
     raise ValueError(f"non-standard JSON constant {value!r} is not allowed")
+
+
+def _validate_json_numbers_are_finite(value: object, *, field_name: str) -> None:
+    if type(value) is float and not math.isfinite(value):
+        raise PersistenceIntegrityError(
+            f"non_finite_{field_name}",
+            f"{field_name} must be canonical JSON text with finite numeric values.",
+        )
+    if isinstance(value, list):
+        for item in value:
+            _validate_json_numbers_are_finite(item, field_name=field_name)
+    elif isinstance(value, dict):
+        for item in value.values():
+            _validate_json_numbers_are_finite(item, field_name=field_name)
 
 
 def validate_checksum(value: object, *, field_name: str = "checksum") -> str:

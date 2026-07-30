@@ -253,7 +253,11 @@ Original Phase 7 implementation SHA: `0c0137177101400ae33756cf46b214121ede5a17`.
 
 Cherry-picked Phase 7 commit SHA on the correction branch: `84da8c2fd95cb36503b5d0b35b8f1451cfcd1d8b`.
 
-Final correction commit SHA: recorded in the final Codex response after the commit is created and pushed.
+Prior correction commit SHA: `2b1cb5210fdf29c32a37173d4365aac85b5fc4c9`.
+
+Final hardening branch: `review/phase-07-final-hardening`.
+
+Final hardening commit SHA: reported in the final Codex response after the commit is created and pushed.
 
 Findings corrected:
 
@@ -409,3 +413,47 @@ Confirmations:
 - The original Phase 7 branch `review/phase-07-persistence-api-dashboard` was not modified.
 - Phase 8 was not started.
 - No Alpaca, broker SDK, broker communication, paper-order submission, live-order submission, execution adapter, order approval control, scheduler, background worker, deployment configuration, authentication, API write route, training route, backtest-running route, signal-generation route, market-data downloading, model binary persistence, additional assets, short selling, leverage, margin, fractional shares, or non-SPY asset behavior was introduced.
+
+## Phase 7 Final Hardening Addendum
+
+Final hardening branch: `review/phase-07-final-hardening`.
+
+Prior correction commit SHA: `2b1cb5210fdf29c32a37173d4365aac85b5fc4c9`.
+
+Final hardening commit SHA: reported in the final Codex response after the commit is created and pushed.
+
+Issue hardened:
+
+- `canonical_json_loads()` already rejected literal `NaN`, `Infinity`, and `-Infinity` through `json.loads(parse_constant=...)`, but JSON numeric overflow such as `1e999` could decode to a non-finite Python float without invoking `parse_constant`.
+
+Correction:
+
+- Added recursive post-decode JSON validation for scalar floats, list elements, and dictionary values.
+- Any decoded float where `math.isfinite(value)` is false now raises `PersistenceIntegrityError` with a stable project-owned code and a sanitized message that does not echo the corrupted value.
+- The JSON storage format, schema version, deterministic serialization, later domain reconstruction, and checksum validation remain unchanged.
+
+Regression coverage added:
+
+- Direct serializer coverage for `1e999`, `-1e999`, `[1e999]`, `{"value": 1e999}`, and deeply nested overflowing values.
+- Direct serializer coverage proving ordinary finite exponent values such as `1e10` and existing valid JSON objects/lists still load.
+- Repository tampering coverage for model parameter JSON stored as `1e999`, including `PersistenceIntegrityError` reconstruction failure and sanitized FastAPI `503` behavior.
+- Existing `NaN` and `Infinity` tests were retained.
+
+Final verification:
+
+- `python -m pip install -e ".[dev]"`: passed in the existing Python 3.12 environment; `uvicorn>=0.30,<1` was already satisfied as `0.52.0`.
+- `pytest`: passed, `539 passed`, `5 warnings in 62.10s`, total coverage `81%`.
+- `pytest tests/unit -q`: exited `0`, unit suite passed with `5 warnings`, total coverage `81%`. The command combines repo `-q` and CLI `-q`, so pytest suppresses the final pass-count line; full minus integration corresponds to `534` unit tests.
+- `pytest tests/integration -q`: exited `0`, `5` integration tests passed, `5 warnings`, integration-only coverage `71%`.
+- `ruff check .`: passed with `All checks passed!`.
+- `ruff format --check .`: passed with `93 files already formatted`.
+- `mypy src tests`: passed with `Success: no issues found in 84 source files`.
+- `python -m uvicorn --version`: printed `Running uvicorn 0.52.0 with CPython 3.12.13 on Darwin`.
+- `python -c "import spy_market_agent; print(spy_market_agent.__version__)"`: printed `0.1.0`.
+- Public `__all__` checks for `persistence`, `api`, and `dashboard` passed and remained unchanged.
+- `git diff --check`: exited `0`.
+
+Confirmation:
+
+- Phase 8 was not started.
+- No broker, Alpaca, execution, order-submission, scheduling, authentication, deployment, or API write functionality was introduced.

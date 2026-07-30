@@ -60,6 +60,30 @@ def test_canonical_json_is_deterministic_and_rejects_non_finite_values() -> None
         canonical_json_loads("-Infinity")
 
 
+@pytest.mark.parametrize(
+    "payload",
+    [
+        "1e999",
+        "-1e999",
+        "[1e999]",
+        '{"value":1e999}',
+        '{"outer":[{"inner":{"value":1e999}}]}',
+    ],
+)
+def test_canonical_json_loads_rejects_overflowing_numeric_values(payload: str) -> None:
+    with pytest.raises(PersistenceIntegrityError, match="canonical JSON"):
+        canonical_json_loads(payload)
+
+
+def test_canonical_json_loads_preserves_finite_json_values() -> None:
+    assert canonical_json_loads("1e10") == 10_000_000_000.0
+    assert canonical_json_loads('{"a":[1,2.5,true,null],"b":{"c":"value"}}') == {
+        "a": [1, 2.5, True, None],
+        "b": {"c": "value"},
+    }
+    assert canonical_json_loads("[1,2,3]") == [1, 2, 3]
+
+
 def test_checksum_validation_requires_lowercase_sha256() -> None:
     checksum = "a" * 64
 
