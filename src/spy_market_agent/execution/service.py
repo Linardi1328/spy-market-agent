@@ -13,6 +13,7 @@ from spy_market_agent.execution.approvals import validate_matching_approval
 from spy_market_agent.execution.errors import (
     PaperExecutionApprovalError,
     PaperExecutionBrokerRejectionError,
+    PaperExecutionBrokerRequestError,
     PaperExecutionBrokerStateError,
     PaperExecutionConfigurationError,
     PaperExecutionError,
@@ -186,6 +187,16 @@ class PaperExecutionService:
         )
         try:
             snapshot = broker.submit_market_day_order(instruction)
+        except PaperExecutionBrokerRequestError:
+            self._repository.mark_failure(
+                client_order_id=instruction.client_order_id,
+                signal_id=instruction.signal_id,
+                status=PAPER_ATTEMPT_BLOCKED,
+                failure_code="broker_request_construction_failed",
+                now_utc=clock.timestamp,
+                event_type="broker_request_construction_failed",
+            )
+            raise
         except PaperExecutionBrokerRejectionError as exc:
             self._repository.mark_failure(
                 client_order_id=instruction.client_order_id,

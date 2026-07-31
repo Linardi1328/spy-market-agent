@@ -8,7 +8,11 @@ from fastapi.testclient import TestClient
 
 from spy_market_agent.api import create_app
 from spy_market_agent.config import Settings
-from spy_market_agent.execution import PAPER_ATTEMPT_ACCEPTED, SQLitePaperExecutionRepository
+from spy_market_agent.execution import (
+    PAPER_ATTEMPT_ACCEPTED,
+    PAPER_ATTEMPT_BLOCKED,
+    SQLitePaperExecutionRepository,
+)
 from spy_market_agent.persistence import initialize_database
 from unit.phase8_helpers import CLIENT_ORDER_ID, make_approval, make_instruction, make_receipt
 
@@ -64,6 +68,40 @@ def test_paper_order_list_and_detail_routes_return_persisted_attempts(
     assert detail.status_code == 200
     assert detail.json()["attempt_status"] == PAPER_ATTEMPT_ACCEPTED
     assert detail.json()["account_id_fingerprint"] == "a" * 64
+
+
+def test_blocked_local_request_failure_is_visible_as_blocked_not_unknown(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "phase8.sqlite3"
+    initialize_database(database_path)
+    repository = SQLitePaperExecutionRepository(database_path)
+    instruction = make_instruction()
+    approval = make_approval(instruction)
+    repository.reserve_attempt(
+        instruction,
+        approval,
+        execution_risk_approved=True,
+        now_utc=instruction.created_at_utc,
+    )
+    repository.mark_failure(
+        client_order_id=instruction.client_order_id,
+        signal_id=instruction.signal_id,
+        status=PAPER_ATTEMPT_BLOCKED,
+        failure_code="broker_request_construction_failed",
+        now_utc=instruction.created_at_utc,
+        event_type="broker_request_construction_failed",
+    )
+    client = TestClient(create_app(database_path=str(database_path)))
+
+    detail = client.get(f"/api/v1/paper-orders/{CLIENT_ORDER_ID}")
+
+    assert detail.status_code == 200
+    payload = detail.json()
+    assert payload["attempt_status"] == PAPER_ATTEMPT_BLOCKED
+    assert payload["attempt_status"] != "submission_unknown"
+    assert payload["failure_code"] == "broker_request_construction_failed"
+    assert "raw" not in detail.text.lower()
 
 
 def test_paper_order_unknown_and_invalid_ids_return_safe_client_errors(

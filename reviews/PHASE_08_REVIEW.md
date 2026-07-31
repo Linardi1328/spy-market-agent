@@ -499,3 +499,185 @@ Correction confirmations:
 - The original Phase 8 branch `review/phase-08-paper-trading-preparation` was not modified.
 - Phase 9 was not started.
 - No live trading, live endpoint, `paper=False` client, automatic execution, submission retry, short selling, leverage, margin, fractional shares, non-SPY asset, scheduler, background worker, deployment, authentication, API write route, dashboard execution control, cancellation, replacement, or liquidation behavior was added.
+
+## Phase 8 Final Hardening Addendum
+
+Final-hardening branch name:
+
+- `review/phase-08-final-hardening`
+
+Starting main SHA:
+
+- `d5e2a81ed51951b414100e440796397cb3cbd938`
+
+Original implementation and correction SHAs:
+
+- Original Phase 8 implementation SHA: `b7062746a22e6ff3fb429f86a4ad6cb6f04520f2`
+- Original Phase 8 correction SHA: `1065ab74c6d1ac3aa4f41657533d394b9c52ac03`
+
+New cherry-picked SHAs on the final-hardening branch:
+
+- New cherry-picked implementation SHA: `f9a794cdf2ffb2dc9f3f7c5044bde131cc86940e`
+- New cherry-picked correction SHA: `f6d9a65d143e0fd910ffbcc0caf9496754278be5`
+
+Final hardening commit SHA:
+
+- Reported in the final Codex response after the commit is created and pushed.
+
+Findings corrected:
+
+- Real Alpaca SDK enum values are normalized through their `.value` strings for account status, asset class, and position side.
+- Local Alpaca request-construction failures are distinguished from uncertain post-submit outcomes.
+- The SQLite execution ledger independently enforces allowed state transitions and persisted lineage.
+- The SQLite execution ledger independently rejects any receipt environment other than `alpaca_paper`.
+
+Files created:
+
+- None.
+
+Files modified:
+
+- `README.md`
+- `reviews/PHASE_08_REVIEW.md`
+- `src/spy_market_agent/execution/__init__.py`
+- `src/spy_market_agent/execution/alpaca_paper.py`
+- `src/spy_market_agent/execution/errors.py`
+- `src/spy_market_agent/execution/repository.py`
+- `src/spy_market_agent/execution/service.py`
+- `tests/integration/test_phase8_paper_execution_flow.py`
+- `tests/unit/test_alpaca_paper_adapter.py`
+- `tests/unit/test_api_phase8.py`
+- `tests/unit/test_execution_repository.py`
+- `tests/unit/test_execution_service.py`
+
+SDK enum normalization behavior:
+
+- `AccountStatus.ACTIVE` becomes `ACTIVE` and `AccountStatus.INACTIVE` becomes `INACTIVE`.
+- `AssetClass.US_EQUITY` becomes `us_equity`.
+- `PositionSide.LONG` becomes `long` and `PositionSide.SHORT` becomes `short`.
+- Existing strict conversions for asset status, order side, order type, time in force, and order status remain in place.
+- Malformed enum-like objects fail closed through project-owned broker errors.
+
+Local request-construction error taxonomy:
+
+- Added `PaperExecutionBrokerRequestError` for failures while building the local Alpaca `MarketOrderRequest`.
+- The adapter constructs the fixed SPY market DAY order request before entering the protected SDK submit call.
+- Unsupported local side, invalid local quantity, local request-model validation failure, and expected conversion failures raise `PaperExecutionBrokerRequestError`.
+- These failures mean `TradingClient.submit_order` was not called, so they are recorded as `blocked`, not `submission_unknown`.
+- Reserved signal, client-order, and approval IDs remain retained and cannot be reused silently.
+- Failures after the SDK submit call may have started retain the existing unknown-submission taxonomy.
+
+Ledger transition matrix:
+
+- Receipt transitions: `reserved -> accepted`, `reserved -> broker_existing_order_found`, `reserved -> reconciled`, and `submission_unknown -> reconciled`.
+- Unknown-outcome transitions: `reserved -> submission_unknown` and `submission_unknown -> submission_unknown`.
+- Failure transitions: `reserved -> blocked` and `reserved -> rejected`.
+- Terminal states `accepted`, `broker_existing_order_found`, `reconciled`, `rejected`, and `blocked` cannot transition through `mark_submission_unknown()` or `mark_failure()`.
+- `mark_failure()` rejects every target state except `blocked` and `rejected`.
+
+Persisted-lineage enforcement:
+
+- `mark_submission_unknown()` and `mark_failure()` validate supplied identifiers before opening a transaction, then load the persisted attempt and require the supplied signal ID to match the persisted signal ID.
+- Audit event lineage is built from persisted attempt rows, not caller-supplied fallback values.
+- `record_receipt()` validates receipt signal ID, client-order ID, fingerprint, SPY symbol, side, whole-share quantity, order type, time in force, regular-hours flag, paper environment, and permitted prior state.
+- SQL updates must affect exactly one row.
+
+Paper-environment receipt validation:
+
+- Repository receipt validation now requires `receipt.execution_environment == "alpaca_paper"`.
+- Forged environments such as `alpaca_live`, `live`, `production`, `paper`, and `unknown` are rejected with a sanitized `receipt_environment_mismatch` integrity error.
+- Rejected forged receipts do not update attempt status or broker fields and do not append success or reconciliation events.
+
+Regression tests added:
+
+- Real alpaca-py enum normalization for account status, asset class, asset status, and position side.
+- Full enum-backed Alpaca preflight integration path with exactly one fake paper order submission.
+- Malformed enum-like value rejection.
+- Local `MarketOrderRequest` construction failure with zero submit calls.
+- Unsupported local side and invalid local quantity blocked before submit.
+- Service-level blocked local request-construction failure with retained identifiers.
+- API visibility for blocked local request-construction failure.
+- Repository state-machine transitions for `submission_unknown`, `blocked`, and `rejected`.
+- Terminal-state regression rejection.
+- Wrong signal-lineage rejection for unknown and failure updates.
+- Row-count mismatch and SQLite failure rollback.
+- Paper-environment receipt enforcement and forged live receipt rejection.
+- Integration coverage for terminal-state protection, wrong signal lineage, and forged live receipt rollback.
+
+Baseline verification before final hardening edits:
+
+- `python -m pip install -e ".[dev]"`: passed; editable package installed with `alpaca-py 0.43.5`.
+- `pytest`: `657 passed, 6 warnings in 74.71s`; full-suite coverage `81%`.
+- `pytest tests/unit -q`: passed with coverage `81%` and the same six warnings; merged suite composition was 646 unit tests and 11 integration tests.
+- `pytest tests/integration -q`: `11 passed, 5 warnings`; integration-only coverage `69%`.
+- `ruff check .`: `All checks passed!`
+- `ruff format --check .`: `110 files already formatted`
+- `mypy src tests`: `Success: no issues found in 100 source files`
+- `python -c "import alpaca; import importlib.metadata as m; print(m.version('alpaca-py'))"`: `0.43.5`
+- `python -c "from alpaca.trading.enums import AccountStatus, AssetClass, AssetStatus, PositionSide; print(AccountStatus.ACTIVE.value, AssetClass.US_EQUITY.value, AssetStatus.ACTIVE.value, PositionSide.LONG.value)"`: `ACTIVE us_equity active long`
+- `python -c "import spy_market_agent; print(spy_market_agent.__version__)"`: `0.1.0`
+- Package export smoke checks for `strategies`, `risk`, `backtesting`, `persistence`, `execution`, `api`, and `dashboard`: passed.
+- `git diff --check`: passed.
+
+Final verification:
+
+- `python -m pip install -e ".[dev]"`: passed; editable `spy-market-agent 0.1.0` installed and `alpaca-py 0.43.5` was present.
+- `pytest`: `700 passed, 6 warnings in 77.89s`; full-suite coverage `82%`.
+- `pytest tests/unit -q`: passed with coverage `82%` and 6 warnings. Supplemental `pytest tests/unit --collect-only -qq --no-cov` confirmed 685 collected unit tests.
+- `pytest tests/integration -q`: 15 integration tests passed, 6 warnings, integration-only coverage `71%`.
+- `ruff check .`: `All checks passed!`
+- `ruff format --check .`: `110 files already formatted`
+- `mypy src tests`: `Success: no issues found in 100 source files`
+- `python -c "import alpaca; import importlib.metadata as m; print(m.version('alpaca-py'))"`: `0.43.5`
+- `python -c "from alpaca.trading.enums import AccountStatus, AssetClass, AssetStatus, PositionSide; print(AccountStatus.ACTIVE.value, AssetClass.US_EQUITY.value, AssetStatus.ACTIVE.value, PositionSide.LONG.value)"`: `ACTIVE us_equity active long`
+- `python -c "import spy_market_agent; print(spy_market_agent.__version__)"`: `0.1.0`
+- `python -c "import spy_market_agent.strategies as m; print(sorted(m.__all__))"`: passed; exports unchanged.
+- `python -c "import spy_market_agent.risk as m; print(sorted(m.__all__))"`: passed; exports unchanged.
+- `python -c "import spy_market_agent.backtesting as m; print(sorted(m.__all__))"`: passed; exports unchanged.
+- `python -c "import spy_market_agent.persistence as m; print(sorted(m.__all__))"`: passed; exports unchanged.
+- `python -c "import spy_market_agent.execution as m; print(sorted(m.__all__))"`: passed; exports include `PaperExecutionBrokerRequestError`.
+- `python -c "import spy_market_agent.api as m; print(sorted(m.__all__))"`: passed; API exports unchanged.
+- `python -c "import spy_market_agent.dashboard as m; print(sorted(m.__all__))"`: passed; dashboard exports unchanged.
+- `git diff --check`: passed.
+
+Explicit targeted hardening and smoke checks:
+
+- `pytest tests/unit/test_alpaca_paper_adapter.py tests/unit/test_execution_repository.py tests/unit/test_execution_service.py tests/unit/test_api_phase8.py tests/unit/test_public_phase7_api.py tests/unit/test_dashboard_phase7.py tests/integration/test_phase8_paper_execution_flow.py -q --no-cov`: 148 tests passed, 6 warnings.
+- This targeted set covers real enum-value normalization, enum-backed preflight success, local request-construction failure with zero submit calls, blocked local request failure rather than `submission_unknown`, retained IDs, terminal ledger-state protection, wrong signal-lineage rejection, persisted event lineage, forged `alpaca_live` receipt rejection, rollback after failed repository operations, generic post-submit uncertainty as `submission_unknown`, no automatic submit retry, no broker clients on import/API/dashboard startup or GET/render paths, no SQLite creation/migration on those read-only paths, no external network request, no automatic order submission, no public live-client construction, no API write route, and no dashboard execution control.
+
+Source and behavior audit:
+
+- `rg -n "paper=False|paper = False|live-api\\.alpaca|api\\.alpaca\\.markets|@.*\\.(post|put|patch|delete)\\(" src tests README.md PROJECT_SPEC.md reviews/PHASE_08_REVIEW.md`: only expected documentation/review references, the canonical paper endpoint, and the live-environment rejection test were found.
+- `rg -n "cancel|replace|liquidat|scheduler|background|cron|websocket|POST|PUT|PATCH|DELETE" src/spy_market_agent/execution src/spy_market_agent/api src/spy_market_agent/dashboard README.md PROJECT_SPEC.md reviews/PHASE_08_REVIEW.md`: only expected scope documentation, the read-only route inventory guard, harmless timestamp `.replace("+00:00", "Z")` calls, and existing third-party warning text were found.
+- Behavior tests confirmed the adapter always passes `paper=True`, callers cannot override the broker URL through a public project API, `execution_mode="live"` is rejected, `submit_order` is never automatically retried, and post-submit uncertainty cannot cause a duplicate submission.
+
+Final git audit before commit:
+
+- `git status --short`: expected modified files only: `README.md`, `reviews/PHASE_08_REVIEW.md`, `src/spy_market_agent/execution/__init__.py`, `src/spy_market_agent/execution/alpaca_paper.py`, `src/spy_market_agent/execution/errors.py`, `src/spy_market_agent/execution/repository.py`, `src/spy_market_agent/execution/service.py`, `tests/integration/test_phase8_paper_execution_flow.py`, `tests/unit/test_alpaca_paper_adapter.py`, `tests/unit/test_api_phase8.py`, `tests/unit/test_execution_repository.py`, and `tests/unit/test_execution_service.py`.
+- `git diff --stat origin/main...HEAD`: 36 files changed, 7058 insertions, 43 deletions.
+- `git diff --check`: passed.
+
+Coverage:
+
+- Baseline full-suite coverage: `81%`.
+- Final full-suite coverage: `82%`.
+
+Warnings:
+
+- Baseline warnings: 6 existing third-party warnings.
+- Final warnings: 6 existing third-party warnings from `exchange_calendars`, FastAPI/Starlette TestClient, and `websockets`. No warnings were suppressed.
+
+Known limitations:
+
+- Phase 8 remains paper-only and explicitly invoked.
+- Local request-construction failures block the reserved attempt but do not release IDs.
+- Reconciliation remains lookup-only and never submits.
+- Engaging the kill switch after the final pre-submit check cannot cancel an already in-flight broker request.
+- API and dashboard views remain read-only and cannot approve, submit, reconcile, retry, cancel, replace, liquidate, or change the kill switch.
+
+Confirmation after final hardening commit:
+
+- Main was not modified.
+- Both earlier Phase 8 branches were not modified.
+- Phase 9 was not started.
+- No live trading, live endpoint, `paper=False` client, automatic execution, automatic submission retry, short selling, leverage, margin, fractional shares, non-SPY asset, scheduler, background worker, deployment, authentication, API write route, dashboard execution control, cancellation, replacement, or liquidation behavior was added.

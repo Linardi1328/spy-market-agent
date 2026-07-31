@@ -173,9 +173,13 @@ Do not commit a real `.env` file. `.env.example` contains safe defaults and comm
 - The durable kill switch is also reread after reservation and broker lookup as the final persistent safety operation before submission. If it engages at that point, the reserved IDs remain blocked and no order is submitted.
 - Engaging the kill switch after the final pre-submit check cannot cancel a broker request that is already in flight; order cancellation remains outside Phase 8.
 - Alpaca adapter is paper-only, constructs `TradingClient(..., paper=True)` only when explicitly instantiated, and uses the canonical paper endpoint identity `https://paper-api.alpaca.markets`.
+- Real Alpaca SDK enum values are normalized through their underlying values before broker preflight validation; malformed enum-like values fail closed.
 - Supported order contract is SPY only, buy/sell only, whole shares only, market order, DAY time in force, `extended_hours=False`, and explicit `client_order_id`.
+- Local order-request construction failures are blocked before submission and are not treated as uncertain broker outcomes. Once IDs are durably reserved, those IDs remain unavailable and cannot be silently reused.
 - Timeout, cancellation, connection loss, malformed post-submit responses, or contradictory post-submit responses record `submission_unknown`, do not retry automatically, and require explicit read-only reconciliation by `client_order_id`.
+- Only failures after the SDK submission may have started require reconciliation; local request-build failures do not.
 - Broker lookup returns broker-observable order snapshots only. Reconciliation binds those fields to persisted local signal IDs and instruction fingerprints; local lineage is never derived from broker order IDs or client-order IDs.
+- The durable ledger independently enforces state transitions, persists event lineage from stored attempt rows, and rejects any receipt environment other than `alpaca_paper`.
 - Read-only API routes expose local paper-trading status and local paper-order attempt history without constructing an Alpaca client.
 - Dashboard adds a read-only Paper Trading Status view that consumes only the FastAPI API and contains no execution controls.
 

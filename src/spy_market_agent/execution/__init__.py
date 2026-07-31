@@ -2,6 +2,7 @@ from spy_market_agent.execution.approvals import validate_matching_approval
 from spy_market_agent.execution.errors import (
     PaperExecutionApprovalError,
     PaperExecutionBrokerRejectionError,
+    PaperExecutionBrokerRequestError,
     PaperExecutionBrokerStateError,
     PaperExecutionBrokerTransportError,
     PaperExecutionConfigurationError,
@@ -76,6 +77,7 @@ __all__ = [
     "PaperExecutionApprovalError",
     "PaperExecutionAttempt",
     "PaperExecutionBrokerRejectionError",
+    "PaperExecutionBrokerRequestError",
     "PaperExecutionBrokerStateError",
     "PaperExecutionBrokerTransportError",
     "PaperExecutionConfigurationError",

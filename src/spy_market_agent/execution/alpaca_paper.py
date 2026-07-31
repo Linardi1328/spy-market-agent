@@ -10,6 +10,7 @@ from alpaca.trading.enums import OrderSide, OrderType, QueryOrderStatus, TimeInF
 from alpaca.trading.requests import GetOrdersRequest, MarketOrderRequest
 
 from spy_market_agent.execution.errors import (
+    PaperExecutionBrokerRequestError,
     PaperExecutionBrokerStateError,
     PaperExecutionBrokerTransportError,
     PaperExecutionConfigurationError,
@@ -68,7 +69,7 @@ class AlpacaPaperBroker:
                 "broker account state is unavailable.",
             ) from exc
         return BrokerAccountSnapshot(
-            status=str(_field(account, "status")),
+            status=_enum_value(_field(account, "status")),
             currency=str(_field(account, "currency")),
             cash=finite_decimal(_field(account, "cash"), field_name="cash"),
             equity=finite_decimal(_field(account, "equity"), field_name="equity"),
@@ -139,7 +140,7 @@ class AlpacaPaperBroker:
             active=_bool_field(asset, "status", true_values={"active"}),
             tradable=_bool_field(asset, "tradable"),
             fractionable=_bool_field(asset, "fractionable"),
-            asset_class=str(_field(asset, "asset_class")),
+            asset_class=_enum_value(_field(asset, "asset_class")),
         )
 
     def list_positions(self) -> tuple[BrokerPositionSnapshot, ...]:
@@ -185,16 +186,7 @@ class AlpacaPaperBroker:
         self,
         instruction: PaperOrderInstruction,
     ) -> BrokerOrderSnapshot:
-        side = _alpaca_side(instruction.proposed_order.side)
-        quantity = whole_quantity(instruction.proposed_order.quantity, field_name="quantity")
-        request = MarketOrderRequest(
-            symbol=SUPPORTED_SYMBOL,
-            qty=quantity,
-            side=side,
-            time_in_force=TimeInForce.DAY,
-            extended_hours=False,
-            client_order_id=instruction.client_order_id,
-        )
+        request, quantity = _build_market_day_order_request(instruction)
         try:
             order = self._client.submit_order(order_data=request)
         except asyncio.CancelledError as exc:
@@ -220,6 +212,28 @@ class AlpacaPaperBroker:
                 "broker_submission_outcome_unknown",
                 "paper-order submission outcome is unknown; do not resubmit automatically.",
             ) from exc
+
+
+def _build_market_day_order_request(
+    instruction: PaperOrderInstruction,
+) -> tuple[MarketOrderRequest, int]:
+    try:
+        side = _alpaca_side(instruction.proposed_order.side)
+        quantity = whole_quantity(instruction.proposed_order.quantity, field_name="quantity")
+        request = MarketOrderRequest(
+            symbol=SUPPORTED_SYMBOL,
+            qty=quantity,
+            side=side,
+            time_in_force=TimeInForce.DAY,
+            extended_hours=False,
+            client_order_id=instruction.client_order_id,
+        )
+        return request, quantity
+    except Exception as exc:
+        raise PaperExecutionBrokerRequestError(
+            "broker_request_construction_failed",
+            "paper-order request could not be constructed locally.",
+        ) from exc
 
 
 def _alpaca_side(side: str) -> OrderSide:
@@ -302,7 +316,7 @@ def _validate_snapshot_matches_instruction(
 def _position_snapshot(position: object) -> BrokerPositionSnapshot:
     return BrokerPositionSnapshot(
         symbol=str(_field(position, "symbol")),
-        side=str(_field(position, "side")),
+        side=_enum_value(_field(position, "side")),
         quantity=_decimal_field(position, "qty"),
         available_quantity=_decimal_field(position, "qty_available"),
         current_price=_optional_decimal_field(position, "current_price"),
