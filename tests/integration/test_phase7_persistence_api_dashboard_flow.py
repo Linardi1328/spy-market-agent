@@ -81,6 +81,15 @@ class ApiClientAdapter:
             params={"limit": limit, "offset": offset},
         )
 
+    def paper_trading_status(self) -> dict[str, Any]:
+        return self._json("/api/v1/paper-trading/status")
+
+    def paper_orders(self, *, limit: int = 100, offset: int = 0) -> dict[str, Any]:
+        return self._json(
+            "/api/v1/paper-orders",
+            params={"limit": limit, "offset": offset},
+        )
+
     def _json(self, path: str, *, params: dict[str, int] | None = None) -> dict[str, Any]:
         response = self._client.get(path, params=params)
         assert response.status_code == 200

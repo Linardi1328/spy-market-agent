@@ -93,6 +93,19 @@ class DashboardApiClient:
             params={"limit": limit, "offset": offset},
         )
 
+    def paper_trading_status(self) -> dict[str, Any]:
+        return self._get("/api/v1/paper-trading/status")
+
+    def paper_orders(self, *, limit: int = 100, offset: int = 0) -> dict[str, Any]:
+        return self._get(
+            "/api/v1/paper-orders",
+            params={"limit": limit, "offset": offset},
+        )
+
+    def paper_order_detail(self, client_order_id: str) -> dict[str, Any]:
+        parsed_client_order_id = validate_run_id(client_order_id)
+        return self._get(f"/api/v1/paper-orders/{parsed_client_order_id}")
+
     def _get(self, path: str, *, params: dict[str, int] | None = None) -> dict[str, Any]:
         try:
             response = self._client.get(path, params=params)

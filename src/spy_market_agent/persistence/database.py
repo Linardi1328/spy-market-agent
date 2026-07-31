@@ -40,6 +40,7 @@ def connect_database(database_path: DatabasePath, *, create: bool = False) -> sq
 def initialize_database(database_path: DatabasePath) -> None:
     connection = connect_database(database_path, create=True)
     try:
+        connection.execute("BEGIN")
         initialize_schema(connection)
         connection.commit()
     except sqlite3.Error as exc:
