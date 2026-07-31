@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -19,9 +21,11 @@ from spy_market_agent.execution import (
     PAPER_ATTEMPT_REJECTED,
     PAPER_ATTEMPT_RESERVED,
     PAPER_ATTEMPT_SUBMISSION_UNKNOWN,
+    PaperExecutionAttempt,
     PaperExecutionDuplicateError,
     PaperExecutionInputError,
     PaperExecutionIntegrityError,
+    PaperOrderApproval,
     PaperOrderInstruction,
     PaperOrderReceipt,
     SQLitePaperExecutionRepository,
@@ -32,7 +36,9 @@ from spy_market_agent.persistence.schema import (
     PERSISTENCE_SCHEMA_VERSION,
     PERSISTENCE_SCHEMA_VERSION_V1,
 )
-from unit.phase8_helpers import make_approval, make_instruction, make_receipt
+from spy_market_agent.persistence.serialization import date_to_text, datetime_to_text
+from spy_market_agent.risk import SELL_SIDE
+from unit.phase8_helpers import make_approval, make_instruction, make_proposed_order, make_receipt
 
 
 def test_fresh_database_defaults_kill_switch_to_engaged(tmp_path: Path) -> None:
@@ -168,6 +174,481 @@ def test_attempt_round_trip_and_duplicate_protection_survive_repository_reopen(
         "attempt_reserved",
         "broker_order_accepted",
     ]
+
+
+def test_fresh_initialization_creates_symbol_session_unique_index(tmp_path: Path) -> None:
+    database_path = tmp_path / "phase8.sqlite3"
+    initialize_database(database_path)
+
+    assert _index_exists(database_path, "ux_paper_execution_attempt_symbol_session")
+
+
+def test_phase7_migration_creates_symbol_session_unique_index(tmp_path: Path) -> None:
+    database_path = tmp_path / "phase7.sqlite3"
+    connection = sqlite3.connect(database_path)
+    try:
+        connection.execute("CREATE TABLE schema_migrations (version TEXT PRIMARY KEY)")
+        connection.execute(
+            "INSERT INTO schema_migrations(version) VALUES (?)",
+            (PERSISTENCE_SCHEMA_VERSION_V1,),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    initialize_database(database_path)
+
+    assert _index_exists(database_path, "ux_paper_execution_attempt_symbol_session")
+
+
+def test_repeated_initialization_keeps_symbol_session_unique_index_idempotent(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "phase8.sqlite3"
+
+    initialize_database(database_path)
+    initialize_database(database_path)
+
+    assert _index_exists(database_path, "ux_paper_execution_attempt_symbol_session")
+
+
+def test_conflicting_development_rows_fail_closed_when_unique_index_is_created(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "phase8-conflict.sqlite3"
+    first = make_instruction(signal_id="signal-legacy-a", client_order_id="client-legacy-a")
+    second = make_instruction(signal_id="signal-legacy-b", client_order_id="client-legacy-b")
+    first_approval = make_approval(first, approval_id="approval-legacy-a")
+    second_approval = make_approval(second, approval_id="approval-legacy-b")
+    connection = sqlite3.connect(database_path)
+    try:
+        connection.execute("CREATE TABLE schema_migrations (version TEXT PRIMARY KEY)")
+        connection.execute(
+            "INSERT INTO schema_migrations(version) VALUES (?)",
+            (PERSISTENCE_SCHEMA_VERSION,),
+        )
+        connection.execute(
+            """
+            CREATE TABLE paper_execution_attempts (
+                client_order_id TEXT PRIMARY KEY,
+                signal_id TEXT NOT NULL UNIQUE,
+                approval_id TEXT NOT NULL UNIQUE,
+                instruction_fingerprint TEXT NOT NULL,
+                execution_schema_version TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                side TEXT NOT NULL,
+                quantity INTEGER NOT NULL CHECK (quantity > 0),
+                signal_session TEXT NOT NULL,
+                execution_session TEXT NOT NULL,
+                instruction_created_at_utc TEXT NOT NULL,
+                expires_at_utc TEXT NOT NULL,
+                approval_at_utc TEXT NOT NULL,
+                approval_source TEXT NOT NULL,
+                original_risk_approved INTEGER NOT NULL CHECK (original_risk_approved IN (0, 1)),
+                execution_risk_approved INTEGER NOT NULL CHECK (execution_risk_approved IN (0, 1)),
+                attempt_status TEXT NOT NULL,
+                broker_order_id TEXT,
+                broker_status TEXT,
+                broker_environment TEXT,
+                account_id_fingerprint TEXT,
+                sanitized_request_id TEXT,
+                created_at_utc TEXT NOT NULL,
+                updated_at_utc TEXT NOT NULL,
+                failure_code TEXT
+            )
+            """
+        )
+        _insert_raw_attempt(connection, first, first_approval)
+        _insert_raw_attempt(connection, second, second_approval)
+        connection.commit()
+    finally:
+        connection.close()
+
+    with pytest.raises(PersistenceSchemaError) as exc_info:
+        initialize_database(database_path)
+
+    assert exc_info.value.code == "schema_initialization_failed"
+
+
+@pytest.mark.parametrize(
+    ("instruction", "approval_id"),
+    [
+        (
+            make_instruction(
+                signal_id="signal-same-session-a",
+                client_order_id="client-same-session-a",
+            ),
+            "approval-same-session-a",
+        ),
+        (
+            make_instruction(
+                signal_id="signal-same-session-side",
+                client_order_id="client-same-session-side",
+                order=make_proposed_order(side=SELL_SIDE),
+            ),
+            "approval-same-session-side",
+        ),
+        (
+            make_instruction(
+                signal_id="signal-same-session-quantity",
+                client_order_id="client-same-session-quantity",
+                order=make_proposed_order(quantity=11),
+            ),
+            "approval-same-session-quantity",
+        ),
+    ],
+)
+def test_same_spy_execution_session_rejects_different_ids_side_and_quantity(
+    tmp_path: Path,
+    instruction: PaperOrderInstruction,
+    approval_id: str,
+) -> None:
+    repository, existing_instruction, _approval = _repository_with_reserved_attempt(tmp_path)
+    before_attempt = repository.get_attempt(existing_instruction.client_order_id)
+    before_events = repository.list_events()
+
+    with pytest.raises(PaperExecutionDuplicateError) as exc_info:
+        repository.reserve_attempt(
+            instruction,
+            make_approval(instruction, approval_id=approval_id),
+            execution_risk_approved=True,
+            now_utc=instruction.created_at_utc,
+        )
+
+    assert exc_info.value.code == "execution_session_already_reserved"
+    assert "signal" not in str(exc_info.value).lower()
+    assert repository.count_attempts() == 1
+    assert repository.get_attempt(existing_instruction.client_order_id) == before_attempt
+    assert repository.list_events() == before_events
+
+
+@pytest.mark.parametrize(
+    "status",
+    [
+        PAPER_ATTEMPT_RESERVED,
+        PAPER_ATTEMPT_BLOCKED,
+        PAPER_ATTEMPT_REJECTED,
+        PAPER_ATTEMPT_ACCEPTED,
+        PAPER_ATTEMPT_SUBMISSION_UNKNOWN,
+        PAPER_ATTEMPT_RECONCILED,
+        PAPER_ATTEMPT_BROKER_EXISTING_ORDER_FOUND,
+    ],
+)
+def test_any_prior_attempt_status_consumes_the_symbol_execution_session(
+    tmp_path: Path,
+    status: str,
+) -> None:
+    repository, existing_instruction, _approval = _repository_with_reserved_attempt(tmp_path)
+    _move_attempt_to_status(repository, existing_instruction, status)
+    new_instruction = make_instruction(
+        signal_id=f"signal-session-consumed-{status.replace('_', '-')}",
+        client_order_id=f"client-session-consumed-{status.replace('_', '-')}",
+    )
+
+    with pytest.raises(PaperExecutionDuplicateError) as exc_info:
+        repository.reserve_attempt(
+            new_instruction,
+            make_approval(
+                new_instruction,
+                approval_id=f"approval-session-consumed-{status.replace('_', '-')}",
+            ),
+            execution_risk_approved=True,
+            now_utc=new_instruction.created_at_utc,
+        )
+
+    assert exc_info.value.code == "execution_session_already_reserved"
+    assert repository.count_attempts() == 1
+
+
+def test_different_future_execution_session_remains_reservable(tmp_path: Path) -> None:
+    database_path = tmp_path / "phase8.sqlite3"
+    initialize_database(database_path)
+    repository = SQLitePaperExecutionRepository(database_path)
+    first = make_instruction()
+    first_approval = make_approval(first)
+    future_order = replace(
+        make_proposed_order(),
+        sequence_number=2,
+        signal_session=date(2025, 1, 6),
+        execution_session=date(2025, 1, 7),
+    )
+    second = make_instruction(
+        signal_id="signal-future-session",
+        client_order_id="client-future-session",
+        order=future_order,
+    )
+    second_approval = make_approval(second, approval_id="approval-future-session")
+
+    repository.reserve_attempt(
+        first,
+        first_approval,
+        execution_risk_approved=True,
+        now_utc=first.created_at_utc,
+    )
+    reserved = repository.reserve_attempt(
+        second,
+        second_approval,
+        execution_risk_approved=True,
+        now_utc=second.created_at_utc,
+    )
+
+    assert reserved.execution_session == date(2025, 1, 7)
+    assert repository.count_attempts() == 2
+
+
+def test_session_reservation_protection_survives_reopen_and_repository_instances(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "phase8.sqlite3"
+    initialize_database(database_path)
+    first_repository = SQLitePaperExecutionRepository(database_path)
+    second_repository = SQLitePaperExecutionRepository(database_path)
+    first = make_instruction()
+    first_repository.reserve_attempt(
+        first,
+        make_approval(first),
+        execution_risk_approved=True,
+        now_utc=first.created_at_utc,
+    )
+    second = make_instruction(
+        signal_id="signal-reopen-session",
+        client_order_id="client-reopen-session",
+    )
+
+    with pytest.raises(PaperExecutionDuplicateError) as exc_info:
+        second_repository.reserve_attempt(
+            second,
+            make_approval(second, approval_id="approval-reopen-session"),
+            execution_risk_approved=True,
+            now_utc=second.created_at_utc,
+        )
+
+    reopened = SQLitePaperExecutionRepository(database_path)
+    third = make_instruction(
+        signal_id="signal-reopened-session",
+        client_order_id="client-reopened-session",
+    )
+    with pytest.raises(PaperExecutionDuplicateError) as reopened_exc:
+        reopened.reserve_attempt(
+            third,
+            make_approval(third, approval_id="approval-reopened-session"),
+            execution_risk_approved=True,
+            now_utc=third.created_at_utc,
+        )
+
+    assert exc_info.value.code == "execution_session_already_reserved"
+    assert reopened_exc.value.code == "execution_session_already_reserved"
+    assert reopened.count_attempts() == 1
+
+
+def test_duplicate_identifier_constraints_still_apply_for_different_sessions(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "phase8.sqlite3"
+    initialize_database(database_path)
+    repository = SQLitePaperExecutionRepository(database_path)
+    first = make_instruction()
+    future_order = replace(
+        make_proposed_order(),
+        sequence_number=2,
+        signal_session=date(2025, 1, 6),
+        execution_session=date(2025, 1, 7),
+    )
+    duplicate_signal = make_instruction(
+        signal_id=first.signal_id,
+        client_order_id="client-duplicate-signal-future",
+        order=future_order,
+    )
+
+    repository.reserve_attempt(
+        first,
+        make_approval(first),
+        execution_risk_approved=True,
+        now_utc=first.created_at_utc,
+    )
+    with pytest.raises(PaperExecutionDuplicateError) as exc_info:
+        repository.reserve_attempt(
+            duplicate_signal,
+            make_approval(duplicate_signal, approval_id="approval-duplicate-signal-future"),
+            execution_risk_approved=True,
+            now_utc=duplicate_signal.created_at_utc,
+        )
+
+    assert exc_info.value.code == "duplicate_execution_identifier"
+    assert repository.count_attempts() == 1
+
+
+def test_reserve_attempt_reconstructs_before_commit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database_path = tmp_path / "phase8.sqlite3"
+    initialize_database(database_path)
+    instruction = make_instruction()
+    approval = make_approval(instruction)
+    repository = SQLitePaperExecutionRepository(database_path)
+    connection = sqlite3.connect(database_path)
+    connection.row_factory = sqlite3.Row
+    tracking_connection = _TrackingConnection(connection)
+    real_get_attempt = execution_repository._get_attempt_from_connection
+
+    def checked_get_attempt(connection_arg: object, client_order_id: str) -> object:
+        if connection_arg is tracking_connection and tracking_connection.commit_called:
+            raise AssertionError("reserve_attempt read after commit")
+        return real_get_attempt(connection_arg, client_order_id)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(repository, "_connect", lambda: tracking_connection)
+    monkeypatch.setattr(execution_repository, "_get_attempt_from_connection", checked_get_attempt)
+
+    reserved = repository.reserve_attempt(
+        instruction,
+        approval,
+        execution_risk_approved=True,
+        now_utc=instruction.created_at_utc,
+    )
+
+    assert reserved.attempt_status == PAPER_ATTEMPT_RESERVED
+    assert tracking_connection.commit_called is True
+
+
+def test_reservation_reconstruction_failure_rolls_back_attempt_and_event(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database_path = tmp_path / "phase8.sqlite3"
+    initialize_database(database_path)
+    repository = SQLitePaperExecutionRepository(database_path)
+    instruction = make_instruction()
+    approval = make_approval(instruction)
+    real_attempt_from_row = execution_repository._attempt_from_row
+
+    def failing_attempt_from_row(row: sqlite3.Row) -> object:
+        attempt = real_attempt_from_row(row)
+        if attempt.attempt_status == PAPER_ATTEMPT_RESERVED:
+            raise PaperExecutionIntegrityError(
+                "invalid_paper_execution_attempt",
+                "paper-execution attempt is invalid.",
+            )
+        return attempt
+
+    monkeypatch.setattr(execution_repository, "_attempt_from_row", failing_attempt_from_row)
+
+    with pytest.raises(PaperExecutionIntegrityError):
+        repository.reserve_attempt(
+            instruction,
+            approval,
+            execution_risk_approved=True,
+            now_utc=instruction.created_at_utc,
+        )
+
+    assert _table_count(database_path, "paper_execution_attempts") == 0
+    assert _table_count(database_path, "paper_execution_events") == 0
+
+
+def test_reservation_event_failure_rolls_back_attempt(tmp_path: Path) -> None:
+    database_path = tmp_path / "phase8.sqlite3"
+    initialize_database(database_path)
+    repository = SQLitePaperExecutionRepository(database_path)
+    instruction = make_instruction()
+    approval = make_approval(instruction)
+    connection = sqlite3.connect(database_path)
+    try:
+        connection.execute(
+            """
+            CREATE TRIGGER fail_attempt_reserved_event
+            BEFORE INSERT ON paper_execution_events
+            WHEN NEW.event_type = 'attempt_reserved'
+            BEGIN
+                SELECT RAISE(FAIL, 'raw sqlite secret reservation failure');
+            END
+            """
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    with pytest.raises(PaperExecutionIntegrityError) as exc_info:
+        repository.reserve_attempt(
+            instruction,
+            approval,
+            execution_risk_approved=True,
+            now_utc=instruction.created_at_utc,
+        )
+
+    assert "secret" not in str(exc_info.value).lower()
+    assert _table_count(database_path, "paper_execution_attempts") == 0
+    assert _table_count(database_path, "paper_execution_events") == 0
+
+
+def test_failed_session_reservation_inserts_no_attempt_or_event(tmp_path: Path) -> None:
+    repository, first, _approval = _repository_with_reserved_attempt(tmp_path)
+    before_attempt = repository.get_attempt(first.client_order_id)
+    before_events = repository.list_events()
+    second = make_instruction(
+        signal_id="signal-failed-session-reservation",
+        client_order_id="client-failed-session-reservation",
+    )
+
+    with pytest.raises(PaperExecutionDuplicateError) as exc_info:
+        repository.reserve_attempt(
+            second,
+            make_approval(second, approval_id="approval-failed-session-reservation"),
+            execution_risk_approved=True,
+            now_utc=second.created_at_utc,
+        )
+
+    assert exc_info.value.code == "execution_session_already_reserved"
+    assert repository.count_attempts() == 1
+    assert repository.get_attempt(first.client_order_id) == before_attempt
+    assert repository.list_events() == before_events
+
+
+def test_concurrent_repository_reservations_allow_one_winner_per_session(
+    tmp_path: Path,
+) -> None:
+    for iteration in range(5):
+        database_path = tmp_path / f"phase8-concurrent-{iteration}.sqlite3"
+        initialize_database(database_path)
+        barrier = threading.Barrier(2)
+
+        def reserve(
+            index: int,
+            *,
+            database_path: Path = database_path,
+            iteration: int = iteration,
+            barrier: threading.Barrier = barrier,
+        ) -> PaperExecutionAttempt | PaperExecutionDuplicateError:
+            repository = SQLitePaperExecutionRepository(database_path)
+            instruction = make_instruction(
+                signal_id=f"signal-concurrent-{iteration}-{index}",
+                client_order_id=f"client-concurrent-{iteration}-{index}",
+            )
+            approval = make_approval(
+                instruction,
+                approval_id=f"approval-concurrent-{iteration}-{index}",
+            )
+            barrier.wait(timeout=10)
+            try:
+                return repository.reserve_attempt(
+                    instruction,
+                    approval,
+                    execution_risk_approved=True,
+                    now_utc=instruction.created_at_utc,
+                )
+            except PaperExecutionDuplicateError as exc:
+                return exc
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = tuple(executor.map(reserve, (1, 2)))
+
+        successes = [item for item in results if isinstance(item, PaperExecutionAttempt)]
+        duplicates = [item for item in results if isinstance(item, PaperExecutionDuplicateError)]
+
+        assert len(successes) == 1
+        assert len(duplicates) == 1
+        assert duplicates[0].code == "execution_session_already_reserved"
+        assert _table_count(database_path, "paper_execution_attempts") == 1
+        assert _table_count(database_path, "paper_execution_events") == 1
 
 
 @pytest.mark.parametrize(
@@ -828,6 +1309,66 @@ def test_unsupported_future_schema_is_rejected_without_migration(
 
     with pytest.raises(PersistenceSchemaError):
         initialize_database(database_path)
+
+
+def _index_exists(database_path: Path, index_name: str) -> bool:
+    connection = sqlite3.connect(database_path)
+    try:
+        row = connection.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?",
+            (index_name,),
+        ).fetchone()
+        return row is not None
+    finally:
+        connection.close()
+
+
+def _table_count(database_path: Path, table_name: str) -> int:
+    connection = sqlite3.connect(database_path)
+    try:
+        return int(connection.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0])
+    finally:
+        connection.close()
+
+
+def _insert_raw_attempt(
+    connection: sqlite3.Connection,
+    instruction: PaperOrderInstruction,
+    approval: PaperOrderApproval,
+) -> None:
+    connection.execute(
+        """
+        INSERT INTO paper_execution_attempts (
+            client_order_id, signal_id, approval_id, instruction_fingerprint,
+            execution_schema_version, symbol, side, quantity, signal_session,
+            execution_session, instruction_created_at_utc, expires_at_utc,
+            approval_at_utc, approval_source, original_risk_approved,
+            execution_risk_approved, attempt_status, created_at_utc, updated_at_utc
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            instruction.client_order_id,
+            instruction.signal_id,
+            approval.approval_id,
+            instruction.instruction_fingerprint,
+            instruction.schema_version,
+            instruction.proposed_order.symbol,
+            instruction.proposed_order.side,
+            instruction.proposed_order.quantity,
+            date_to_text(instruction.proposed_order.signal_session),
+            date_to_text(instruction.proposed_order.execution_session),
+            datetime_to_text(instruction.created_at_utc),
+            datetime_to_text(instruction.expires_at_utc),
+            datetime_to_text(approval.approved_at_utc),
+            approval.approved_by,
+            1,
+            1,
+            PAPER_ATTEMPT_RESERVED,
+            datetime_to_text(instruction.created_at_utc),
+            datetime_to_text(instruction.created_at_utc),
+        ),
+    )
 
 
 def _forged_receipt(

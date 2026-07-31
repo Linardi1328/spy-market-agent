@@ -168,6 +168,9 @@ Do not commit a real `.env` file. `.env.example` contains safe defaults and comm
 - Deterministic SHA-256 instruction fingerprints over versioned order, risk, cost, session, timestamp, and identifier data.
 - Human approval must match the exact instruction fingerprint and cannot be reused through the durable ledger.
 - Durable duplicate protection for `signal_id`, `client_order_id`, and `approval_id`.
+- Version 1 also permits at most one reserved SPY paper-execution attempt per execution session. The SQLite ledger enforces this on `(symbol, execution_session)` even when different signal, client-order, and approval IDs are supplied.
+- A blocked, rejected, accepted, uncertain, broker-existing, or reconciled attempt still consumes that SPY execution session. This deliberately strict behavior prevents concurrent pyramiding and conflicting same-session submissions.
+- Later execution sessions remain independently eligible after all normal configuration, approval, broker, risk, kill-switch, and duplicate checks pass.
 - Configuration and durable global paper-execution kill switches both default to engaged. The effective kill-switch state is their logical OR, so both must be deliberately disengaged before an explicitly invoked paper submission can proceed.
 - Durable kill-switch disengagement requires an explicit confirmation token and nonblank reason; changing configuration does not alter the durable SQLite switch.
 - Explicit service-only submission path that rechecks configuration, credentials, kill switch, approval, staleness, broker state, open orders, positions, and execution-time risk before a broker call.
@@ -181,6 +184,7 @@ Do not commit a real `.env` file. `.env.example` contains safe defaults and comm
 - Local order-request construction failures are blocked before submission and are not treated as uncertain broker outcomes. Once IDs are durably reserved, those IDs remain unavailable and cannot be silently reused.
 - An instruction is invalid at its `expires_at_utc` instant; execution exactly at expiration is rejected before submission.
 - Timeout, cancellation, connection loss, malformed post-submit responses, contradictory post-submit responses, or a local ledger failure after broker acceptance record `submission_unknown`, do not retry automatically, and require explicit read-only reconciliation by `client_order_id`.
+- Same-session duplicate reservations and unknown submissions are never retried automatically.
 - Only failures after the SDK submission may have started require reconciliation; local request-build failures do not.
 - Broker lookup returns broker-observable order snapshots only. Reconciliation is lookup-only and binds those fields to persisted local signal IDs and instruction fingerprints; local lineage is never derived from broker order IDs or client-order IDs.
 - The durable ledger independently enforces state transitions, persists event lineage from stored attempt rows, and rejects any receipt environment other than `alpaca_paper`.

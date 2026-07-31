@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from datetime import UTC, datetime, time, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -47,6 +50,7 @@ from spy_market_agent.execution import (
 from spy_market_agent.execution.models import (
     BrokerAccountSnapshot,
     BrokerClockSnapshot,
+    BrokerOpenOrderSnapshot,
     PaperOrderApproval,
     PaperOrderInstruction,
     PaperOrderReceipt,
@@ -741,23 +745,48 @@ def test_phase8_existing_broker_order_lineage_and_mismatch_paths(tmp_path: Path)
         PAPER_ATTEMPT_BROKER_EXISTING_ORDER_FOUND
     )
 
+    mismatch_order = replace(
+        order,
+        sequence_number=order.sequence_number + 1,
+        signal_session=order.signal_session + timedelta(days=1),
+        execution_session=order.execution_session + timedelta(days=1),
+    )
+    mismatch_risk = evaluate_order_risk(
+        mismatch_order,
+        PortfolioState(
+            session=mismatch_order.execution_session,
+            cash=mismatch_order.current_cash,
+            shares=mismatch_order.current_shares,
+            reference_price=mismatch_order.reference_open,
+            market_value=Decimal(mismatch_order.current_shares) * mismatch_order.reference_open,
+            equity=mismatch_order.current_cash
+            + Decimal(mismatch_order.current_shares) * mismatch_order.reference_open,
+        ),
+        risk_config=RiskConfig(),
+        cost_assumptions=artifacts.backtest.cost_assumptions,
+    )
+    mismatch_broker_time = _broker_time(mismatch_order.execution_session)
     mismatch_instruction = build_paper_order_instruction(
         signal_id="signal-phase8-existing-mismatch",
         client_order_id="paper-order-phase8-existing-mismatch",
-        proposed_order=order,
-        original_risk_decision=risk,
+        proposed_order=mismatch_order,
+        original_risk_decision=mismatch_risk,
         cost_assumptions=artifacts.backtest.cost_assumptions,
-        created_at_utc=broker_time - timedelta(minutes=10),
-        expires_at_utc=broker_time + timedelta(hours=1),
+        created_at_utc=mismatch_broker_time - timedelta(minutes=10),
+        expires_at_utc=mismatch_broker_time + timedelta(hours=1),
     )
     mismatch_approval = make_approval(
         mismatch_instruction,
         approval_id="approval-phase8-existing-mismatch",
-        approved_at=broker_time - timedelta(minutes=5),
+        approved_at=mismatch_broker_time - timedelta(minutes=5),
     )
-    mismatch_broker = _safe_broker(order, broker_time)
+    mismatch_broker = _safe_broker(mismatch_order, mismatch_broker_time)
     mismatch_broker.existing_order = make_broker_order_snapshot(mismatch_instruction)
-    object.__setattr__(mismatch_broker.existing_order, "submitted_quantity", order.quantity + 1)
+    object.__setattr__(
+        mismatch_broker.existing_order,
+        "submitted_quantity",
+        mismatch_order.quantity + 1,
+    )
 
     with pytest.raises(PaperExecutionSubmissionUnknownError):
         service.submit_approved_order(
@@ -1199,6 +1228,207 @@ def test_phase8_successful_path_uses_fresh_clock_final_kill_switch_submit_orderi
     ]
 
 
+def test_phase8_concurrent_same_session_attempts_submit_exactly_once(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "phase8-concurrent-session.sqlite3"
+    order, broker_time, first_instruction, first_approval = _phase8_order_fixture(
+        database_path,
+        suffix="concurrent-session-a",
+    )
+    repository = SQLitePaperExecutionRepository(database_path)
+    repository.set_paper_execution_kill_switch(
+        engaged=False,
+        reason="explicit_phase8_concurrent_session",
+        updated_at_utc=broker_time,
+        confirmation=DISENGAGE_KILL_SWITCH_CONFIRMATION,
+    )
+    second_instruction = build_paper_order_instruction(
+        signal_id="signal-phase8-concurrent-session-b",
+        client_order_id="paper-order-phase8-concurrent-session-b",
+        proposed_order=order,
+        original_risk_decision=first_instruction.original_risk_decision,
+        cost_assumptions=first_instruction.cost_assumptions,
+        created_at_utc=first_instruction.created_at_utc,
+        expires_at_utc=first_instruction.expires_at_utc,
+    )
+    second_approval = make_approval(
+        second_instruction,
+        approval_id="approval-phase8-concurrent-session-b",
+        approved_at=first_approval.approved_at_utc,
+    )
+    first_service = PaperExecutionService(
+        settings=_enabled_settings(),
+        repository=SQLitePaperExecutionRepository(database_path),
+    )
+    second_service = PaperExecutionService(
+        settings=_enabled_settings(),
+        repository=SQLitePaperExecutionRepository(database_path),
+    )
+    pre_reservation_barrier = threading.Barrier(2)
+    first_broker = _CoordinatedIntegrationBroker(
+        order=order,
+        broker_time=broker_time,
+        pre_reservation_barrier=pre_reservation_barrier,
+    )
+    second_broker = _CoordinatedIntegrationBroker(
+        order=order,
+        broker_time=broker_time,
+        pre_reservation_barrier=pre_reservation_barrier,
+    )
+
+    def submit(
+        service: PaperExecutionService,
+        instruction: PaperOrderInstruction,
+        approval: PaperOrderApproval,
+        broker: _CoordinatedIntegrationBroker,
+    ) -> tuple[str, _CoordinatedIntegrationBroker, PaperExecutionDuplicateError | None]:
+        try:
+            service.submit_approved_order(instruction, approval, broker=broker)
+        except PaperExecutionDuplicateError as exc:
+            return ("duplicate", broker, exc)
+        return ("submitted", broker, None)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first_future = executor.submit(
+            submit,
+            first_service,
+            first_instruction,
+            first_approval,
+            first_broker,
+        )
+        second_future = executor.submit(
+            submit,
+            second_service,
+            second_instruction,
+            second_approval,
+            second_broker,
+        )
+        results = (first_future.result(), second_future.result())
+
+    submitted = [result for result in results if result[0] == "submitted"]
+    duplicates = [result for result in results if result[0] == "duplicate"]
+    losing_broker = duplicates[0][1]
+
+    assert len(submitted) == 1
+    assert len(duplicates) == 1
+    assert duplicates[0][2] is not None
+    assert duplicates[0][2].code == "execution_session_already_reserved"
+    assert first_broker.submit_calls + second_broker.submit_calls == 1
+    assert losing_broker.lookup_calls == 0
+    assert losing_broker.submit_calls == 0
+    assert _database_count(database_path, "paper_execution_attempts") == 1
+    assert _event_count(database_path, "attempt_reserved") == 1
+
+
+def test_phase8_same_session_protection_survives_repository_reopen(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "phase8-session-restart.sqlite3"
+    order, broker_time, instruction, approval = _phase8_order_fixture(
+        database_path,
+        suffix="session-restart",
+    )
+    repository = SQLitePaperExecutionRepository(database_path)
+    repository.set_paper_execution_kill_switch(
+        engaged=False,
+        reason="explicit_phase8_session_restart",
+        updated_at_utc=broker_time,
+        confirmation=DISENGAGE_KILL_SWITCH_CONFIRMATION,
+    )
+    service = PaperExecutionService(settings=_enabled_settings(), repository=repository)
+    service.submit_approved_order(instruction, approval, broker=_safe_broker(order, broker_time))
+    reopened_repository = SQLitePaperExecutionRepository(database_path)
+    duplicate = build_paper_order_instruction(
+        signal_id="signal-phase8-session-restart-duplicate",
+        client_order_id="paper-order-phase8-session-restart-duplicate",
+        proposed_order=order,
+        original_risk_decision=instruction.original_risk_decision,
+        cost_assumptions=instruction.cost_assumptions,
+        created_at_utc=instruction.created_at_utc,
+        expires_at_utc=instruction.expires_at_utc,
+    )
+    duplicate_broker = _safe_broker(order, broker_time)
+
+    with pytest.raises(PaperExecutionDuplicateError) as exc_info:
+        PaperExecutionService(
+            settings=_enabled_settings(),
+            repository=reopened_repository,
+        ).submit_approved_order(
+            duplicate,
+            make_approval(
+                duplicate,
+                approval_id="approval-phase8-session-restart-duplicate",
+                approved_at=approval.approved_at_utc,
+            ),
+            broker=duplicate_broker,
+        )
+
+    assert exc_info.value.code == "execution_session_already_reserved"
+    assert duplicate_broker.submit_calls == 0
+    assert reopened_repository.count_attempts() == 1
+
+
+def test_phase8_later_execution_session_remains_independently_eligible(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "phase8-later-session.sqlite3"
+    order, broker_time, instruction, approval = _phase8_order_fixture(
+        database_path,
+        suffix="later-session-a",
+    )
+    repository = SQLitePaperExecutionRepository(database_path)
+    repository.set_paper_execution_kill_switch(
+        engaged=False,
+        reason="explicit_phase8_later_session",
+        updated_at_utc=broker_time,
+        confirmation=DISENGAGE_KILL_SWITCH_CONFIRMATION,
+    )
+    service = PaperExecutionService(settings=_enabled_settings(), repository=repository)
+    service.submit_approved_order(instruction, approval, broker=_safe_broker(order, broker_time))
+    later_order = replace(
+        order,
+        sequence_number=order.sequence_number + 1,
+        signal_session=order.signal_session + timedelta(days=1),
+        execution_session=order.execution_session + timedelta(days=1),
+    )
+    later_broker_time = _broker_time(later_order.execution_session)
+    later_risk = evaluate_order_risk(
+        later_order,
+        PortfolioState(
+            session=later_order.execution_session,
+            cash=later_order.current_cash,
+            shares=later_order.current_shares,
+            reference_price=later_order.reference_open,
+            market_value=Decimal(later_order.current_shares) * later_order.reference_open,
+            equity=later_order.current_cash
+            + Decimal(later_order.current_shares) * later_order.reference_open,
+        ),
+        risk_config=RiskConfig(),
+        cost_assumptions=instruction.cost_assumptions,
+    )
+    later_instruction = build_paper_order_instruction(
+        signal_id="signal-phase8-later-session-b",
+        client_order_id="paper-order-phase8-later-session-b",
+        proposed_order=later_order,
+        original_risk_decision=later_risk,
+        cost_assumptions=instruction.cost_assumptions,
+        created_at_utc=later_broker_time - timedelta(minutes=10),
+        expires_at_utc=later_broker_time + timedelta(hours=1),
+    )
+    later_approval = make_approval(
+        later_instruction,
+        approval_id="approval-phase8-later-session-b",
+        approved_at=later_broker_time - timedelta(minutes=5),
+    )
+    later_broker = _safe_broker(later_order, later_broker_time)
+
+    service.submit_approved_order(later_instruction, later_approval, broker=later_broker)
+
+    assert later_broker.submit_calls == 1
+    assert repository.count_attempts() == 2
+
+
 def _approved_buy_order_and_risk(
     proposed_orders: Any,
     risk_decisions: Any,
@@ -1301,6 +1531,63 @@ def _safe_broker(order: ProposedOrder, broker_time: datetime) -> FakePaperBroker
             next_close=broker_time + timedelta(hours=5),
         ),
     )
+
+
+class _CoordinatedIntegrationBroker(FakePaperBroker):
+    def __init__(
+        self,
+        *,
+        order: ProposedOrder,
+        broker_time: datetime,
+        pre_reservation_barrier: threading.Barrier,
+    ) -> None:
+        super().__init__(
+            account=BrokerAccountSnapshot(
+                status="active",
+                currency="USD",
+                cash=order.current_cash,
+                equity=order.current_cash,
+                buying_power=order.current_cash,
+                trading_blocked=False,
+                account_blocked=False,
+                trade_suspended_by_user=False,
+                account_id_fingerprint="a" * 64,
+                retrieved_at_utc=broker_time,
+            ),
+            clock=BrokerClockSnapshot(
+                timestamp=broker_time,
+                is_open=True,
+                next_open=broker_time + timedelta(days=1),
+                next_close=broker_time + timedelta(hours=5),
+            ),
+        )
+        self._pre_reservation_barrier = pre_reservation_barrier
+
+    def list_open_orders(self) -> tuple[BrokerOpenOrderSnapshot, ...]:
+        open_orders = super().list_open_orders()
+        self._pre_reservation_barrier.wait(timeout=10)
+        return open_orders
+
+
+def _database_count(database_path: Path, table_name: str) -> int:
+    connection = sqlite3.connect(database_path)
+    try:
+        return int(connection.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0])
+    finally:
+        connection.close()
+
+
+def _event_count(database_path: Path, event_type: str) -> int:
+    connection = sqlite3.connect(database_path)
+    try:
+        return int(
+            connection.execute(
+                "SELECT COUNT(*) FROM paper_execution_events WHERE event_type = ?",
+                (event_type,),
+            ).fetchone()[0]
+        )
+    finally:
+        connection.close()
 
 
 def _broker_time(session: Any) -> datetime:

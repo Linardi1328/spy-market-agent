@@ -870,3 +870,164 @@ Final confirmations:
 - Earlier Phase 8 branches `review/phase-08-paper-trading-preparation`, `review/phase-08-corrections`, and `review/phase-08-final-hardening` were not modified.
 - Phase 9 was not started.
 - No live trading, `paper=False` client, live endpoint, automatic execution, automatic submit retry, short selling, leverage, margin, fractional shares, non-SPY asset, scheduler, background worker, authentication, deployment, API write route, dashboard execution control, cancellation, replacement, or liquidation functionality was introduced.
+
+## Phase 8 Concurrency Hardening Addendum
+
+Branch:
+
+- `review/phase-08-concurrency-hardening`
+
+Starting main SHA:
+
+- `d5e2a81ed51951b414100e440796397cb3cbd938`
+
+Original Phase 8 SHAs:
+
+- `9880deffeca14e80dbf6c6bda4c98a51e4109754`
+- `0a2e2c8573490be7dccf8f07ab446d873908f3d1`
+- `2e8aaf9f03cdaa1d89005338d028faf1cbafea65`
+- `3bcdd0ee2c8c0c5206156bd5feb76e9d826c35c9`
+
+New cherry-picked SHAs on the concurrency-hardening branch:
+
+- `aca9e93537050998c6c17a61a45c18f46f2fdd0d`
+- `e2b25304ef2491da52778e2f715f9111d7f78f76`
+- `2d7aa80853f53a7bf4fe4a254dcd56aa3fd2bfd5`
+- `5f5b3e8de5b6b9c6a2cdc51158d867311337d81e`
+
+Final concurrency-hardening commit SHA:
+
+- Reported in the final Codex response after the commit is created and pushed.
+
+Concurrency finding corrected:
+
+- Phase 8 identifier uniqueness prevented reuse of signal IDs, client-order IDs, and approval IDs, but two concurrent callers using different IDs could reserve separate SPY attempts for the same execution session.
+
+Symbol/session reservation invariant:
+
+- Version 1 now permits at most one paper-execution attempt for each `(symbol, execution_session)`.
+- The invariant applies to every local attempt status: `reserved`, `accepted`, `broker_existing_order_found`, `submission_unknown`, `reconciled`, `rejected`, and `blocked`.
+- A consumed execution session is not silently released after blocked, rejected, accepted, uncertain, or reconciled outcomes.
+- Different later execution sessions remain independently reservable after normal approval, broker, risk, kill-switch, and duplicate checks pass.
+
+SQLite unique index:
+
+- `ux_paper_execution_attempt_symbol_session`
+- Definition: unique index on `paper_execution_attempts(symbol, execution_session)`.
+- Fresh v2 initialization and Phase 7 v1-to-v2 migration create the index.
+- Repeated initialization remains idempotent.
+- Existing non-approved development databases with duplicate `(symbol, execution_session)` rows fail closed during explicit initialization.
+- Schema validation treats a v2 ledger missing the required index as invalid.
+
+Transaction ordering:
+
+- `reserve_attempt()` now performs `BEGIN IMMEDIATE`, symbol/session availability check, attempt insert, reservation event insert, attempt reload/reconstruction, commit, and return of the already reconstructed immutable attempt.
+- There is no fallible database read after the reservation commit.
+- Reservation reconstruction failure rolls back both the attempt and event.
+- Reservation event insertion failure rolls back the attempt.
+- SQLite unique-index failures are translated to `PaperExecutionDuplicateError` with code `execution_session_already_reserved`.
+- Existing signal/client-order/approval uniqueness remains enforced and still reports `duplicate_execution_identifier` for different-session identifier reuse.
+
+Cross-repository and service behavior:
+
+- The symbol/session invariant is enforced across separate repository objects, separate SQLite connections, service objects, concurrent threads, and repository reopen/restart.
+- A losing service call may complete initial read-only preflights, but after `reserve_attempt()` reports `execution_session_already_reserved`, it performs no broker lookup, refreshed broker-clock read, final durable kill-switch read, or broker submit.
+- The losing call does not modify the winning attempt and does not retry automatically.
+
+Unit tests added:
+
+- Fresh initialization creates `ux_paper_execution_attempt_symbol_session`.
+- Phase 7 v1-to-v2 migration creates the unique index.
+- Repeated initialization remains idempotent.
+- Conflicting development rows fail closed when the unique index is created.
+- Different signal IDs, client-order IDs, approval IDs, sides, and quantities do not bypass same-session protection.
+- Prior attempts in `reserved`, `blocked`, `rejected`, `accepted`, `submission_unknown`, `reconciled`, and `broker_existing_order_found` all consume the session.
+- A future execution session remains reservable.
+- Identifier uniqueness remains enforced for different-session duplicate identifiers.
+- Failed session reservations insert no attempt and append no event.
+- Session protection survives repository reopen and multiple repository instances.
+- Concurrent repository reservations with different IDs for the same session produce exactly one winner and one `execution_session_already_reserved` loser without leaking a database-lock error.
+- `reserve_attempt()` reconstructs before commit and performs no read after commit.
+- Reservation reconstruction and reservation-event failures roll back completely.
+- Concurrent service submissions produce exactly one broker submit and the losing service performs no post-reservation broker operation.
+- Same-session protection survives repository reopen at the service boundary.
+- A different execution session can submit after a prior session attempt.
+
+Integration tests added:
+
+- Concurrent Phase 8 service flow with two same-session instructions and different IDs submits exactly once.
+- Restart/reopen flow preserves same-session protection and submits zero orders for the duplicate.
+- Later execution-session flow remains independently eligible and submits once after normal checks.
+
+Baseline verification before concurrency edits:
+
+- `python -m pip install -e ".[dev]"`: passed; editable `spy-market-agent 0.1.0` installed and `alpaca-py 0.43.5` was present.
+- `pytest`: `730 passed, 6 warnings in 40.29s`; full-suite coverage `82%`.
+- `pytest tests/unit -q`: passed with 6 warnings and coverage `82%`; `pytest tests/unit --collect-only -qq --no-cov` confirmed 710 collected unit tests.
+- `pytest tests/integration -q`: `20 passed, 6 warnings`; integration-only coverage `71%`.
+- `ruff check .`: `All checks passed!`
+- `ruff format --check .`: `111 files already formatted`
+- `mypy src tests`: `Success: no issues found in 101 source files`
+- `python -c "import alpaca; import importlib.metadata as m; print(m.version('alpaca-py'))"`: `0.43.5`
+- `python -c "import spy_market_agent; print(spy_market_agent.__version__)"`: `0.1.0`
+- Export smoke checks for `execution`, `persistence`, `api`, and `dashboard`: passed.
+- `git diff --check`: passed.
+
+Targeted regression run before implementation:
+
+- `pytest tests/unit/test_execution_repository.py::test_fresh_initialization_creates_symbol_session_unique_index tests/unit/test_execution_repository.py::test_same_spy_execution_session_rejects_different_ids_side_and_quantity tests/unit/test_execution_repository.py::test_reserve_attempt_reconstructs_before_commit -q`: failed as expected before implementation, proving the missing unique index, missing same-session guard, and post-commit reservation read.
+
+In-progress verification:
+
+- `pytest tests/unit/test_execution_repository.py::test_fresh_initialization_creates_symbol_session_unique_index tests/unit/test_execution_repository.py::test_same_spy_execution_session_rejects_different_ids_side_and_quantity tests/unit/test_execution_repository.py::test_reserve_attempt_reconstructs_before_commit tests/unit/test_execution_repository.py::test_reservation_reconstruction_failure_rolls_back_attempt_and_event tests/unit/test_execution_service.py::test_concurrent_service_submissions_allow_one_session_winner -q`: `7 passed`.
+- `pytest tests/unit/test_execution_repository.py tests/unit/test_execution_service.py tests/integration/test_phase8_paper_execution_flow.py -q`: passed with 6 warnings.
+- `ruff check .`: `All checks passed!`
+- `ruff format --check .`: `111 files already formatted`
+- `mypy src tests`: `Success: no issues found in 101 source files`
+
+Final verification:
+
+- `python -m pip install -e ".[dev]"`: passed; editable `spy-market-agent 0.1.0` installed and `alpaca-py 0.43.5` was present.
+- `pytest`: `758 passed, 6 warnings in 40.31s`; full-suite coverage `82%`.
+- `pytest tests/unit -q`: passed with 6 warnings and coverage `82%`; `pytest tests/unit --collect-only -qq --no-cov` confirmed 735 collected unit tests.
+- `pytest tests/integration -q`: `23 passed, 6 warnings`; integration-only coverage `71%`.
+- `ruff check .`: `All checks passed!`
+- `ruff format --check .`: `111 files already formatted`
+- `mypy src tests`: `Success: no issues found in 101 source files`
+- `python -c "import alpaca; import importlib.metadata as m; print(m.version('alpaca-py'))"`: `0.43.5`
+- `python -c "import spy_market_agent; print(spy_market_agent.__version__)"`: `0.1.0`
+- Export smoke checks for `strategies`, `risk`, `backtesting`, `persistence`, `execution`, `api`, and `dashboard`: passed.
+- `git diff --check`: passed.
+
+Targeted behavior smoke tests:
+
+- `pytest tests/unit/test_execution_repository.py::test_concurrent_repository_reservations_allow_one_winner_per_session tests/unit/test_execution_repository.py::test_session_reservation_protection_survives_reopen_and_repository_instances tests/unit/test_execution_repository.py::test_different_future_execution_session_remains_reservable tests/unit/test_execution_repository.py::test_failed_session_reservation_inserts_no_attempt_or_event tests/unit/test_execution_repository.py::test_reserve_attempt_reconstructs_before_commit tests/unit/test_execution_repository.py::test_reservation_reconstruction_failure_rolls_back_attempt_and_event tests/unit/test_execution_repository.py::test_fresh_initialization_creates_symbol_session_unique_index tests/unit/test_execution_repository.py::test_phase7_migration_creates_symbol_session_unique_index tests/unit/test_execution_service.py::test_concurrent_service_submissions_allow_one_session_winner tests/unit/test_execution_service.py::test_same_session_duplicate_after_repository_reopen_does_not_submit tests/unit/test_execution_service.py::test_different_execution_session_can_submit_after_prior_session_attempt tests/unit/test_api_phase8.py::test_api_factory_health_and_get_requests_do_not_create_database_or_broker_client tests/unit/test_api_phase8.py::test_phase8_api_route_inventory_has_no_state_changing_application_routes tests/unit/test_dashboard_phase7.py::test_dashboard_import_smoke_public_exports_and_no_database_access tests/unit/test_dashboard_phase7.py::test_dashboard_paper_status_view_is_read_only_and_redacted tests/unit/test_alpaca_paper_adapter.py::test_alpaca_client_is_constructed_paper_only_without_custom_url tests/unit/test_execution_service.py::test_timeout_marks_submission_unknown_and_reconciliation_never_submits tests/unit/test_execution_service.py::test_live_mode_request_at_execution_boundary_raises_runtime_error -q --no-cov`: `18 passed, 2 warnings`.
+- `pytest tests/integration/test_phase8_paper_execution_flow.py::test_phase8_concurrent_same_session_attempts_submit_exactly_once tests/integration/test_phase8_paper_execution_flow.py::test_phase8_same_session_protection_survives_repository_reopen tests/integration/test_phase8_paper_execution_flow.py::test_phase8_later_execution_session_remains_independently_eligible -q --no-cov`: `3 passed, 6 warnings`.
+
+Pre-commit git audit:
+
+- `git status --short`: showed modified files only in `README.md`, `reviews/PHASE_08_REVIEW.md`, `src/spy_market_agent/execution/repository.py`, `src/spy_market_agent/persistence/schema.py`, `tests/integration/test_phase8_paper_execution_flow.py`, `tests/unit/test_execution_repository.py`, and `tests/unit/test_execution_service.py`.
+- `git diff --stat origin/main...HEAD`: showed the full Phase 8 branch diff, 37 files changed with 9,783 insertions and 49 deletions before the final review-note update.
+- `git diff --check`: passed.
+- `git diff --stat`: showed this pass changed 7 files with 1,285 insertions and 14 deletions before the final review-note update.
+
+Coverage:
+
+- Baseline full-suite coverage: `82%`.
+- Final full-suite coverage: `82%`.
+
+Warnings:
+
+- Baseline warnings: 6 existing third-party warnings.
+- Final warnings: 6 existing third-party warnings.
+
+Known limitation:
+
+- A consumed SPY execution session is not automatically released in Phase 8, even for blocked, rejected, or uncertain attempts. This is deliberate to prevent concurrent pyramiding or conflicting same-session submissions.
+
+Confirmations:
+
+- Main was not modified.
+- Earlier Phase 8 branches were not modified.
+- Phase 9 was not started.
+- No live trading, `paper=False` client, live endpoint, automatic execution, automatic retry, short selling, leverage, margin, fractional shares, non-SPY asset, scheduler, background worker, authentication, deployment, API write route, dashboard execution control, cancellation, replacement, or liquidation functionality was introduced.
