@@ -36,7 +36,7 @@ The repository currently contains typed configuration, paper-only configuration 
 - Application startup must not submit paper orders.
 - The package import does not load settings or perform external actions.
 - Models must never communicate directly with brokers.
-- Paper-order submission is available only through explicit service calls with matching human approval, a disengaged durable kill switch, duplicate protection, broker preflights, and execution-time risk approval.
+- Paper-order submission is available only through explicit service calls with matching human approval, disengaged configuration and durable kill switches, duplicate protection, broker preflights, and execution-time risk approval.
 - All future proposed trades must pass through an independent risk-management layer.
 - Version 1 must not permit short selling, leverage, or non-SPY assets.
 
@@ -168,17 +168,21 @@ Do not commit a real `.env` file. `.env.example` contains safe defaults and comm
 - Deterministic SHA-256 instruction fingerprints over versioned order, risk, cost, session, timestamp, and identifier data.
 - Human approval must match the exact instruction fingerprint and cannot be reused through the durable ledger.
 - Durable duplicate protection for `signal_id`, `client_order_id`, and `approval_id`.
-- Persistent global paper-execution kill switch defaults to engaged; disengagement requires an explicit confirmation token and nonblank reason.
+- Configuration and durable global paper-execution kill switches both default to engaged. The effective kill-switch state is their logical OR, so both must be deliberately disengaged before an explicitly invoked paper submission can proceed.
+- Durable kill-switch disengagement requires an explicit confirmation token and nonblank reason; changing configuration does not alter the durable SQLite switch.
 - Explicit service-only submission path that rechecks configuration, credentials, kill switch, approval, staleness, broker state, open orders, positions, and execution-time risk before a broker call.
-- The durable kill switch is also reread after reservation and broker lookup as the final persistent safety operation before submission. If it engages at that point, the reserved IDs remain blocked and no order is submitted.
+- Phase 8 always requires regular market hours; `PAPER_EXECUTION_REQUIRE_MARKET_OPEN` is retained for display compatibility but cannot be set to `false`.
+- The broker clock is refreshed after reservation and broker lookup confirms no existing order. The fresh clock must still be open, timezone-aware, on the instruction execution session, before the exclusive expiration instant, and compatible with the approval.
+- The durable kill switch is reread after the refreshed clock as the final persistent safety operation before submission. If it engages at that point, the reserved IDs remain blocked and no order is submitted.
 - Engaging the kill switch after the final pre-submit check cannot cancel a broker request that is already in flight; order cancellation remains outside Phase 8.
 - Alpaca adapter is paper-only, constructs `TradingClient(..., paper=True)` only when explicitly instantiated, and uses the canonical paper endpoint identity `https://paper-api.alpaca.markets`.
 - Real Alpaca SDK enum values are normalized through their underlying values before broker preflight validation; malformed enum-like values fail closed.
 - Supported order contract is SPY only, buy/sell only, whole shares only, market order, DAY time in force, `extended_hours=False`, and explicit `client_order_id`.
 - Local order-request construction failures are blocked before submission and are not treated as uncertain broker outcomes. Once IDs are durably reserved, those IDs remain unavailable and cannot be silently reused.
-- Timeout, cancellation, connection loss, malformed post-submit responses, or contradictory post-submit responses record `submission_unknown`, do not retry automatically, and require explicit read-only reconciliation by `client_order_id`.
+- An instruction is invalid at its `expires_at_utc` instant; execution exactly at expiration is rejected before submission.
+- Timeout, cancellation, connection loss, malformed post-submit responses, contradictory post-submit responses, or a local ledger failure after broker acceptance record `submission_unknown`, do not retry automatically, and require explicit read-only reconciliation by `client_order_id`.
 - Only failures after the SDK submission may have started require reconciliation; local request-build failures do not.
-- Broker lookup returns broker-observable order snapshots only. Reconciliation binds those fields to persisted local signal IDs and instruction fingerprints; local lineage is never derived from broker order IDs or client-order IDs.
+- Broker lookup returns broker-observable order snapshots only. Reconciliation is lookup-only and binds those fields to persisted local signal IDs and instruction fingerprints; local lineage is never derived from broker order IDs or client-order IDs.
 - The durable ledger independently enforces state transitions, persists event lineage from stored attempt rows, and rejects any receipt environment other than `alpaca_paper`.
 - Read-only API routes expose local paper-trading status and local paper-order attempt history without constructing an Alpaca client.
 - Dashboard adds a read-only Paper Trading Status view that consumes only the FastAPI API and contains no execution controls.
@@ -230,7 +234,7 @@ Configure the dashboard API URL with `DASHBOARD_API_BASE_URL`; it defaults to `h
 
 Dashboard tables for predictions, orders, risk decisions, and fills are previews when the API total exceeds the visible rows. Equity and drawdown charts are intended to be complete; the dashboard retrieves all equity pages using the maximum API page size and shows an error instead of silently plotting partial or malformed chart data.
 
-The Paper Trading Status dashboard tab is also read-only. It shows educational warnings, execution mode, paper-execution permission, dry-run state, kill-switch state, credential presence as booleans, unresolved submission count, and recent local paper-order attempts with visible pagination labels. It has no approve, submit, retry, reconcile, enable, disable, cancel, replace, or liquidation controls.
+The Paper Trading Status dashboard tab is also read-only. It shows educational warnings, execution mode, paper-execution permission, dry-run state, configuration, durable, and effective kill-switch states, credential presence as booleans, unresolved submission count, and recent local paper-order attempts with visible pagination labels. It has no approve, submit, retry, reconcile, enable, disable, cancel, replace, or liquidation controls.
 
 Paper market orders submitted after the market opens can fill differently from the Phase 6 next-open historical backtest assumption and do not represent real-money performance.
 

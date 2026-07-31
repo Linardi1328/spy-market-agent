@@ -148,6 +148,9 @@ class FakeClient:
     def paper_trading_status(self) -> dict[str, Any]:
         return {
             "kill_switch_engaged": True,
+            "configuration_kill_switch_engaged": True,
+            "durable_kill_switch_engaged": True,
+            "effective_kill_switch_engaged": True,
             "execution_mode": "paper",
             "paper_execution_enabled": False,
             "dry_run": True,
@@ -394,6 +397,9 @@ def test_dashboard_rendering_shows_required_warning_and_no_write_controls() -> N
         fill_rows=PaginatedItems.empty(),
         paper_trading_status={
             "kill_switch_engaged": True,
+            "configuration_kill_switch_engaged": True,
+            "durable_kill_switch_engaged": True,
+            "effective_kill_switch_engaged": True,
             "execution_mode": "paper",
             "paper_execution_enabled": False,
             "dry_run": True,
@@ -510,6 +516,12 @@ def test_dashboard_paper_status_view_is_read_only_and_redacted() -> None:
     assert "cancel" not in rendered_text
     assert "liquidate" not in rendered_text
     assert status_frames
+    assert "configuration_kill_switch_engaged" in status_frames[0].columns
+    assert "durable_kill_switch_engaged" in status_frames[0].columns
+    assert "effective_kill_switch_engaged" in status_frames[0].columns
+    assert bool(status_frames[0].loc[0, "configuration_kill_switch_engaged"]) is True
+    assert bool(status_frames[0].loc[0, "durable_kill_switch_engaged"]) is True
+    assert bool(status_frames[0].loc[0, "effective_kill_switch_engaged"]) is True
     assert status_frames[0].loc[0, "alpaca_api_key_present"] == "not present"
     assert status_frames[0].loc[0, "alpaca_secret_key_present"] == "not present"
 

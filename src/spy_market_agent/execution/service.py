@@ -173,17 +173,37 @@ class PaperExecutionService:
                     "broker_order_mismatch",
                     "broker order state does not match the reserved paper-execution attempt.",
                 ) from exc
-            self._repository.record_receipt(
-                receipt,
-                status=PAPER_ATTEMPT_BROKER_EXISTING_ORDER_FOUND,
-                account_id_fingerprint=account.account_id_fingerprint,
-                now_utc=clock.timestamp,
-                event_type="broker_existing_order_found",
-            )
+            try:
+                self._repository.record_receipt(
+                    receipt,
+                    status=PAPER_ATTEMPT_BROKER_EXISTING_ORDER_FOUND,
+                    account_id_fingerprint=account.account_id_fingerprint,
+                    now_utc=clock.timestamp,
+                    event_type="broker_existing_order_found",
+                )
+            except Exception as exc:
+                self._mark_submission_unknown_best_effort(
+                    instruction=instruction,
+                    now_utc=clock.timestamp,
+                    failure_code="existing_order_receipt_persistence_failed",
+                )
+                raise PaperExecutionSubmissionUnknownError(
+                    "existing_order_receipt_persistence_failed",
+                    (
+                        "paper-order submission outcome is unknown; do not resubmit "
+                        "automatically, and reconcile by client_order_id."
+                    ),
+                ) from exc
             return receipt
+        submission_clock = self._refresh_pre_submission_clock(
+            instruction=instruction,
+            approval=approval,
+            broker=broker,
+            fallback_now_utc=clock.timestamp,
+        )
         self._assert_final_kill_switch_gate(
             instruction=instruction,
-            now_utc=clock.timestamp,
+            now_utc=submission_clock.timestamp,
         )
         try:
             snapshot = broker.submit_market_day_order(instruction)
@@ -193,7 +213,7 @@ class PaperExecutionService:
                 signal_id=instruction.signal_id,
                 status=PAPER_ATTEMPT_BLOCKED,
                 failure_code="broker_request_construction_failed",
-                now_utc=clock.timestamp,
+                now_utc=submission_clock.timestamp,
                 event_type="broker_request_construction_failed",
             )
             raise
@@ -203,7 +223,7 @@ class PaperExecutionService:
                 signal_id=instruction.signal_id,
                 status=PAPER_ATTEMPT_REJECTED,
                 failure_code=exc.code,
-                now_utc=clock.timestamp,
+                now_utc=submission_clock.timestamp,
                 event_type="broker_order_rejected",
             )
             raise
@@ -212,7 +232,7 @@ class PaperExecutionService:
                 client_order_id=instruction.client_order_id,
                 signal_id=instruction.signal_id,
                 failure_code="submission_outcome_unknown",
-                now_utc=clock.timestamp,
+                now_utc=submission_clock.timestamp,
             )
             raise PaperExecutionSubmissionUnknownError(
                 "submission_outcome_unknown",
@@ -223,7 +243,7 @@ class PaperExecutionService:
                 client_order_id=instruction.client_order_id,
                 signal_id=instruction.signal_id,
                 failure_code=exc.code,
-                now_utc=clock.timestamp,
+                now_utc=submission_clock.timestamp,
             )
             raise
         except Exception as exc:
@@ -231,7 +251,7 @@ class PaperExecutionService:
                 client_order_id=instruction.client_order_id,
                 signal_id=instruction.signal_id,
                 failure_code="submission_outcome_unknown",
-                now_utc=clock.timestamp,
+                now_utc=submission_clock.timestamp,
             )
             raise PaperExecutionSubmissionUnknownError(
                 "submission_outcome_unknown",
@@ -248,7 +268,7 @@ class PaperExecutionService:
                 client_order_id=instruction.client_order_id,
                 signal_id=instruction.signal_id,
                 failure_code="broker_snapshot_mismatch",
-                now_utc=clock.timestamp,
+                now_utc=submission_clock.timestamp,
             )
             raise PaperExecutionSubmissionUnknownError(
                 "broker_snapshot_mismatch",
@@ -259,19 +279,33 @@ class PaperExecutionService:
                 client_order_id=instruction.client_order_id,
                 signal_id=instruction.signal_id,
                 failure_code="broker_snapshot_mismatch",
-                now_utc=clock.timestamp,
+                now_utc=submission_clock.timestamp,
             )
             raise PaperExecutionSubmissionUnknownError(
                 "broker_snapshot_mismatch",
                 "broker order response does not match the reserved paper-execution attempt.",
             ) from exc
-        self._repository.record_receipt(
-            receipt,
-            status=PAPER_ATTEMPT_ACCEPTED,
-            account_id_fingerprint=account.account_id_fingerprint,
-            now_utc=clock.timestamp,
-            event_type="broker_order_accepted",
-        )
+        try:
+            self._repository.record_receipt(
+                receipt,
+                status=PAPER_ATTEMPT_ACCEPTED,
+                account_id_fingerprint=account.account_id_fingerprint,
+                now_utc=submission_clock.timestamp,
+                event_type="broker_order_accepted",
+            )
+        except Exception as exc:
+            self._mark_submission_unknown_best_effort(
+                instruction=instruction,
+                now_utc=submission_clock.timestamp,
+                failure_code="accepted_receipt_persistence_failed",
+            )
+            raise PaperExecutionSubmissionUnknownError(
+                "accepted_receipt_persistence_failed",
+                (
+                    "paper-order submission outcome is unknown; do not resubmit "
+                    "automatically, and reconcile by client_order_id."
+                ),
+            ) from exc
         return receipt
 
     def reconcile_by_client_order_id(
@@ -311,13 +345,29 @@ class PaperExecutionService:
                 "broker_order_mismatch",
                 "broker order state does not match the reserved paper-execution attempt.",
             ) from exc
-        self._repository.record_receipt(
-            receipt,
-            status=PAPER_ATTEMPT_RECONCILED,
-            account_id_fingerprint=None,
-            now_utc=now_utc,
-            event_type="broker_order_reconciled",
-        )
+        try:
+            self._repository.record_receipt(
+                receipt,
+                status=PAPER_ATTEMPT_RECONCILED,
+                account_id_fingerprint=None,
+                now_utc=now_utc,
+                event_type="broker_order_reconciled",
+            )
+        except Exception as exc:
+            with suppress(PaperExecutionError):
+                self._repository.mark_submission_unknown(
+                    client_order_id=attempt.client_order_id,
+                    signal_id=attempt.signal_id,
+                    failure_code="reconciliation_receipt_persistence_failed",
+                    now_utc=now_utc,
+                )
+            raise PaperExecutionSubmissionUnknownError(
+                "reconciliation_receipt_persistence_failed",
+                (
+                    "paper-order reconciliation outcome is unknown; do not resubmit "
+                    "automatically, and reconcile by client_order_id."
+                ),
+            ) from exc
         return receipt
 
     def _assert_final_kill_switch_gate(
@@ -333,6 +383,7 @@ class PaperExecutionService:
                 instruction=instruction,
                 now_utc=now_utc,
                 failure_code="kill_switch_state_unavailable_before_submission",
+                event_type="final_kill_switch_blocked",
             )
             raise PaperExecutionKillSwitchError(
                 "kill_switch_state_unavailable_before_submission",
@@ -343,11 +394,67 @@ class PaperExecutionService:
                 instruction=instruction,
                 now_utc=now_utc,
                 failure_code="kill_switch_engaged_before_submission",
+                event_type="final_kill_switch_blocked",
             )
             raise PaperExecutionKillSwitchError(
                 "kill_switch_engaged_before_submission",
                 "paper-execution kill switch is engaged.",
             )
+
+    def _refresh_pre_submission_clock(
+        self,
+        *,
+        instruction: PaperOrderInstruction,
+        approval: PaperOrderApproval,
+        broker: PaperBrokerProtocol,
+        fallback_now_utc: datetime,
+    ) -> BrokerClockSnapshot:
+        try:
+            refreshed_clock = broker.get_clock()
+        except Exception as exc:
+            self._mark_reserved_blocked(
+                instruction=instruction,
+                now_utc=fallback_now_utc,
+                failure_code="broker_clock_refresh_failed",
+                event_type="pre_submission_clock_blocked",
+            )
+            raise PaperExecutionStaleSignalError(
+                "broker_clock_refresh_failed",
+                "broker clock could not be refreshed before paper-order submission.",
+            ) from exc
+        try:
+            self._assert_clock(
+                refreshed_clock,
+                instruction,
+                market_closed_code="market_closed_before_submission",
+                instruction_expired_code="instruction_expired_before_submission",
+                wrong_session_code="wrong_execution_session_before_submission",
+            )
+            validate_matching_approval(
+                instruction,
+                approval,
+                execution_time_utc=refreshed_clock.timestamp,
+            )
+        except PaperExecutionApprovalError as exc:
+            self._mark_reserved_blocked(
+                instruction=instruction,
+                now_utc=refreshed_clock.timestamp,
+                failure_code="approval_invalid_before_submission",
+                event_type="pre_submission_clock_blocked",
+            )
+            raise PaperExecutionApprovalError(
+                "approval_invalid_before_submission",
+                "paper-order approval is invalid before submission.",
+            ) from exc
+        except PaperExecutionStaleSignalError as exc:
+            self._mark_reserved_blocked(
+                instruction=instruction,
+                now_utc=refreshed_clock.timestamp,
+                failure_code=exc.code,
+                event_type="pre_submission_clock_blocked",
+            )
+            raise
+        return refreshed_clock
 
     def _mark_reserved_blocked(
         self,
@@ -355,6 +462,7 @@ class PaperExecutionService:
         instruction: PaperOrderInstruction,
         now_utc: datetime,
         failure_code: str,
+        event_type: str = "attempt_blocked",
     ) -> None:
         with suppress(PaperExecutionError):
             self._repository.mark_failure(
@@ -363,12 +471,34 @@ class PaperExecutionService:
                 status=PAPER_ATTEMPT_BLOCKED,
                 failure_code=failure_code,
                 now_utc=now_utc,
-                event_type="final_kill_switch_blocked",
+                event_type=event_type,
+            )
+
+    def _mark_submission_unknown_best_effort(
+        self,
+        *,
+        instruction: PaperOrderInstruction,
+        now_utc: datetime,
+        failure_code: str,
+        event_type: str = "submission_unknown",
+    ) -> None:
+        with suppress(PaperExecutionError):
+            self._repository.mark_submission_unknown(
+                client_order_id=instruction.client_order_id,
+                signal_id=instruction.signal_id,
+                failure_code=failure_code,
+                now_utc=now_utc,
+                event_type=event_type,
             )
 
     def _assert_local_permission_gates(self) -> None:
         if self._settings.execution_mode != "paper":
             raise RuntimeError("live execution is not supported.")
+        if self._settings.paper_execution_kill_switch:
+            raise PaperExecutionKillSwitchError(
+                "configuration_kill_switch_engaged",
+                "paper-execution configuration kill switch is engaged.",
+            )
         if not self._settings.enable_paper_execution:
             raise PaperExecutionConfigurationError(
                 "paper_execution_disabled",
@@ -436,14 +566,20 @@ class PaperExecutionService:
         self,
         clock: BrokerClockSnapshot,
         instruction: PaperOrderInstruction,
+        *,
+        market_closed_code: str = "market_closed",
+        instruction_expired_code: str = "instruction_expired",
+        wrong_session_code: str = "wrong_execution_session",
     ) -> None:
-        if self._settings.paper_execution_require_market_open and not clock.is_open:
+        if not clock.is_open:
             raise PaperExecutionStaleSignalError(
-                "market_closed", "market must be open for Phase 8 paper execution."
+                market_closed_code,
+                "market must be open for Phase 8 paper execution.",
             )
-        if clock.timestamp > instruction.expires_at_utc:
+        if clock.timestamp >= instruction.expires_at_utc:
             raise PaperExecutionStaleSignalError(
-                "instruction_expired", "paper instruction has expired."
+                instruction_expired_code,
+                "paper instruction has expired.",
             )
         order = instruction.proposed_order
         if order.execution_session <= order.signal_session:
@@ -453,7 +589,7 @@ class PaperExecutionService:
         broker_session = clock.timestamp.astimezone(NEW_YORK).date()
         if broker_session != order.execution_session:
             raise PaperExecutionStaleSignalError(
-                "wrong_execution_session",
+                wrong_session_code,
                 "broker clock is not on the instruction execution session.",
             )
 
