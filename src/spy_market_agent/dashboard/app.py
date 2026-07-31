@@ -340,7 +340,19 @@ def _render_paper_trading_status(st: Any, state: DashboardState) -> None:
             "execution_mode": status.get("execution_mode", "unknown"),
             "paper_execution_enabled": status.get("paper_execution_enabled", False),
             "dry_run": status.get("dry_run", True),
-            "kill_switch_engaged": status.get("kill_switch_engaged", True),
+            "configuration_kill_switch_engaged": status.get(
+                "configuration_kill_switch_engaged",
+                True,
+            ),
+            "durable_kill_switch_engaged": status.get("durable_kill_switch_engaged", True),
+            "effective_kill_switch_engaged": status.get(
+                "effective_kill_switch_engaged",
+                status.get("kill_switch_engaged", True),
+            ),
+            "kill_switch_engaged": status.get(
+                "kill_switch_engaged",
+                status.get("effective_kill_switch_engaged", True),
+            ),
             "alpaca_api_key_present": _bool_label(status.get("alpaca_api_key_present", False)),
             "alpaca_secret_key_present": _bool_label(
                 status.get("alpaca_secret_key_present", False)

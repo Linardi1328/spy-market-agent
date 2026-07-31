@@ -681,3 +681,192 @@ Confirmation after final hardening commit:
 - Both earlier Phase 8 branches were not modified.
 - Phase 9 was not started.
 - No live trading, live endpoint, `paper=False` client, automatic execution, automatic submission retry, short selling, leverage, margin, fractional shares, non-SPY asset, scheduler, background worker, deployment, authentication, API write route, dashboard execution control, cancellation, replacement, or liquidation behavior was added.
+
+## Phase 8 Final Safety Pass Addendum
+
+Final safety branch:
+
+- `review/phase-08-final-safety-pass`
+
+Starting main SHA:
+
+- `d5e2a81ed51951b414100e440796397cb3cbd938`
+
+Original Phase 8 SHAs:
+
+- `f9a794cdf2ffb2dc9f3f7c5044bde131cc86940e`
+- `f6d9a65d143e0fd910ffbcc0caf9496754278be5`
+- `fd3eb4869ad8cf8f362238e92135e218033b6ff7`
+
+New cherry-picked SHAs on the final-safety branch:
+
+- `9880def19dd3db90a8d6b730a77b7fd5a6858475`
+- `0a2e2c8950aa50ce90b1b8c135bfc82fbc8c9811`
+- `2e8aaf9d12d3d36f42440fcc6746007bfcc1522a`
+
+Final correction commit SHA:
+
+- Reported in the final Codex response after the commit is created and pushed.
+
+Findings corrected:
+
+- Enforced `paper_execution_kill_switch` as a process-level kill switch in addition to the durable SQLite kill switch.
+- Made regular-market-hours execution non-optional and rejected attempts to configure `PAPER_EXECUTION_REQUIRE_MARKET_OPEN=false`.
+- Added a fresh broker-clock read after reservation and broker lookup, before the final durable kill-switch read.
+- Made instruction expiration exclusive: execution exactly at `expires_at_utc` is rejected.
+- Hardened post-submit ledger failure handling so a broker acceptance followed by receipt persistence failure becomes `submission_unknown` and is never retried.
+- Refactored `record_receipt()` so the resulting attempt is reconstructed and validated before commit, with no post-commit database read.
+
+Files created:
+
+- `tests/unit/test_execution_approvals.py`
+
+Files modified:
+
+- `.env.example`
+- `README.md`
+- `reviews/PHASE_08_REVIEW.md`
+- `src/spy_market_agent/api/schemas.py`
+- `src/spy_market_agent/api/services.py`
+- `src/spy_market_agent/config/settings.py`
+- `src/spy_market_agent/dashboard/app.py`
+- `src/spy_market_agent/execution/approvals.py`
+- `src/spy_market_agent/execution/models.py`
+- `src/spy_market_agent/execution/repository.py`
+- `src/spy_market_agent/execution/service.py`
+- `tests/integration/test_phase8_paper_execution_flow.py`
+- `tests/unit/phase8_helpers.py`
+- `tests/unit/test_api_phase8.py`
+- `tests/unit/test_dashboard_phase7.py`
+- `tests/unit/test_execution_repository.py`
+- `tests/unit/test_execution_service.py`
+- `tests/unit/test_execution_settings.py`
+- `tests/unit/test_settings.py`
+
+Configuration and durable kill-switch behavior:
+
+- `settings.paper_execution_kill_switch` defaults to engaged and is checked before any broker operation.
+- Durable SQLite kill switch still defaults to engaged and is still reread as the final persistent safety operation before broker submission.
+- Submission requires both switches to be disengaged.
+- Status exposes `configuration_kill_switch_engaged`, `durable_kill_switch_engaged`, and `effective_kill_switch_engaged`.
+- Compatibility field `kill_switch_engaged` now represents the effective OR state.
+- API and dashboard remain read-only and cannot change either switch.
+
+Mandatory market-open behavior:
+
+- `paper_execution_require_market_open` remains visible for compatibility but must validate as exactly `True`.
+- Environment attempts to set `PAPER_EXECUTION_REQUIRE_MARKET_OPEN=false` fail settings validation.
+- The service rejects a closed broker clock unconditionally, even if a settings-like object is manually constructed with the field set false.
+- `extended_hours` remains false for the only supported order contract.
+
+Fresh-clock ordering:
+
+- Normal no-existing-order submission order is: broker lookup, refreshed broker clock, fresh clock and approval validation, final durable kill-switch read, then `submit_market_day_order()`.
+- After the final durable kill-switch read passes, no further database read/write, broker preflight, broker lookup, approval lookup, callback, or risk calculation occurs before submit.
+- Existing matching broker-order reconciliation skips the final fresh-clock and submit sequence because no new broker submission is attempted.
+
+Expiration boundary:
+
+- `validate_matching_approval()` and service clock validation now reject `now >= expires_at_utc`.
+- One microsecond before expiration remains valid when every other gate passes.
+- Exactly at expiration and after expiration are rejected before submission; reserved IDs remain retained and the attempt is blocked when the expiration is discovered after reservation.
+
+Post-submit ledger-failure behavior:
+
+- If broker submit returns a valid matching paper snapshot but accepted receipt persistence fails, the service raises sanitized `PaperExecutionSubmissionUnknownError` with code `accepted_receipt_persistence_failed`.
+- The service best-effort marks the reserved attempt `submission_unknown`, retains all reserved IDs, never retries, and requires lookup-only reconciliation by `client_order_id`.
+- If the best-effort unknown mark also fails, the caller still receives the sanitized unknown-submission error.
+- Existing-broker-order reconciliation persistence failures also fail closed and never submit a new order.
+
+Repository transaction changes:
+
+- `record_receipt()` now performs prior attempt load, receipt lineage validation, transition validation, update, event insert, and result reconstruction inside one transaction.
+- Commit occurs only after the resulting immutable attempt is reconstructed and validated.
+- Update row-count mismatch, event insertion failure, and result reconstruction failure roll back the complete receipt transaction.
+- `record_receipt()` performs no database read after commit.
+
+Regression tests added:
+
+- Configuration kill switch blocks before broker calls and appears in preview/status/API/dashboard.
+- Configuration false does not override the durable kill switch.
+- Effective kill-switch status is the OR of configuration and durable states.
+- Regular-market-hours setting default is true; explicit false and environment false are rejected.
+- Closed market cannot be bypassed by manually constructed settings.
+- Initial and refreshed broker clocks both run in a successful submission.
+- First clock open plus refreshed clock closed blocks after reservation with zero submits.
+- Refreshed clock on a later session blocks after reservation.
+- Instruction expiration between clock reads blocks before submission.
+- Approval invalid at the refreshed clock blocks before submission.
+- Refreshed clock retrieval failure blocks safely without raw broker details.
+- Exact expiration is rejected; one microsecond before expiration can submit.
+- Successful ordering proves lookup, refreshed clock, final durable switch, then submit.
+- Existing broker-order reconciliation skips the final submission clock sequence and submit.
+- Accepted receipt persistence failure after submit becomes `submission_unknown`.
+- Failure to mark `submission_unknown` after receipt persistence failure still returns a sanitized unknown error.
+- Explicit reconciliation after ledger failure performs lookup only and repairs the ledger.
+- `record_receipt()` update failure, event insertion failure, and result reconstruction failure roll back.
+- `record_receipt()` does not read after commit.
+- Integration paths cover configuration kill switch, closed-market refresh race, exact expiration, accepted order plus ledger failure, and successful final ordering.
+
+Baseline verification before final safety edits:
+
+- `python -m pip install -e ".[dev]"`: passed; editable package installed with `alpaca-py 0.43.5`.
+- `pytest`: `700 passed, 6 warnings`; full-suite coverage `82%`.
+- `pytest tests/unit -q`: passed with 6 warnings and coverage `82%`; recorded baseline unit composition was 685 tests.
+- `pytest tests/integration -q`: `15 passed, 6 warnings`; integration-only coverage `71%`.
+- `ruff check .`: `All checks passed!`
+- `ruff format --check .`: passed.
+- `mypy src tests`: passed across 100 source files.
+- `python -c "import alpaca; import importlib.metadata as m; print(m.version('alpaca-py'))"`: `0.43.5`
+- `python -c "import spy_market_agent; print(spy_market_agent.__version__)"`: `0.1.0`
+- Export smoke checks for `execution`, `persistence`, `api`, and `dashboard`: passed.
+- `git diff --check`: passed.
+
+Final verification:
+
+- `python -m pip install -e ".[dev]"`: passed; editable `spy-market-agent 0.1.0` installed and `alpaca-py 0.43.5` was present.
+- `pytest`: `730 passed, 6 warnings in 40.46s`; full-suite coverage `82%`.
+- `pytest tests/unit -q`: passed with 6 warnings and coverage `82%`; `pytest tests/unit --collect-only -qq --no-cov` confirmed 710 collected unit tests.
+- `pytest tests/integration -q`: `20 passed, 6 warnings`; integration-only coverage `71%`.
+- `ruff check .`: `All checks passed!`
+- `ruff format --check .`: `111 files already formatted`
+- `mypy src tests`: `Success: no issues found in 101 source files`
+- `python -c "import alpaca; import importlib.metadata as m; print(m.version('alpaca-py'))"`: `0.43.5`
+- `python -c "import spy_market_agent; print(spy_market_agent.__version__)"`: `0.1.0`
+- Public export smoke checks for `strategies`, `risk`, `backtesting`, `persistence`, `execution`, `api`, and `dashboard`: passed.
+- `git diff --check`: passed.
+
+Targeted behavior smoke checks:
+
+- `pytest tests/unit/test_execution_service.py::test_configuration_kill_switch_blocks_before_any_broker_operation tests/unit/test_execution_service.py::test_market_open_requirement_cannot_be_bypassed_by_constructed_settings tests/unit/test_execution_service.py::test_refreshed_closed_clock_blocks_after_reservation_and_keeps_ids tests/unit/test_execution_service.py::test_successful_submission_ordering_refreshes_clock_before_final_kill_switch tests/unit/test_execution_service.py::test_instruction_exact_expiration_at_refreshed_clock_blocks_before_submission tests/unit/test_execution_service.py::test_accepted_receipt_persistence_failure_after_submit_becomes_unknown tests/unit/test_execution_service.py::test_accepted_receipt_and_unknown_mark_failures_still_raise_sanitized_unknown tests/unit/test_execution_service.py::test_timeout_marks_submission_unknown_and_reconciliation_never_submits tests/unit/test_execution_service.py::test_live_mode_request_at_execution_boundary_raises_runtime_error tests/unit/test_execution_repository.py::test_record_receipt_does_not_read_attempt_after_commit tests/unit/test_execution_repository.py::test_record_receipt_result_reconstruction_failure_rolls_back_before_commit tests/unit/test_execution_repository.py::test_forged_receipt_environment_is_rejected_transactionally tests/unit/test_api_phase8.py::test_api_factory_health_and_get_requests_do_not_create_database_or_broker_client tests/unit/test_api_phase8.py::test_phase8_api_route_inventory_has_no_state_changing_application_routes tests/unit/test_dashboard_phase7.py::test_dashboard_import_smoke_public_exports_and_no_database_access tests/unit/test_dashboard_phase7.py::test_dashboard_paper_status_view_is_read_only_and_redacted tests/integration/test_phase8_paper_execution_flow.py::test_phase8_configuration_kill_switch_blocks_before_broker_calls tests/integration/test_phase8_paper_execution_flow.py::test_phase8_closed_market_refresh_race_blocks_reserved_attempt tests/integration/test_phase8_paper_execution_flow.py::test_phase8_exact_expiration_at_refresh_blocks_submission tests/integration/test_phase8_paper_execution_flow.py::test_phase8_accepted_order_plus_ledger_failure_requires_lookup_reconciliation tests/integration/test_phase8_paper_execution_flow.py::test_phase8_successful_path_uses_fresh_clock_final_kill_switch_submit_ordering -q --no-cov`: `25 passed, 6 warnings`.
+- These tests prove the configuration kill switch blocks all broker calls, market-open enforcement cannot be disabled, initial and refreshed clock checks both run, exact expiration is rejected, final ordering is fresh clock then durable kill switch then submit, receipt persistence failure after submit becomes `submission_unknown`, submit is not retried, reconciliation performs lookup only, `record_receipt()` performs no post-commit database read, API/dashboard remain read-only, import/API/dashboard smoke paths construct no broker client and perform no external network request, no automatic order is submitted, live execution is rejected through the public service boundary, no API write route exists, and no dashboard execution control exists.
+
+Source audit:
+
+- `rg -n "paper=False|paper = False|live-api\\.alpaca|https://api\\.alpaca\\.markets|@.*\\.(post|put|patch|delete)\\(|cancel|replace|liquidat|scheduler|background|cron|websocket|submit_order" src tests README.md PROJECT_SPEC.md reviews/PHASE_08_REVIEW.md`: only expected documentation/review references, the canonical paper-only adapter submit call, tests, harmless timestamp `.replace("+00:00", "Z")` calls, and the live-environment rejection test were found.
+
+Coverage:
+
+- Baseline full-suite coverage: `82%`.
+- Final full-suite coverage: `82%`.
+
+Warnings:
+
+- Baseline warnings: 6 existing third-party warnings.
+- Final warnings: 6 existing third-party warnings from `exchange_calendars`, FastAPI/Starlette TestClient, and `websockets`.
+- No warnings were suppressed.
+
+Known limitations:
+
+- Phase 8 remains paper-only and explicitly invoked.
+- Both configuration and durable kill switches must be deliberately disengaged.
+- Reconciliation remains lookup-only and never submits.
+- Engaging either kill switch after the final pre-submit check cannot cancel an already in-flight broker request.
+- API and dashboard views remain read-only and cannot approve, submit, reconcile, retry, enable, disable, cancel, replace, liquidate, or change either kill switch.
+
+Final confirmations:
+
+- Main was not modified.
+- Earlier Phase 8 branches `review/phase-08-paper-trading-preparation`, `review/phase-08-corrections`, and `review/phase-08-final-hardening` were not modified.
+- Phase 9 was not started.
+- No live trading, `paper=False` client, live endpoint, automatic execution, automatic submit retry, short selling, leverage, margin, fractional shares, non-SPY asset, scheduler, background worker, authentication, deployment, API write route, dashboard execution control, cancellation, replacement, or liquidation functionality was introduced.

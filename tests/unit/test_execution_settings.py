@@ -22,6 +22,17 @@ def test_live_execution_mode_remains_rejected() -> None:
         Settings(execution_mode="live")
 
 
+def test_regular_market_hours_requirement_cannot_be_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with pytest.raises(ValidationError, match="paper_execution_require_market_open"):
+        Settings(paper_execution_require_market_open=False)
+
+    monkeypatch.setenv("PAPER_EXECUTION_REQUIRE_MARKET_OPEN", "false")
+    with pytest.raises(ValidationError, match="paper_execution_require_market_open"):
+        Settings()
+
+
 def test_missing_credentials_are_allowed_but_displayed_only_as_presence_flags() -> None:
     settings = Settings()
     displayed = settings.display_safe_dict()

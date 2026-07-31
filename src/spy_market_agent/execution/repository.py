@@ -308,9 +308,10 @@ class SQLitePaperExecutionRepository:
                 safe_reason_code=status,
                 safe_metadata={"broker_status": receipt.broker_order_status},
             )
+            updated = _get_attempt_from_connection(connection, receipt.client_order_id)
             connection.commit()
-            return _get_attempt_from_connection(connection, receipt.client_order_id)
-        except PaperExecutionIntegrityError:
+            return updated
+        except (PaperExecutionIntegrityError, PaperExecutionNotFoundError):
             connection.rollback()
             raise
         except sqlite3.Error as exc:
@@ -536,8 +537,16 @@ class SQLitePaperExecutionRepository:
                 """,
                 (PAPER_ATTEMPT_RESERVED, PAPER_ATTEMPT_SUBMISSION_UNKNOWN),
             ).fetchone()[0]
+            configuration_kill_switch_engaged = settings.paper_execution_kill_switch
+            durable_kill_switch_engaged = control.kill_switch_engaged
+            effective_kill_switch_engaged = (
+                configuration_kill_switch_engaged or durable_kill_switch_engaged
+            )
             return PaperExecutionStatus(
-                kill_switch_engaged=control.kill_switch_engaged,
+                configuration_kill_switch_engaged=configuration_kill_switch_engaged,
+                durable_kill_switch_engaged=durable_kill_switch_engaged,
+                effective_kill_switch_engaged=effective_kill_switch_engaged,
+                kill_switch_engaged=effective_kill_switch_engaged,
                 execution_mode=settings.execution_mode,
                 paper_execution_enabled=settings.enable_paper_execution,
                 dry_run=settings.dry_run,

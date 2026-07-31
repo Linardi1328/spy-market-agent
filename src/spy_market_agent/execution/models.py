@@ -692,6 +692,9 @@ class PaperExecutionEvent:
 
 @dataclass(frozen=True, slots=True)
 class PaperExecutionStatus:
+    configuration_kill_switch_engaged: bool
+    durable_kill_switch_engaged: bool
+    effective_kill_switch_engaged: bool
     kill_switch_engaged: bool
     execution_mode: str
     paper_execution_enabled: bool

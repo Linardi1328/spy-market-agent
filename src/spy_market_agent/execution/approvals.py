@@ -37,7 +37,7 @@ def validate_matching_approval(
         raise PaperExecutionApprovalError(
             "approval_from_future", "approval timestamp is in the future."
         )
-    if now > instruction.expires_at_utc:
+    if now >= instruction.expires_at_utc:
         raise PaperExecutionApprovalError(
             "approval_expired", "approval expired with the instruction."
         )

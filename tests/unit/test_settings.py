@@ -112,23 +112,26 @@ def test_dry_run_defaults_to_true() -> None:
 
 
 @pytest.mark.parametrize(
-    ("enable_paper_execution", "dry_run", "expected"),
+    ("enable_paper_execution", "dry_run", "paper_execution_kill_switch", "expected"),
     [
-        (False, True, False),
-        (False, False, False),
-        (True, True, False),
-        (True, False, True),
+        (False, True, True, False),
+        (False, False, False, False),
+        (True, True, False, False),
+        (True, False, True, False),
+        (True, False, False, True),
     ],
 )
 def test_paper_order_submission_helper_requires_explicit_non_dry_run_permission(
     enable_paper_execution: bool,
     dry_run: bool,
+    paper_execution_kill_switch: bool,
     expected: bool,
 ) -> None:
     settings = Settings(
         execution_mode="paper",
         enable_paper_execution=enable_paper_execution,
         dry_run=dry_run,
+        paper_execution_kill_switch=paper_execution_kill_switch,
     )
 
     assert settings.paper_order_submission_enabled is expected
@@ -247,12 +250,14 @@ def test_environment_variables_can_override_safe_defaults(monkeypatch: pytest.Mo
     monkeypatch.setenv("ENVIRONMENT", "test")
     monkeypatch.setenv("ENABLE_PAPER_EXECUTION", "true")
     monkeypatch.setenv("DRY_RUN", "false")
+    monkeypatch.setenv("PAPER_EXECUTION_KILL_SWITCH", "false")
 
     settings = load_settings()
 
     assert settings.environment == "test"
     assert settings.enable_paper_execution is True
     assert settings.dry_run is False
+    assert settings.paper_execution_kill_switch is False
     assert settings.paper_order_submission_enabled is True
 
 

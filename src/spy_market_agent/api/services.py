@@ -465,6 +465,9 @@ def _risk_config(config: RiskConfig) -> RiskConfigResponse:
 
 def _paper_status_response(status: PaperExecutionStatus) -> PaperTradingStatusResponse:
     return PaperTradingStatusResponse(
+        configuration_kill_switch_engaged=status.configuration_kill_switch_engaged,
+        durable_kill_switch_engaged=status.durable_kill_switch_engaged,
+        effective_kill_switch_engaged=status.effective_kill_switch_engaged,
         kill_switch_engaged=status.kill_switch_engaged,
         execution_mode=status.execution_mode,
         paper_execution_enabled=status.paper_execution_enabled,

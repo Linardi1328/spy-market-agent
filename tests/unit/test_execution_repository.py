@@ -4,9 +4,11 @@ import sqlite3
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 
+import spy_market_agent.execution.repository as execution_repository
 from spy_market_agent.config import Settings
 from spy_market_agent.execution import (
     DISENGAGE_KILL_SWITCH_CONFIRMATION,
@@ -44,8 +46,44 @@ def test_fresh_database_defaults_kill_switch_to_engaged(tmp_path: Path) -> None:
     assert state.kill_switch_engaged is True
     assert state.reason == "default_engaged"
     assert status.kill_switch_engaged is True
+    assert status.configuration_kill_switch_engaged is True
+    assert status.durable_kill_switch_engaged is True
+    assert status.effective_kill_switch_engaged is True
     assert status.paper_execution_enabled is False
     assert status.dry_run is True
+
+
+def test_status_reports_configuration_durable_and_effective_kill_switch_states(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "phase8.sqlite3"
+    initialize_database(database_path)
+    repository = SQLitePaperExecutionRepository(database_path)
+
+    default_status = repository.status(Settings())
+    config_only = repository.status(Settings(paper_execution_kill_switch=True))
+    durable_only = repository.status(Settings(paper_execution_kill_switch=False))
+    repository.set_paper_execution_kill_switch(
+        engaged=False,
+        reason="explicit_test",
+        updated_at_utc=datetime(2025, 1, 3, 14, 0, tzinfo=UTC),
+        confirmation=DISENGAGE_KILL_SWITCH_CONFIRMATION,
+    )
+    none_engaged = repository.status(Settings(paper_execution_kill_switch=False))
+    configuration_engaged = repository.status(Settings(paper_execution_kill_switch=True))
+
+    assert default_status.kill_switch_engaged is True
+    assert config_only.configuration_kill_switch_engaged is True
+    assert config_only.durable_kill_switch_engaged is True
+    assert config_only.effective_kill_switch_engaged is True
+    assert durable_only.configuration_kill_switch_engaged is False
+    assert durable_only.durable_kill_switch_engaged is True
+    assert durable_only.effective_kill_switch_engaged is True
+    assert none_engaged.kill_switch_engaged is False
+    assert none_engaged.effective_kill_switch_engaged is False
+    assert configuration_engaged.kill_switch_engaged is True
+    assert configuration_engaged.configuration_kill_switch_engaged is True
+    assert configuration_engaged.durable_kill_switch_engaged is False
 
 
 def test_disengaging_kill_switch_requires_confirmation_reason_and_audits(
@@ -549,6 +587,150 @@ def test_forged_receipt_environment_is_rejected_transactionally(
     assert reopened.get_attempt(instruction.client_order_id) == before_attempt
 
 
+def test_record_receipt_update_failure_rolls_back_attempt_and_event(
+    tmp_path: Path,
+) -> None:
+    repository, instruction, _approval = _repository_with_reserved_attempt(tmp_path)
+    before_attempt = repository.get_attempt(instruction.client_order_id)
+    before_events = repository.list_events(client_order_id=instruction.client_order_id)
+    connection = sqlite3.connect(tmp_path / "phase8.sqlite3")
+    try:
+        connection.execute(
+            """
+            CREATE TRIGGER skip_receipt_update
+            BEFORE UPDATE ON paper_execution_attempts
+            WHEN NEW.broker_order_id IS NOT NULL
+            BEGIN
+                SELECT RAISE(IGNORE);
+            END
+            """
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    with pytest.raises(PaperExecutionIntegrityError):
+        repository.record_receipt(
+            make_receipt(instruction),
+            status=PAPER_ATTEMPT_ACCEPTED,
+            account_id_fingerprint="a" * 64,
+            now_utc=instruction.created_at_utc,
+            event_type="broker_order_accepted",
+        )
+
+    assert repository.get_attempt(instruction.client_order_id) == before_attempt
+    assert repository.list_events(client_order_id=instruction.client_order_id) == before_events
+
+
+def test_record_receipt_event_insertion_failure_rolls_back_attempt_update(
+    tmp_path: Path,
+) -> None:
+    repository, instruction, _approval = _repository_with_reserved_attempt(tmp_path)
+    before_attempt = repository.get_attempt(instruction.client_order_id)
+    before_events = repository.list_events(client_order_id=instruction.client_order_id)
+    connection = sqlite3.connect(tmp_path / "phase8.sqlite3")
+    try:
+        connection.execute(
+            """
+            CREATE TRIGGER fail_receipt_event
+            BEFORE INSERT ON paper_execution_events
+            WHEN NEW.event_type = 'broker_order_accepted'
+            BEGIN
+                SELECT RAISE(FAIL, 'raw sqlite secret event failure');
+            END
+            """
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    with pytest.raises(PaperExecutionIntegrityError) as exc_info:
+        repository.record_receipt(
+            make_receipt(instruction),
+            status=PAPER_ATTEMPT_ACCEPTED,
+            account_id_fingerprint="a" * 64,
+            now_utc=instruction.created_at_utc,
+            event_type="broker_order_accepted",
+        )
+
+    assert "secret" not in str(exc_info.value).lower()
+    assert repository.get_attempt(instruction.client_order_id) == before_attempt
+    assert repository.list_events(client_order_id=instruction.client_order_id) == before_events
+
+
+def test_record_receipt_result_reconstruction_failure_rolls_back_before_commit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository, instruction, _approval = _repository_with_reserved_attempt(tmp_path)
+    before_attempt = repository.get_attempt(instruction.client_order_id)
+    before_events = repository.list_events(client_order_id=instruction.client_order_id)
+    real_attempt_from_row = execution_repository._attempt_from_row
+
+    def failing_attempt_from_row(row: sqlite3.Row) -> object:
+        attempt = real_attempt_from_row(row)
+        if attempt.attempt_status == PAPER_ATTEMPT_ACCEPTED:
+            raise PaperExecutionIntegrityError(
+                "invalid_paper_execution_attempt",
+                "paper-execution attempt is invalid.",
+            )
+        return attempt
+
+    monkeypatch.setattr(execution_repository, "_attempt_from_row", failing_attempt_from_row)
+
+    with pytest.raises(PaperExecutionIntegrityError):
+        repository.record_receipt(
+            make_receipt(instruction),
+            status=PAPER_ATTEMPT_ACCEPTED,
+            account_id_fingerprint="a" * 64,
+            now_utc=instruction.created_at_utc,
+            event_type="broker_order_accepted",
+        )
+
+    assert repository.get_attempt(instruction.client_order_id) == before_attempt
+    assert repository.list_events(client_order_id=instruction.client_order_id) == before_events
+
+
+def test_record_receipt_does_not_read_attempt_after_commit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database_path = tmp_path / "phase8.sqlite3"
+    initialize_database(database_path)
+    instruction = make_instruction()
+    approval = make_approval(instruction)
+    repository = SQLitePaperExecutionRepository(database_path)
+    repository.reserve_attempt(
+        instruction,
+        approval,
+        execution_risk_approved=True,
+        now_utc=instruction.created_at_utc,
+    )
+    connection = sqlite3.connect(database_path)
+    connection.row_factory = sqlite3.Row
+    tracking_connection = _TrackingConnection(connection)
+    real_get_attempt = execution_repository._get_attempt_from_connection
+
+    def checked_get_attempt(connection_arg: object, client_order_id: str) -> object:
+        if connection_arg is tracking_connection and tracking_connection.commit_called:
+            raise AssertionError("record_receipt read after commit")
+        return real_get_attempt(connection_arg, client_order_id)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(repository, "_connect", lambda: tracking_connection)
+    monkeypatch.setattr(execution_repository, "_get_attempt_from_connection", checked_get_attempt)
+
+    accepted = repository.record_receipt(
+        make_receipt(instruction),
+        status=PAPER_ATTEMPT_ACCEPTED,
+        account_id_fingerprint="a" * 64,
+        now_utc=instruction.created_at_utc,
+        event_type="broker_order_accepted",
+    )
+
+    assert accepted.attempt_status == PAPER_ATTEMPT_ACCEPTED
+    assert tracking_connection.commit_called is True
+
+
 def test_blank_receipt_environment_is_rejected_by_model_validation() -> None:
     instruction = make_instruction()
 
@@ -724,3 +906,22 @@ def _move_attempt_to_status(
         )
         return
     raise AssertionError(f"unsupported test status {status}")
+
+
+class _TrackingConnection:
+    def __init__(self, connection: sqlite3.Connection) -> None:
+        self._connection = connection
+        self.commit_called = False
+
+    def execute(self, *args: Any, **kwargs: Any) -> sqlite3.Cursor:
+        return self._connection.execute(*args, **kwargs)
+
+    def commit(self) -> None:
+        self.commit_called = True
+        self._connection.commit()
+
+    def rollback(self) -> None:
+        self._connection.rollback()
+
+    def close(self) -> None:
+        self._connection.close()
