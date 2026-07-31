@@ -16,7 +16,7 @@ Market-intelligence projects often fail by mixing research, prediction, backtest
 4. Convert model outputs into proposed long-or-cash signals.
 5. Backtest those signals with realistic execution timing, transaction costs, and slippage.
 6. Pass all proposed trades through an independent risk-management layer.
-7. In a later phase, submit only explicitly approved paper-trading orders after risk approval.
+7. Submit only explicitly approved paper-trading orders after risk approval through an isolated paper-only execution layer.
 
 ## Intended Users
 
@@ -38,7 +38,7 @@ This project is not intended for live-money trading, investment advice, or autom
 - Persist data and run metadata in SQLite.
 - Expose research and backtest results through a FastAPI backend.
 - Provide an interactive Streamlit dashboard.
-- Prepare for Alpaca paper-only order submission in a later phase while explicitly prohibiting live-money trading and automatic order submission.
+- Provide explicitly invoked Alpaca paper-only order submission while explicitly prohibiting live-money trading and automatic order submission.
 - Maintain a test suite with Pytest, formatting and linting with Ruff, and static type checking with MyPy.
 
 ## Version 1 Scope
@@ -59,7 +59,7 @@ This project is not intended for live-money trading, investment advice, or autom
 - Pytest test suite.
 - Ruff linting and formatting.
 - MyPy static type checking.
-- Alpaca paper trading planned for a later development phase only.
+- Explicitly invoked Alpaca paper-trading preparation for SPY whole-share market DAY orders only.
 
 ## Explicit Non-Goals
 
@@ -145,7 +145,7 @@ Core design rules:
 15. Backtest approved trades with initial capital, cash accounting, transaction costs, and slippage.
 16. Persist backtest results, orders, positions, trades, metrics, lineage, and run metadata.
 17. Serve results through FastAPI and Streamlit.
-18. In a later phase, submit only explicitly approved, risk-approved simulated orders to Alpaca paper trading.
+18. In Phase 8, submit only explicitly approved, risk-approved simulated orders to Alpaca paper trading through the isolated paper-only adapter.
 
 ## Market-Data Provider and Adjusted-Price Policy
 
@@ -272,24 +272,32 @@ Processed datasets and model runs should record the following when available:
 
 ### Paper Execution
 
-- Reserved for a later development phase.
-- Support Alpaca paper trading only.
+- Support Alpaca paper trading only through the isolated Phase 8 adapter.
 - `EXECUTION_MODE` may only be `paper`.
 - Raise `RuntimeError` for any request for `live` execution.
 - Default `ENABLE_PAPER_EXECUTION` to `false`.
 - Default `DRY_RUN` to `true`.
+- Default the durable paper-execution kill switch to engaged.
 - Starting the application must not automatically submit paper orders.
 - Paper-order submission must require deliberate configuration and explicit approval.
 - Refuse live-money endpoints, live account configuration, or any non-paper execution mode.
-- Accept only risk-approved orders.
+- Accept only immutable paper-order instructions tied to an approved `ProposedOrder` and `RiskDecision`.
+- Require a matching human approval bound to the exact deterministic instruction fingerprint.
+- Re-evaluate the order through the independent risk engine immediately before submission.
 - Require unique signal identifiers.
 - Require unique client-order identifiers.
+- Require unique approval identifiers.
 - Reject duplicate orders.
 - Reject stale signals.
 - Provide a global kill switch.
 - Verify broker account type before order submission.
 - Verify paper endpoint before order submission.
+- Verify broker clock, account, account configuration, SPY asset, existing positions, and open orders before order submission.
 - Permit at most one open SPY position in Version 1.
+- Submit only SPY whole-share market DAY orders with `extended_hours=False`.
+- Treat timeouts or uncertain submission outcomes as unresolved local audit states and never automatically resubmit.
+- Provide explicit read-only reconciliation by `client_order_id`.
+- Keep FastAPI routes and dashboard views read-only; they may inspect local execution status but must not approve, submit, cancel, replace, reconcile, or change the kill switch.
 
 ### Database Persistence
 
@@ -386,9 +394,10 @@ Model evaluation must preserve chronological order. Candidate metrics may includ
 - `DRY_RUN` must default to `true`.
 - Starting the application must not automatically submit paper orders.
 - Paper-order submission must require deliberate configuration and explicit approval.
-- Alpaca integration is deferred to a later development phase.
+- Alpaca integration is isolated to the Phase 8 paper-only adapter.
 - Paper execution adapters must never be imported by model modules.
 - Paper execution must accept only risk-approved order instructions.
+- Paper execution must use deterministic instruction fingerprints and matching explicit approvals.
 - Paper execution must reject duplicate orders and stale signals.
 - Paper execution must require unique signal identifiers and unique client-order identifiers.
 - Paper execution must include a global kill switch.
@@ -594,10 +603,13 @@ spy-market-agent/
 
 ### Phase 8: Paper-Trading Preparation
 
-- Add paper execution interfaces.
-- Add Alpaca paper adapter only after explicit approval.
+- Add broker-independent paper execution interfaces.
+- Add immutable paper-order instructions, matching approvals, deterministic fingerprints, and durable duplicate protection.
+- Add a persistent global kill switch that defaults to engaged.
+- Add the Alpaca paper adapter only after explicit approval.
 - Enforce paper-only endpoint restrictions.
-- Add tests proving live trading cannot be configured.
+- Add read-only API and dashboard status views for local paper-execution state.
+- Add tests proving live trading cannot be configured, imports/startup do not construct broker clients, and timeout paths cannot resubmit automatically.
 
 ### Phase 9: Documentation, Polish, and Portfolio Readiness
 

@@ -7,8 +7,11 @@ from spy_market_agent.api.schemas import (
     HealthResponse,
     ModelRunDetailResponse,
     ModelRunListResponse,
+    PaperOrderAttemptResponse,
+    PaperOrderListResponse,
+    PaperTradingStatusResponse,
 )
-from spy_market_agent.api.services import MAX_PAGE_LIMIT, ReadService
+from spy_market_agent.api.services import MAX_PAGE_LIMIT, ExecutionReadRepository, ReadService
 
 __all__ = [
     "DEFAULT_SQLITE_DATABASE_PATH",
@@ -17,9 +20,13 @@ __all__ = [
     "BacktestDetailResponse",
     "BacktestRunListResponse",
     "DataStatusResponse",
+    "ExecutionReadRepository",
     "HealthResponse",
     "ModelRunDetailResponse",
     "ModelRunListResponse",
+    "PaperOrderAttemptResponse",
+    "PaperOrderListResponse",
+    "PaperTradingStatusResponse",
     "ReadService",
     "create_app",
 ]

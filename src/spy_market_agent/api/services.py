@@ -24,6 +24,9 @@ from spy_market_agent.api.schemas import (
     ModelRunSummaryResponse,
     OrderPageResponse,
     OrderRowResponse,
+    PaperOrderAttemptResponse,
+    PaperOrderListResponse,
+    PaperTradingStatusResponse,
     PredictionPageResponse,
     PredictionRowResponse,
     RiskConfigResponse,
@@ -31,6 +34,9 @@ from spy_market_agent.api.schemas import (
     RiskDecisionRowResponse,
 )
 from spy_market_agent.backtesting.models import BacktestResult
+from spy_market_agent.config import Settings
+from spy_market_agent.execution.models import PaperExecutionAttempt, PaperExecutionStatus
+from spy_market_agent.execution.repository import SQLitePaperExecutionRepository
 from spy_market_agent.market_data.models import MarketDataBatch
 from spy_market_agent.modeling.models import ClassificationMetrics, FinalTestEvaluation
 from spy_market_agent.persistence.models import BacktestRunSummary, ModelRunSummary
@@ -53,18 +59,39 @@ class ReadRepository(Protocol):
     def load_backtest_result(self, run_id: str) -> BacktestResult: ...
 
 
+class ExecutionReadRepository(Protocol):
+    def status(self, settings: Settings) -> PaperExecutionStatus: ...
+
+    def list_attempts(self, *, limit: int, offset: int) -> tuple[PaperExecutionAttempt, ...]: ...
+
+    def count_attempts(self) -> int: ...
+
+    def get_attempt(self, client_order_id: str) -> PaperExecutionAttempt: ...
+
+
 T = TypeVar("T")
 
 
 class ReadService:
     """Read-only service layer for persisted research artifacts."""
 
-    def __init__(self, repository: ReadRepository) -> None:
+    def __init__(
+        self,
+        repository: ReadRepository,
+        *,
+        execution_repository: ExecutionReadRepository | None = None,
+        settings: Settings | None = None,
+    ) -> None:
         self._repository = repository
+        self._execution_repository = execution_repository
+        self._settings = settings or Settings()
 
     @classmethod
     def from_database_path(cls, database_path: str) -> ReadService:
-        return cls(SQLiteArtifactRepository(database_path))
+        return cls(
+            SQLiteArtifactRepository(database_path),
+            execution_repository=SQLitePaperExecutionRepository(database_path),
+        )
 
     def data_status(self) -> DataStatusResponse:
         batch = self._repository.load_latest_market_data_batch()
@@ -310,6 +337,33 @@ class ReadService:
             ],
         )
 
+    def paper_trading_status(self) -> PaperTradingStatusResponse:
+        repository = self._require_execution_repository()
+        return _paper_status_response(repository.status(self._settings))
+
+    def paper_orders(self, *, limit: int, offset: int) -> PaperOrderListResponse:
+        limit, offset = validate_pagination(limit=limit, offset=offset)
+        repository = self._require_execution_repository()
+        return PaperOrderListResponse(
+            items=[
+                _paper_attempt_response(attempt)
+                for attempt in repository.list_attempts(limit=limit, offset=offset)
+            ],
+            total=repository.count_attempts(),
+            limit=limit,
+            offset=offset,
+        )
+
+    def paper_order_detail(self, client_order_id: str) -> PaperOrderAttemptResponse:
+        return _paper_attempt_response(
+            self._require_execution_repository().get_attempt(client_order_id)
+        )
+
+    def _require_execution_repository(self) -> ExecutionReadRepository:
+        if self._execution_repository is None:
+            raise RuntimeError("paper-execution repository is not configured.")
+        return self._execution_repository
+
 
 def validate_pagination(*, limit: int, offset: int) -> tuple[int, int]:
     if isinstance(limit, bool) or limit < 1 or limit > MAX_PAGE_LIMIT:
@@ -409,6 +463,52 @@ def _risk_config(config: RiskConfig) -> RiskConfigResponse:
     )
 
 
+def _paper_status_response(status: PaperExecutionStatus) -> PaperTradingStatusResponse:
+    return PaperTradingStatusResponse(
+        kill_switch_engaged=status.kill_switch_engaged,
+        execution_mode=status.execution_mode,
+        paper_execution_enabled=status.paper_execution_enabled,
+        dry_run=status.dry_run,
+        alpaca_api_key_present=status.alpaca_api_key_present,
+        alpaca_secret_key_present=status.alpaca_secret_key_present,
+        last_local_attempt_status=status.last_local_attempt_status,
+        last_successful_submission_at_utc=None
+        if status.last_successful_submission_at_utc is None
+        else datetime_to_text(status.last_successful_submission_at_utc),
+        unresolved_submission_count=status.unresolved_submission_count,
+    )
+
+
+def _paper_attempt_response(attempt: PaperExecutionAttempt) -> PaperOrderAttemptResponse:
+    return PaperOrderAttemptResponse(
+        signal_id=attempt.signal_id,
+        client_order_id=attempt.client_order_id,
+        approval_id=attempt.approval_id,
+        instruction_fingerprint=attempt.instruction_fingerprint,
+        execution_schema_version=attempt.execution_schema_version,
+        symbol=attempt.symbol,
+        side=attempt.side,
+        quantity=attempt.quantity,
+        signal_session=date_to_text(attempt.signal_session),
+        execution_session=date_to_text(attempt.execution_session),
+        instruction_created_at_utc=datetime_to_text(attempt.instruction_created_at_utc),
+        expires_at_utc=datetime_to_text(attempt.expires_at_utc),
+        approval_at_utc=datetime_to_text(attempt.approval_at_utc),
+        approval_source=attempt.approval_source,
+        original_risk_approved=attempt.original_risk_approved,
+        execution_risk_approved=attempt.execution_risk_approved,
+        attempt_status=attempt.attempt_status,
+        broker_order_id=attempt.broker_order_id,
+        broker_status=attempt.broker_status,
+        broker_environment=attempt.broker_environment,
+        account_id_fingerprint=attempt.account_id_fingerprint,
+        sanitized_request_id=attempt.sanitized_request_id,
+        created_at_utc=datetime_to_text(attempt.created_at_utc),
+        updated_at_utc=datetime_to_text(attempt.updated_at_utc),
+        failure_code=attempt.failure_code,
+    )
+
+
 def _split_spec_dict(spec: object) -> dict[str, str]:
     split = cast(Any, spec)
     return {
@@ -439,4 +539,10 @@ def _finite(value: object, field_name: str) -> float:
     return parsed
 
 
-__all__ = ["MAX_PAGE_LIMIT", "ReadRepository", "ReadService", "validate_pagination"]
+__all__ = [
+    "MAX_PAGE_LIMIT",
+    "ExecutionReadRepository",
+    "ReadRepository",
+    "ReadService",
+    "validate_pagination",
+]
