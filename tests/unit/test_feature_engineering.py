@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any, cast
@@ -8,6 +9,7 @@ from typing import Any, cast
 import pandas as pd
 import pytest
 
+import spy_market_agent.features.models as feature_models
 from spy_market_agent.datasets.labels import build_forward_label_set
 from spy_market_agent.datasets.models import TradingCostAssumptions
 from spy_market_agent.features.engineering import build_trailing_feature_set
@@ -81,6 +83,23 @@ def replace_close_at(frame: pd.DataFrame, session: date, close: float) -> pd.Dat
     changed.loc[row, "high"] = max(float(changed.loc[row, "open"].iloc[0]), close) + 1.0
     changed.loc[row, "low"] = min(float(changed.loc[row, "open"].iloc[0]), close) - 1.0
     return changed
+
+
+def rebuild_feature_set(feature_set: FeatureSet, **overrides: object) -> FeatureSet:
+    values: dict[str, object] = {
+        "data": feature_set.data,
+        "source_market_data_checksum": feature_set.source_market_data_checksum,
+        "source_schema_version": feature_set.source_schema_version,
+        "feature_schema_version": feature_set.feature_schema_version,
+        "feature_columns": feature_set.feature_columns,
+        "first_feature_session": feature_set.first_feature_session,
+        "last_feature_session": feature_set.last_feature_session,
+        "row_count": feature_set.row_count,
+        "trailing_warmup_rows_excluded": feature_set.trailing_warmup_rows_excluded,
+        "created_at": feature_set.created_at,
+    }
+    values.update(overrides)
+    return FeatureSet(**values)  # type: ignore[arg-type]
 
 
 def std_ddof_zero(values: list[float]) -> float:
@@ -289,3 +308,111 @@ def test_non_string_or_malformed_feature_checksum_fails_with_structured_error(
         )
 
     assert "invalid_source_market_data_checksum" in exc_info.value.codes
+
+
+def test_feature_scalar_helpers_reject_malformed_values() -> None:
+    with pytest.raises(FeatureEngineeringError, match="invalid_created_at"):
+        feature_models.require_aware_utc("2024-12-31", field_name="created_at")
+    with pytest.raises(FeatureEngineeringError, match="naive_created_at"):
+        feature_models.require_aware_utc(CREATED_AT.replace(tzinfo=None), field_name="created_at")
+    with pytest.raises(FeatureEngineeringError, match=r"plain datetime\.date"):
+        feature_models.require_plain_date(CREATED_AT, field_name="session")
+    assert not feature_models.is_finite_float(object())
+
+
+@pytest.mark.parametrize(
+    ("overrides", "expected_code"),
+    [
+        ({"source_schema_version": "wrong"}, "invalid_source_schema_version"),
+        ({"feature_schema_version": "wrong"}, "invalid_feature_schema_version"),
+        ({"feature_columns": list(FEATURE_COLUMNS)}, "invalid_feature_columns"),
+        ({"feature_columns": tuple(reversed(FEATURE_COLUMNS))}, "invalid_feature_columns"),
+        ({"row_count": True}, "invalid_row_count"),
+        ({"trailing_warmup_rows_excluded": 0}, "invalid_warmup_row_count"),
+    ],
+)
+def test_feature_set_rejects_malformed_metadata(
+    overrides: dict[str, object],
+    expected_code: str,
+) -> None:
+    feature_set = build_trailing_feature_set(validate_frame(make_frame(25)), created_at=CREATED_AT)
+
+    with pytest.raises(FeatureEngineeringError) as exc_info:
+        rebuild_feature_set(feature_set, **overrides)
+
+    assert expected_code in exc_info.value.codes
+
+
+def shuffled_feature_columns(frame: pd.DataFrame) -> pd.DataFrame:
+    return frame[["session", FEATURE_COLUMNS[1], FEATURE_COLUMNS[0], *FEATURE_COLUMNS[2:]]]
+
+
+def integer_feature_dtype(frame: pd.DataFrame) -> pd.DataFrame:
+    return frame.assign(**{FEATURE_COLUMNS[0]: frame[FEATURE_COLUMNS[0]].astype("int64")})
+
+
+def infinite_feature_value(frame: pd.DataFrame) -> pd.DataFrame:
+    return frame.assign(**{FEATURE_COLUMNS[0]: float("inf")})
+
+
+@pytest.mark.parametrize(
+    ("mutate", "expected_code"),
+    [
+        (shuffled_feature_columns, "invalid_feature_frame_columns"),
+        (lambda frame: frame.iloc[0:0].copy(), "empty_feature_set"),
+        (integer_feature_dtype, "invalid_feature_dtype"),
+        (infinite_feature_value, "undefined_feature_value"),
+    ],
+)
+def test_feature_set_rejects_malformed_frame_state(
+    mutate: Callable[[pd.DataFrame], pd.DataFrame],
+    expected_code: str,
+) -> None:
+    feature_set = build_trailing_feature_set(validate_frame(make_frame(25)), created_at=CREATED_AT)
+    frame = mutate(feature_set.data.copy(deep=True))
+    row_count = len(frame)
+    first_feature_session = (
+        frame.iloc[0]["session"] if not frame.empty else feature_set.first_feature_session
+    )
+    last_feature_session = (
+        frame.iloc[-1]["session"] if not frame.empty else feature_set.last_feature_session
+    )
+
+    with pytest.raises(FeatureEngineeringError) as exc_info:
+        rebuild_feature_set(
+            feature_set,
+            data=frame,
+            row_count=row_count,
+            first_feature_session=first_feature_session,
+            last_feature_session=last_feature_session,
+        )
+
+    assert expected_code in exc_info.value.codes
+
+
+def test_feature_set_rejects_session_metadata_and_order_mismatches() -> None:
+    feature_set = build_trailing_feature_set(validate_frame(make_frame(25)), created_at=CREATED_AT)
+    duplicate_sessions = feature_set.data.copy(deep=True)
+    duplicate_sessions.loc[duplicate_sessions.index[-1], "session"] = duplicate_sessions.iloc[0][
+        "session"
+    ]
+    reversed_sessions = feature_set.data.iloc[::-1].reset_index(drop=True)
+
+    with pytest.raises(FeatureEngineeringError) as first_mismatch:
+        rebuild_feature_set(feature_set, first_feature_session=date(2024, 1, 2))
+    with pytest.raises(FeatureEngineeringError) as last_mismatch:
+        rebuild_feature_set(feature_set, last_feature_session=date(2024, 1, 2))
+    with pytest.raises(FeatureEngineeringError) as duplicates:
+        rebuild_feature_set(feature_set, data=duplicate_sessions)
+    with pytest.raises(FeatureEngineeringError) as unordered:
+        rebuild_feature_set(
+            feature_set,
+            data=reversed_sessions,
+            first_feature_session=reversed_sessions.iloc[0]["session"],
+            last_feature_session=reversed_sessions.iloc[-1]["session"],
+        )
+
+    assert "first_feature_session_mismatch" in first_mismatch.value.codes
+    assert "last_feature_session_mismatch" in last_mismatch.value.codes
+    assert "duplicate_feature_sessions" in duplicates.value.codes
+    assert "unordered_feature_sessions" in unordered.value.codes

@@ -223,6 +223,37 @@ def test_market_data_batch_direct_construction_rejects_bad_checksum() -> None:
         MarketDataBatch(data=frame, metadata=metadata)
 
 
+def test_market_data_checksum_rejects_noncanonical_column_order() -> None:
+    frame = make_frame()[["session", "open", "low", "high", "close", "volume"]]
+
+    with pytest.raises(ValueError, match="canonical column order"):
+        compute_market_data_checksum(frame)
+
+
+@pytest.mark.parametrize(
+    ("column", "bad_value", "message"),
+    [
+        ("open", True, "must not be boolean"),
+        ("high", object(), "float64-compatible"),
+        ("low", float("inf"), "must be finite"),
+        ("volume", True, "must not be boolean"),
+        ("volume", object(), "int64-compatible"),
+        ("volume", 100.5, "integer values"),
+    ],
+)
+def test_market_data_checksum_rejects_malformed_ohlcv_values(
+    column: str,
+    bad_value: object,
+    message: str,
+) -> None:
+    frame = make_frame()
+    frame[column] = frame[column].astype("object")
+    frame.at[0, column] = bad_value
+
+    with pytest.raises(ValueError, match=message):
+        compute_market_data_checksum(frame)
+
+
 def test_market_data_batch_direct_construction_rejects_bad_first_session() -> None:
     frame = make_frame()
     metadata = make_metadata_for_frame(frame, first_session=date(2024, 1, 3))

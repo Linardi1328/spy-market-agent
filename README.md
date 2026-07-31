@@ -268,6 +268,12 @@ Run tests:
 pytest
 ```
 
+Run the dedicated full-suite coverage gate:
+
+```bash
+pytest --cov-fail-under=85
+```
+
 Run linting:
 
 ```bash

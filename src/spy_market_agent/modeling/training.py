@@ -63,7 +63,6 @@ def build_candidate_estimator(model_name: ModelName | str, *, random_seed: int) 
                 (
                     "classifier",
                     LogisticRegression(
-                        penalty="l2",
                         C=1.0,
                         solver="liblinear",
                         max_iter=2000,

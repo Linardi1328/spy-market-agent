@@ -442,7 +442,6 @@ def validate_estimator_learned_binary_classes(
 
 def _canonical_logistic_classifier(random_seed: int) -> LogisticRegression:
     return LogisticRegression(
-        penalty="l2",
         C=1.0,
         solver="liblinear",
         max_iter=2000,
@@ -1550,7 +1549,7 @@ def fixed_model_parameters(model_name: object, *, random_seed: int) -> ModelPara
                 ("estimator", "Pipeline"),
                 ("scaler", "StandardScaler"),
                 ("classifier", "LogisticRegression"),
-                ("classifier.penalty", "l2"),
+                ("classifier.l1_ratio", 0.0),
                 ("classifier.C", 1.0),
                 ("classifier.solver", "liblinear"),
                 ("classifier.max_iter", 2000),

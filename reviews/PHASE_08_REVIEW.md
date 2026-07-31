@@ -897,7 +897,7 @@ New cherry-picked SHAs on the concurrency-hardening branch:
 
 Final concurrency-hardening commit SHA:
 
-- Reported in the final Codex response after the commit is created and pushed.
+- `ae3d390` after the PR #9 rebase onto `origin/main`.
 
 Concurrency finding corrected:
 
@@ -1031,3 +1031,27 @@ Confirmations:
 - Earlier Phase 8 branches were not modified.
 - Phase 9 was not started.
 - No live trading, `paper=False` client, live endpoint, automatic execution, automatic retry, short selling, leverage, margin, fractional shares, non-SPY asset, scheduler, background worker, authentication, deployment, API write route, dashboard execution control, cancellation, replacement, or liquidation functionality was introduced.
+
+## Phase 8 PR #9 Merge Resolution Addendum
+
+PR #9 branch:
+
+- `review/phase-08-concurrency-hardening`
+
+Actual Phase 8 merge commit now present on `main`:
+
+- `846db31158723d43a2aa66004e2d31e0beb20378`
+
+Rebased PR #9 commits retained above the already merged Phase 8 final-hardening work:
+
+- `03d59d2` - `fix: close final phase 8 execution safety gaps`
+- `ae3d390` - `fix: prevent concurrent phase 8 session submissions`
+
+Merge-resolution notes:
+
+- The PR branch originally carried duplicated Phase 8 implementation, correction, and final-hardening commits that were already represented in `main` through PR #7.
+- The conflict resolution preserved the final-hardening implementation already on `main` and replayed only the final-safety and concurrency changes.
+- README and this review file were kept to a single current history without duplicated conflict-resolution sections.
+- The dual kill switches, mandatory regular-market-hours rule, refreshed broker-clock check, exclusive expiration boundary, post-submit ledger-failure handling, repository state machine, paper-only restrictions, and symbol/session concurrency protections are now represented on `main`.
+- The SQLite unique index `ux_paper_execution_attempt_symbol_session` is included in the merged Phase 8 schema.
+- Phase 9 was not started during the PR #9 merge-resolution work.
