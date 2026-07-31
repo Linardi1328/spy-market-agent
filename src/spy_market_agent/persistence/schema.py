@@ -361,6 +361,9 @@ CREATE TABLE IF NOT EXISTS paper_execution_attempts (
     failure_code TEXT
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS ux_paper_execution_attempt_symbol_session
+ON paper_execution_attempts(symbol, execution_session);
+
 CREATE TABLE IF NOT EXISTS paper_execution_events (
     event_id INTEGER PRIMARY KEY AUTOINCREMENT,
     signal_id TEXT,
@@ -431,6 +434,7 @@ def validate_schema_version(connection: sqlite3.Connection) -> None:
             "schema_migration_required",
             "database requires explicit Phase 8 schema migration.",
         )
+    _validate_required_indexes(connection)
 
 
 def _schema_versions(connection: sqlite3.Connection) -> set[str]:
@@ -444,6 +448,21 @@ def _reject_unsupported_versions(versions: set[str]) -> None:
         raise PersistenceSchemaError(
             "unsupported_schema_version",
             "database schema version is newer or unsupported by this application.",
+        )
+
+
+def _validate_required_indexes(connection: sqlite3.Connection) -> None:
+    row = connection.execute(
+        """
+        SELECT name
+        FROM sqlite_master
+        WHERE type = 'index' AND name = 'ux_paper_execution_attempt_symbol_session'
+        """
+    ).fetchone()
+    if row is None:
+        raise PersistenceSchemaError(
+            "missing_required_index",
+            "database schema is missing a required paper-execution index.",
         )
 
 

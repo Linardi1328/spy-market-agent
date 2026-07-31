@@ -29,11 +29,41 @@ def test_paper_trading_status_route_is_read_only_and_uses_local_ledger(
     assert response.status_code == 200
     payload = response.json()
     assert payload["kill_switch_engaged"] is True
+    assert payload["configuration_kill_switch_engaged"] is True
+    assert payload["durable_kill_switch_engaged"] is True
+    assert payload["effective_kill_switch_engaged"] is True
     assert payload["paper_execution_enabled"] is False
     assert payload["dry_run"] is True
     assert payload["alpaca_api_key_present"] is False
     assert payload["alpaca_secret_key_present"] is False
     assert "not investment advice" in payload["limitation"].lower()
+
+
+def test_paper_trading_status_effective_kill_switch_is_configuration_or_durable(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "phase8.sqlite3"
+    initialize_database(database_path)
+    repository = SQLitePaperExecutionRepository(database_path)
+    repository.set_paper_execution_kill_switch(
+        engaged=False,
+        reason="explicit_api_test",
+        updated_at_utc=make_instruction().created_at_utc,
+        confirmation="DISENGAGE_PAPER_EXECUTION_KILL_SWITCH",
+    )
+    client = TestClient(
+        create_app(
+            database_path=str(database_path),
+            settings=Settings(paper_execution_kill_switch=True),
+        )
+    )
+
+    payload = client.get("/api/v1/paper-trading/status").json()
+
+    assert payload["configuration_kill_switch_engaged"] is True
+    assert payload["durable_kill_switch_engaged"] is False
+    assert payload["effective_kill_switch_engaged"] is True
+    assert payload["kill_switch_engaged"] is True
 
 
 def test_paper_order_list_and_detail_routes_return_persisted_attempts(

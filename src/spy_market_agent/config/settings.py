@@ -69,6 +69,14 @@ class Settings(BaseSettings):
     def _validate_execution_mode(cls, value: str) -> str:
         return _require_value(value, expected="paper", field_name="execution_mode")
 
+    @field_validator("paper_execution_require_market_open")
+    @classmethod
+    def _validate_market_open_required(cls, value: bool) -> bool:
+        if value is not True:
+            msg = "paper_execution_require_market_open must be true for Phase 8."
+            raise ValueError(msg)
+        return value
+
     @field_validator("market_symbol")
     @classmethod
     def _validate_market_symbol(cls, value: str) -> str:
@@ -111,7 +119,12 @@ class Settings(BaseSettings):
     def paper_order_submission_enabled(self) -> bool:
         """Whether future paper-order submission would be permitted by configuration only."""
 
-        return self.execution_mode == "paper" and self.enable_paper_execution and not self.dry_run
+        return (
+            self.execution_mode == "paper"
+            and self.enable_paper_execution
+            and not self.dry_run
+            and not self.paper_execution_kill_switch
+        )
 
     def display_safe_dict(self) -> dict[str, Any]:
         """Return settings suitable for display without revealing secret values."""

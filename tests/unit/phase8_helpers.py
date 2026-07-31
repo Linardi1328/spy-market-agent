@@ -172,6 +172,7 @@ class FakePaperBroker:
         account: BrokerAccountSnapshot | None = None,
         account_configuration: BrokerAccountConfigurationSnapshot | None = None,
         clock: BrokerClockSnapshot | None = None,
+        clock_sequence: tuple[BrokerClockSnapshot | BaseException, ...] = (),
         asset: BrokerAssetSnapshot | None = None,
     ) -> None:
         self.environment = environment or BrokerEnvironmentSnapshot(
@@ -205,6 +206,8 @@ class FakePaperBroker:
             next_open=BROKER_TIME + timedelta(days=1),
             next_close=BROKER_TIME + timedelta(hours=6),
         )
+        self.clock_sequence = clock_sequence
+        self.clock_calls = 0
         self.asset = asset or BrokerAssetSnapshot(
             symbol="SPY",
             active=True,
@@ -235,6 +238,13 @@ class FakePaperBroker:
 
     def get_clock(self) -> BrokerClockSnapshot:
         self.operation_log.append("get_clock")
+        if self.clock_calls < len(self.clock_sequence):
+            item = self.clock_sequence[self.clock_calls]
+            self.clock_calls += 1
+            if isinstance(item, BaseException):
+                raise item
+            return item
+        self.clock_calls += 1
         return self.clock
 
     def get_asset(self, symbol: str) -> BrokerAssetSnapshot:

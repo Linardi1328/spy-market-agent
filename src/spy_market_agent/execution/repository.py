@@ -188,6 +188,7 @@ class SQLitePaperExecutionRepository:
         connection = self._connect()
         try:
             connection.execute("BEGIN IMMEDIATE")
+            _require_symbol_execution_session_available(connection, instruction=instruction)
             connection.execute(
                 """
                 INSERT INTO paper_execution_attempts (
@@ -232,13 +233,33 @@ class SQLitePaperExecutionRepository:
                 safe_reason_code="reserved",
                 safe_metadata={"approval_id": approval.approval_id},
             )
+            reserved = _get_attempt_from_connection(connection, instruction.client_order_id)
             connection.commit()
-            return _get_attempt_from_connection(connection, instruction.client_order_id)
+            return reserved
+        except PaperExecutionDuplicateError:
+            connection.rollback()
+            raise
+        except PaperExecutionNotFoundError as exc:
+            connection.rollback()
+            raise PaperExecutionIntegrityError(
+                "attempt_reservation_failed",
+                "paper-execution attempt could not be reserved.",
+            ) from exc
+        except PaperExecutionIntegrityError:
+            connection.rollback()
+            raise
         except sqlite3.IntegrityError as exc:
             connection.rollback()
-            raise PaperExecutionDuplicateError(
-                "duplicate_execution_identifier",
-                "signal_id, client_order_id, or approval_id has already been reserved.",
+            if _is_execution_session_unique_error(exc):
+                raise _execution_session_duplicate_error() from exc
+            if _is_identifier_unique_error(exc):
+                raise PaperExecutionDuplicateError(
+                    "duplicate_execution_identifier",
+                    "signal_id, client_order_id, or approval_id has already been reserved.",
+                ) from exc
+            raise PaperExecutionIntegrityError(
+                "attempt_reservation_failed",
+                "paper-execution attempt could not be reserved.",
             ) from exc
         except sqlite3.Error as exc:
             connection.rollback()
@@ -308,9 +329,10 @@ class SQLitePaperExecutionRepository:
                 safe_reason_code=status,
                 safe_metadata={"broker_status": receipt.broker_order_status},
             )
+            updated = _get_attempt_from_connection(connection, receipt.client_order_id)
             connection.commit()
-            return _get_attempt_from_connection(connection, receipt.client_order_id)
-        except PaperExecutionIntegrityError:
+            return updated
+        except (PaperExecutionIntegrityError, PaperExecutionNotFoundError):
             connection.rollback()
             raise
         except sqlite3.Error as exc:
@@ -536,8 +558,16 @@ class SQLitePaperExecutionRepository:
                 """,
                 (PAPER_ATTEMPT_RESERVED, PAPER_ATTEMPT_SUBMISSION_UNKNOWN),
             ).fetchone()[0]
+            configuration_kill_switch_engaged = settings.paper_execution_kill_switch
+            durable_kill_switch_engaged = control.kill_switch_engaged
+            effective_kill_switch_engaged = (
+                configuration_kill_switch_engaged or durable_kill_switch_engaged
+            )
             return PaperExecutionStatus(
-                kill_switch_engaged=control.kill_switch_engaged,
+                configuration_kill_switch_engaged=configuration_kill_switch_engaged,
+                durable_kill_switch_engaged=durable_kill_switch_engaged,
+                effective_kill_switch_engaged=effective_kill_switch_engaged,
+                kill_switch_engaged=effective_kill_switch_engaged,
                 execution_mode=settings.execution_mode,
                 paper_execution_enabled=settings.enable_paper_execution,
                 dry_run=settings.dry_run,
@@ -679,6 +709,54 @@ def _validate_receipt_against_attempt(
             "receipt_environment_mismatch",
             "broker receipt environment does not match the approved paper ledger.",
         )
+
+
+def _require_symbol_execution_session_available(
+    connection: sqlite3.Connection,
+    *,
+    instruction: PaperOrderInstruction,
+) -> None:
+    row = connection.execute(
+        """
+        SELECT 1
+        FROM paper_execution_attempts
+        WHERE symbol = ? AND execution_session = ?
+        LIMIT 1
+        """,
+        (
+            instruction.proposed_order.symbol,
+            date_to_text(instruction.proposed_order.execution_session),
+        ),
+    ).fetchone()
+    if row is not None:
+        raise _execution_session_duplicate_error()
+
+
+def _execution_session_duplicate_error() -> PaperExecutionDuplicateError:
+    return PaperExecutionDuplicateError(
+        "execution_session_already_reserved",
+        "a paper-execution attempt already exists for this symbol and execution session.",
+    )
+
+
+def _is_execution_session_unique_error(exc: sqlite3.IntegrityError) -> bool:
+    message = str(exc).lower()
+    return "ux_paper_execution_attempt_symbol_session" in message or (
+        "paper_execution_attempts.symbol" in message
+        and "paper_execution_attempts.execution_session" in message
+    )
+
+
+def _is_identifier_unique_error(exc: sqlite3.IntegrityError) -> bool:
+    message = str(exc).lower()
+    return any(
+        token in message
+        for token in (
+            "paper_execution_attempts.client_order_id",
+            "paper_execution_attempts.signal_id",
+            "paper_execution_attempts.approval_id",
+        )
+    )
 
 
 def _require_signal_matches(signal_id: str, *, prior: PaperExecutionAttempt) -> None:
