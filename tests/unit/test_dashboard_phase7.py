@@ -145,6 +145,43 @@ class FakeClient:
             "items": items,
         }
 
+    def paper_trading_status(self) -> dict[str, Any]:
+        return {
+            "kill_switch_engaged": True,
+            "execution_mode": "paper",
+            "paper_execution_enabled": False,
+            "dry_run": True,
+            "alpaca_api_key_present": False,
+            "alpaca_secret_key_present": False,
+            "last_local_attempt_status": None,
+            "last_successful_submission_at_utc": None,
+            "unresolved_submission_count": 0,
+        }
+
+    def paper_orders(self, *, limit: int = 100, offset: int = 0) -> dict[str, Any]:
+        items = (
+            [
+                {
+                    "client_order_id": "paper-order-1",
+                    "signal_id": "signal-1",
+                    "side": "buy",
+                    "quantity": 10,
+                    "attempt_status": "accepted",
+                    "broker_status": "accepted",
+                    "updated_at_utc": "2025-01-03T15:30:00Z",
+                    "failure_code": None,
+                }
+            ]
+            if self.populated
+            else []
+        )
+        return {
+            "total": len(items),
+            "limit": limit,
+            "offset": offset,
+            "items": items,
+        }
+
 
 class PaginatedFakeClient(FakeClient):
     def __init__(
@@ -253,6 +290,22 @@ class PaginatedFakeClient(FakeClient):
         ]
         return _page(run_id=run_id, total=self.fill_total, limit=limit, offset=offset, items=items)
 
+    def paper_orders(self, *, limit: int = 100, offset: int = 0) -> dict[str, Any]:
+        items = [
+            {
+                "client_order_id": f"paper-order-{index}",
+                "signal_id": f"signal-{index}",
+                "side": "buy",
+                "quantity": 10,
+                "attempt_status": "accepted",
+                "broker_status": "accepted",
+                "updated_at_utc": _session(index),
+                "failure_code": None,
+            }
+            for index in range(offset, min(offset + limit, 125))
+        ]
+        return {"total": 125, "limit": limit, "offset": offset, "items": items}
+
 
 def _page(
     *,
@@ -283,7 +336,7 @@ class FakeStreamlit:
         def recorder(*args: object, **_kwargs: object) -> object:
             self.text.extend(str(arg) for arg in args)
             if name == "tabs":
-                return [FakeTab(), FakeTab(), FakeTab(), FakeTab(), FakeTab()]
+                return [FakeTab(), FakeTab(), FakeTab(), FakeTab(), FakeTab(), FakeTab()]
             if name == "line_chart" and args:
                 self.line_charts.append(args[0])
             if name == "dataframe" and args and isinstance(args[0], pd.DataFrame):
@@ -339,6 +392,18 @@ def test_dashboard_rendering_shows_required_warning_and_no_write_controls() -> N
         order_rows=PaginatedItems.empty(),
         risk_decision_rows=PaginatedItems.empty(),
         fill_rows=PaginatedItems.empty(),
+        paper_trading_status={
+            "kill_switch_engaged": True,
+            "execution_mode": "paper",
+            "paper_execution_enabled": False,
+            "dry_run": True,
+            "alpaca_api_key_present": False,
+            "alpaca_secret_key_present": False,
+            "last_local_attempt_status": None,
+            "last_successful_submission_at_utc": None,
+            "unresolved_submission_count": 0,
+        },
+        paper_order_rows=PaginatedItems.empty(),
     )
 
     render_dashboard(streamlit, state)
@@ -356,8 +421,9 @@ def test_dashboard_import_smoke_public_exports_and_no_database_access() -> None:
 
     assert "DashboardApiClient" in dashboard.__all__
     assert "persistence" not in source + app_source + client_source
+    assert "alpaca_paper" not in (source + app_source + client_source).lower()
+    assert "execution.repository" not in source + app_source + client_source
     assert "button" not in (source + app_source + client_source).lower()
-    assert "broker" not in (source + app_source + client_source).lower()
     assert "not investment advice" in DASHBOARD_WARNING.lower()
 
 
@@ -423,6 +489,29 @@ def test_dashboard_rendering_uses_authoritative_metrics_and_preview_labels() -> 
     assert "Showing 250 of 1200 orders." in rendered_text
     assert "Showing 250 of 1200 risk decisions." in rendered_text
     assert "Showing 250 of 900 fills." in rendered_text
+    assert "Showing 100 of 125 paper-order attempts." in rendered_text
+
+
+def test_dashboard_paper_status_view_is_read_only_and_redacted() -> None:
+    state = load_dashboard_state(PaginatedFakeClient())
+    streamlit = FakeStreamlit()
+
+    render_dashboard(streamlit, state)
+    rendered_text = " ".join(streamlit.text).lower()
+    status_frames = [
+        frame for frame in streamlit.dataframes if "alpaca_api_key_present" in frame.columns
+    ]
+
+    assert state.paper_trading_status is not None
+    assert "paper trading status" in rendered_text
+    assert "paper trading only" in rendered_text
+    assert "not investment advice" in rendered_text
+    assert "approve order" not in rendered_text
+    assert "cancel" not in rendered_text
+    assert "liquidate" not in rendered_text
+    assert status_frames
+    assert status_frames[0].loc[0, "alpaca_api_key_present"] == "not present"
+    assert status_frames[0].loc[0, "alpaca_secret_key_present"] == "not present"
 
 
 @pytest.mark.parametrize(
@@ -484,6 +573,8 @@ def test_dashboard_charts_convert_valid_exact_strings_without_mutating_tables() 
         order_rows=PaginatedItems.empty(),
         risk_decision_rows=PaginatedItems.empty(),
         fill_rows=PaginatedItems.empty(),
+        paper_trading_status=None,
+        paper_order_rows=PaginatedItems.empty(),
     )
 
     render_dashboard(streamlit, state)
@@ -519,6 +610,8 @@ def test_dashboard_rejects_malformed_nan_and_infinite_chart_values_gracefully(
         order_rows=PaginatedItems.empty(),
         risk_decision_rows=PaginatedItems.empty(),
         fill_rows=PaginatedItems.empty(),
+        paper_trading_status=None,
+        paper_order_rows=PaginatedItems.empty(),
     )
 
     render_dashboard(streamlit, state)
