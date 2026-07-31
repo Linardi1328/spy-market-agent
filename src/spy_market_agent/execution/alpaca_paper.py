@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import cast
@@ -23,9 +24,9 @@ from spy_market_agent.execution.models import (
     BrokerClockSnapshot,
     BrokerEnvironmentSnapshot,
     BrokerOpenOrderSnapshot,
+    BrokerOrderSnapshot,
     BrokerPositionSnapshot,
     PaperOrderInstruction,
-    PaperOrderReceipt,
     finite_decimal,
     whole_quantity,
 )
@@ -161,7 +162,7 @@ class AlpacaPaperBroker:
             ) from exc
         return tuple(_open_order_snapshot(order) for order in orders)
 
-    def get_order_by_client_order_id(self, client_order_id: str) -> PaperOrderReceipt | None:
+    def get_order_by_client_order_id(self, client_order_id: str) -> BrokerOrderSnapshot | None:
         parsed_client_id = require_execution_id(client_order_id, field_name="client_order_id")
         try:
             order = self._client.get_order_by_client_id(parsed_client_id)
@@ -172,12 +173,18 @@ class AlpacaPaperBroker:
                 "broker_order_lookup_unavailable",
                 "broker order lookup is unavailable.",
             ) from exc
-        return _receipt_from_order(order)
+        try:
+            return _snapshot_from_order(order)
+        except Exception as exc:
+            raise PaperExecutionBrokerTransportError(
+                "broker_order_lookup_unavailable",
+                "broker order lookup is unavailable.",
+            ) from exc
 
     def submit_market_day_order(
         self,
         instruction: PaperOrderInstruction,
-    ) -> PaperOrderReceipt:
+    ) -> BrokerOrderSnapshot:
         side = _alpaca_side(instruction.proposed_order.side)
         quantity = whole_quantity(instruction.proposed_order.quantity, field_name="quantity")
         request = MarketOrderRequest(
@@ -190,22 +197,29 @@ class AlpacaPaperBroker:
         )
         try:
             order = self._client.submit_order(order_data=request)
+        except asyncio.CancelledError as exc:
+            raise PaperExecutionSubmissionUnknownError(
+                "broker_submission_outcome_unknown",
+                "paper-order submission outcome is unknown; do not resubmit automatically.",
+            ) from exc
         except Exception as exc:
             raise PaperExecutionSubmissionUnknownError(
                 "broker_submission_outcome_unknown",
                 "paper-order submission outcome is unknown; do not resubmit automatically.",
             ) from exc
-        receipt = _receipt_from_order(
-            order,
-            expected_instruction=instruction,
-            expected_quantity=quantity,
-        )
-        if receipt.instruction_fingerprint != instruction.instruction_fingerprint:
-            raise PaperExecutionBrokerStateError(
-                "invalid_broker_receipt",
-                "broker order response did not match the submitted instruction.",
+        try:
+            snapshot = _snapshot_from_order(order)
+            _validate_snapshot_matches_instruction(
+                snapshot,
+                instruction=instruction,
+                expected_quantity=quantity,
             )
-        return receipt
+            return snapshot
+        except Exception as exc:
+            raise PaperExecutionSubmissionUnknownError(
+                "broker_submission_outcome_unknown",
+                "paper-order submission outcome is unknown; do not resubmit automatically.",
+            ) from exc
 
 
 def _alpaca_side(side: str) -> OrderSide:
@@ -216,63 +230,19 @@ def _alpaca_side(side: str) -> OrderSide:
     raise PaperExecutionBrokerStateError("invalid_order_side", "order side is unsupported.")
 
 
-def _receipt_from_order(
-    order: object,
-    *,
-    expected_instruction: PaperOrderInstruction | None = None,
-    expected_quantity: int | None = None,
-) -> PaperOrderReceipt:
+def _snapshot_from_order(order: object) -> BrokerOrderSnapshot:
     client_order_id = require_execution_id(
         _field(order, "client_order_id"),
         field_name="client_order_id",
     )
-    signal_id = (
-        expected_instruction.signal_id
-        if expected_instruction is not None
-        else _safe_optional_id(_optional_field(order, "signal_id")) or client_order_id
-    )
-    fingerprint = (
-        expected_instruction.instruction_fingerprint
-        if expected_instruction is not None
-        else sha256_hexdigest(client_order_id)
-    )
     side = _project_side(_field(order, "side"))
     quantity = _whole_decimal_to_int(_decimal_field(order, "qty"), field_name="quantity")
-    if expected_quantity is not None and quantity != expected_quantity:
-        raise PaperExecutionBrokerStateError(
-            "broker_quantity_mismatch",
-            "broker order quantity does not match the request.",
-        )
-    if expected_instruction is not None:
-        proposed = expected_instruction.proposed_order
-        if client_order_id != expected_instruction.client_order_id:
-            raise PaperExecutionBrokerStateError(
-                "broker_client_order_id_mismatch",
-                "broker order client ID does not match the request.",
-            )
-        if side != proposed.side or quantity != proposed.quantity:
-            raise PaperExecutionBrokerStateError(
-                "broker_order_mismatch",
-                "broker order response does not match the request.",
-            )
     symbol = str(_field(order, "symbol"))
     order_type = _enum_value(_field(order, "type"))
     time_in_force = _enum_value(_field(order, "time_in_force"))
     extended_hours = _bool_field(order, "extended_hours")
-    if (
-        symbol != SUPPORTED_SYMBOL
-        or order_type != OrderType.MARKET.value
-        or time_in_force != TimeInForce.DAY.value
-        or extended_hours is not False
-    ):
-        raise PaperExecutionBrokerStateError(
-            "unsupported_broker_order_contract",
-            "broker order response describes an unsupported order contract.",
-        )
-    return PaperOrderReceipt(
-        signal_id=signal_id,
+    return BrokerOrderSnapshot(
         client_order_id=client_order_id,
-        instruction_fingerprint=fingerprint,
         broker_order_id=str(_field(order, "id")),
         broker_order_status=_enum_value(_field(order, "status")),
         symbol=symbol,
@@ -286,8 +256,47 @@ def _receipt_from_order(
         broker_response_at_utc=_optional_datetime_field(order, "updated_at"),
         sanitized_request_id=_safe_optional_text(_optional_field(order, "request_id")),
         execution_environment="alpaca_paper",
-        reconciliation_status="broker_verified",
     )
+
+
+def _validate_snapshot_matches_instruction(
+    snapshot: BrokerOrderSnapshot,
+    *,
+    instruction: PaperOrderInstruction,
+    expected_quantity: int,
+) -> None:
+    proposed = instruction.proposed_order
+    if snapshot.client_order_id != instruction.client_order_id:
+        raise PaperExecutionBrokerStateError(
+            "broker_client_order_id_mismatch",
+            "broker order client ID does not match the request.",
+        )
+    if snapshot.symbol != SUPPORTED_SYMBOL:
+        raise PaperExecutionBrokerStateError(
+            "broker_symbol_mismatch",
+            "broker order symbol does not match the request.",
+        )
+    if snapshot.side != proposed.side:
+        raise PaperExecutionBrokerStateError(
+            "broker_side_mismatch",
+            "broker order side does not match the request.",
+        )
+    if snapshot.submitted_quantity != expected_quantity or snapshot.submitted_quantity != (
+        proposed.quantity
+    ):
+        raise PaperExecutionBrokerStateError(
+            "broker_quantity_mismatch",
+            "broker order quantity does not match the request.",
+        )
+    if (
+        snapshot.order_type != OrderType.MARKET.value
+        or snapshot.time_in_force != TimeInForce.DAY.value
+        or snapshot.extended_hours is not False
+    ):
+        raise PaperExecutionBrokerStateError(
+            "unsupported_broker_order_contract",
+            "broker order response describes an unsupported order contract.",
+        )
 
 
 def _position_snapshot(position: object) -> BrokerPositionSnapshot:
@@ -441,15 +450,6 @@ def _whole_decimal_to_int(
             "broker quantity is not a whole share.",
         )
     return whole_quantity(int(value), field_name=field_name, allow_zero=allow_zero)
-
-
-def _safe_optional_id(value: object | None) -> str | None:
-    if value is None:
-        return None
-    try:
-        return require_execution_id(value, field_name="signal_id")
-    except Exception:
-        return None
 
 
 def _safe_optional_text(value: object | None) -> str | None:

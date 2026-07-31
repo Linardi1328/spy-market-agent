@@ -1,6 +1,7 @@
 from spy_market_agent.execution.approvals import validate_matching_approval
 from spy_market_agent.execution.errors import (
     PaperExecutionApprovalError,
+    PaperExecutionBrokerRejectionError,
     PaperExecutionBrokerStateError,
     PaperExecutionBrokerTransportError,
     PaperExecutionConfigurationError,
@@ -34,6 +35,7 @@ from spy_market_agent.execution.models import (
     BrokerClockSnapshot,
     BrokerEnvironmentSnapshot,
     BrokerOpenOrderSnapshot,
+    BrokerOrderSnapshot,
     BrokerPositionSnapshot,
     PaperExecutionAttempt,
     PaperExecutionControlState,
@@ -68,10 +70,12 @@ __all__ = [
     "BrokerClockSnapshot",
     "BrokerEnvironmentSnapshot",
     "BrokerOpenOrderSnapshot",
+    "BrokerOrderSnapshot",
     "BrokerPositionSnapshot",
     "PaperBrokerProtocol",
     "PaperExecutionApprovalError",
     "PaperExecutionAttempt",
+    "PaperExecutionBrokerRejectionError",
     "PaperExecutionBrokerStateError",
     "PaperExecutionBrokerTransportError",
     "PaperExecutionConfigurationError",

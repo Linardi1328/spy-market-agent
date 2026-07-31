@@ -15,7 +15,12 @@ from spy_market_agent.execution import (
     require_execution_id,
     validate_matching_approval,
 )
-from spy_market_agent.execution.models import BrokerAccountSnapshot, BrokerPositionSnapshot
+from spy_market_agent.execution.models import (
+    BrokerAccountSnapshot,
+    BrokerOpenOrderSnapshot,
+    BrokerOrderSnapshot,
+    BrokerPositionSnapshot,
+)
 from unit.phase8_helpers import (
     APPROVED_AT,
     CREATED_AT,
@@ -226,6 +231,96 @@ def test_execution_snapshots_reject_nonfinite_and_fractional_quantities() -> Non
         )
 
 
+def test_position_available_quantity_relationship_is_validated() -> None:
+    full = BrokerPositionSnapshot(
+        symbol="SPY",
+        side="long",
+        quantity=Decimal("10"),
+        available_quantity=Decimal("10"),
+    )
+    partial = BrokerPositionSnapshot(
+        symbol="SPY",
+        side="long",
+        quantity=Decimal("10"),
+        available_quantity=Decimal("4"),
+    )
+    zero = BrokerPositionSnapshot(
+        symbol="SPY",
+        side="long",
+        quantity=Decimal("0"),
+        available_quantity=Decimal("0"),
+    )
+
+    assert full.available_quantity == Decimal("10")
+    assert partial.available_quantity == Decimal("4")
+    assert zero.quantity == Decimal("0")
+    with pytest.raises(PaperExecutionInputError):
+        BrokerPositionSnapshot(
+            symbol="SPY",
+            side="long",
+            quantity=Decimal("10"),
+            available_quantity=Decimal("11"),
+        )
+    with pytest.raises(PaperExecutionInputError):
+        BrokerPositionSnapshot(
+            symbol="SPY",
+            side="long",
+            quantity=Decimal("0"),
+            available_quantity=Decimal("1"),
+        )
+
+
+def test_open_order_filled_quantity_relationship_is_validated() -> None:
+    for filled_quantity in (Decimal("0"), Decimal("4"), Decimal("10")):
+        order = BrokerOpenOrderSnapshot(
+            broker_order_id="broker-open-1",
+            client_order_id="client-order-1",
+            symbol="SPY",
+            side="buy",
+            quantity=Decimal("10"),
+            filled_quantity=filled_quantity,
+            status="accepted",
+            submitted_at_utc=datetime(2025, 1, 3, 15, 30, tzinfo=UTC),
+        )
+        assert order.filled_quantity == filled_quantity
+
+    with pytest.raises(PaperExecutionInputError):
+        BrokerOpenOrderSnapshot(
+            broker_order_id="broker-open-1",
+            client_order_id="client-order-1",
+            symbol="SPY",
+            side="buy",
+            quantity=Decimal("10"),
+            filled_quantity=Decimal("11"),
+            status="accepted",
+            submitted_at_utc=datetime(2025, 1, 3, 15, 30, tzinfo=UTC),
+        )
+
+
+def test_broker_order_snapshot_quantity_relationship_is_validated() -> None:
+    instruction = make_instruction()
+    snapshot = BrokerOrderSnapshot(
+        broker_order_id="broker-1",
+        client_order_id=instruction.client_order_id,
+        broker_order_status="accepted",
+        symbol="SPY",
+        side="buy",
+        submitted_quantity=10,
+        filled_quantity=10,
+        order_type="market",
+        time_in_force="day",
+        extended_hours=False,
+        submitted_at_utc=datetime(2025, 1, 3, 15, 30, tzinfo=UTC),
+        broker_response_at_utc=None,
+        sanitized_request_id=None,
+        execution_environment="alpaca_paper",
+    )
+
+    assert snapshot.filled_quantity == 10
+    with pytest.raises(PaperExecutionInputError):
+        replace(snapshot, filled_quantity=11)
+
+
 def test_receipt_preserves_supported_market_day_order_contract() -> None:
     instruction = make_instruction()
     receipt = PaperOrderReceipt(
@@ -251,3 +346,5 @@ def test_receipt_preserves_supported_market_day_order_contract() -> None:
     assert receipt.symbol == "SPY"
     with pytest.raises(PaperExecutionInputError):
         replace(receipt, extended_hours=True)
+    with pytest.raises(PaperExecutionInputError):
+        replace(receipt, filled_quantity=11)

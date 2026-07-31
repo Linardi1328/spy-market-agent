@@ -9,9 +9,9 @@ from spy_market_agent.execution.models import (
     BrokerClockSnapshot,
     BrokerEnvironmentSnapshot,
     BrokerOpenOrderSnapshot,
+    BrokerOrderSnapshot,
     BrokerPositionSnapshot,
     PaperOrderInstruction,
-    PaperOrderReceipt,
 )
 
 
@@ -30,9 +30,12 @@ class PaperBrokerProtocol(Protocol):
 
     def list_open_orders(self) -> tuple[BrokerOpenOrderSnapshot, ...]: ...
 
-    def get_order_by_client_order_id(self, client_order_id: str) -> PaperOrderReceipt | None: ...
+    def get_order_by_client_order_id(self, client_order_id: str) -> BrokerOrderSnapshot | None: ...
 
-    def submit_market_day_order(self, instruction: PaperOrderInstruction) -> PaperOrderReceipt: ...
+    def submit_market_day_order(
+        self,
+        instruction: PaperOrderInstruction,
+    ) -> BrokerOrderSnapshot: ...
 
 
 __all__ = ["PaperBrokerProtocol"]
