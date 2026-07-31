@@ -14,6 +14,7 @@ from spy_market_agent.execution.models import (
     BrokerClockSnapshot,
     BrokerEnvironmentSnapshot,
     BrokerOpenOrderSnapshot,
+    BrokerOrderSnapshot,
     BrokerPositionSnapshot,
     OrderSide,
     PaperOrderApproval,
@@ -139,14 +140,34 @@ def make_receipt(instruction: PaperOrderInstruction) -> PaperOrderReceipt:
     )
 
 
+def make_broker_order_snapshot(instruction: PaperOrderInstruction) -> BrokerOrderSnapshot:
+    return BrokerOrderSnapshot(
+        broker_order_id="alpaca-paper-order-1",
+        client_order_id=instruction.client_order_id,
+        broker_order_status="accepted",
+        symbol="SPY",
+        side=cast(OrderSide, instruction.proposed_order.side),
+        submitted_quantity=instruction.proposed_order.quantity,
+        filled_quantity=0,
+        order_type="market",
+        time_in_force="day",
+        extended_hours=False,
+        submitted_at_utc=BROKER_TIME,
+        broker_response_at_utc=BROKER_TIME,
+        sanitized_request_id="safe-request-id",
+        execution_environment="alpaca_paper",
+    )
+
+
 class FakePaperBroker:
     def __init__(
         self,
         *,
         positions: tuple[BrokerPositionSnapshot, ...] = (),
         open_orders: tuple[BrokerOpenOrderSnapshot, ...] = (),
-        existing_receipt: PaperOrderReceipt | None = None,
-        submit_error: Exception | None = None,
+        existing_order: BrokerOrderSnapshot | None = None,
+        submit_snapshot: BrokerOrderSnapshot | None = None,
+        submit_error: BaseException | None = None,
         environment: BrokerEnvironmentSnapshot | None = None,
         account: BrokerAccountSnapshot | None = None,
         account_configuration: BrokerAccountConfigurationSnapshot | None = None,
@@ -193,47 +214,58 @@ class FakePaperBroker:
         )
         self.positions = positions
         self.open_orders = open_orders
-        self.existing_receipt = existing_receipt
+        self.existing_order = existing_order
+        self.submit_snapshot = submit_snapshot
         self.submit_error = submit_error
         self.submit_calls = 0
         self.lookup_calls = 0
+        self.operation_log: list[str] = []
 
     def verify_environment(self) -> BrokerEnvironmentSnapshot:
+        self.operation_log.append("verify_environment")
         return self.environment
 
     def get_account(self) -> BrokerAccountSnapshot:
+        self.operation_log.append("get_account")
         return self.account
 
     def get_account_configuration(self) -> BrokerAccountConfigurationSnapshot:
+        self.operation_log.append("get_account_configuration")
         return self.account_configuration
 
     def get_clock(self) -> BrokerClockSnapshot:
+        self.operation_log.append("get_clock")
         return self.clock
 
     def get_asset(self, symbol: str) -> BrokerAssetSnapshot:
         assert symbol == "SPY"
+        self.operation_log.append("get_asset")
         return self.asset
 
     def list_positions(self) -> tuple[BrokerPositionSnapshot, ...]:
+        self.operation_log.append("list_positions")
         return self.positions
 
     def list_open_orders(self) -> tuple[BrokerOpenOrderSnapshot, ...]:
+        self.operation_log.append("list_open_orders")
         return self.open_orders
 
-    def get_order_by_client_order_id(self, client_order_id: str) -> PaperOrderReceipt | None:
+    def get_order_by_client_order_id(self, client_order_id: str) -> BrokerOrderSnapshot | None:
+        self.operation_log.append("get_order_by_client_order_id")
         self.lookup_calls += 1
         if (
-            self.existing_receipt is not None
-            and self.existing_receipt.client_order_id == client_order_id
+            self.existing_order is not None
+            and self.existing_order.client_order_id == client_order_id
         ):
-            return self.existing_receipt
+            return self.existing_order
         return None
 
-    def submit_market_day_order(self, instruction: PaperOrderInstruction) -> PaperOrderReceipt:
+    def submit_market_day_order(self, instruction: PaperOrderInstruction) -> BrokerOrderSnapshot:
+        self.operation_log.append("submit_market_day_order")
         self.submit_calls += 1
         if self.submit_error is not None:
             raise self.submit_error
-        return make_receipt(instruction)
+        return self.submit_snapshot or make_broker_order_snapshot(instruction)
 
 
 def replace_instruction_order(

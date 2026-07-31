@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import asyncio
+import sqlite3
+from dataclasses import replace
 from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -11,13 +14,17 @@ from spy_market_agent.config import Settings
 from spy_market_agent.execution import (
     DISENGAGE_KILL_SWITCH_CONFIRMATION,
     PAPER_ATTEMPT_ACCEPTED,
+    PAPER_ATTEMPT_BLOCKED,
     PAPER_ATTEMPT_BROKER_EXISTING_ORDER_FOUND,
     PAPER_ATTEMPT_RECONCILED,
+    PAPER_ATTEMPT_REJECTED,
     PAPER_ATTEMPT_SUBMISSION_UNKNOWN,
+    PaperExecutionBrokerRejectionError,
     PaperExecutionBrokerStateError,
     PaperExecutionConfigurationError,
     PaperExecutionDuplicateError,
     PaperExecutionError,
+    PaperExecutionIntegrityError,
     PaperExecutionKillSwitchError,
     PaperExecutionPermissionError,
     PaperExecutionService,
@@ -40,9 +47,9 @@ from unit.phase8_helpers import (
     CLIENT_ORDER_ID,
     FakePaperBroker,
     make_approval,
+    make_broker_order_snapshot,
     make_instruction,
     make_proposed_order,
-    make_receipt,
 )
 
 
@@ -154,17 +161,28 @@ def test_kill_switch_blocks_submission_until_explicitly_disengaged(tmp_path: Pat
 
 def test_successful_submission_reserves_ids_records_receipt_and_blocks_duplicate(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     service, repository = _ready_service(tmp_path)
     instruction = make_instruction()
     approval = make_approval(instruction)
     broker = FakePaperBroker()
+    kill_switch_reads = 0
+    real_kill_switch_state = repository.get_kill_switch_state
+
+    def counted_kill_switch_state() -> object:
+        nonlocal kill_switch_reads
+        kill_switch_reads += 1
+        return real_kill_switch_state()
+
+    monkeypatch.setattr(repository, "get_kill_switch_state", counted_kill_switch_state)
 
     receipt = service.submit_approved_order(instruction, approval, broker=broker)
     second_broker = FakePaperBroker()
 
     assert receipt.client_order_id == CLIENT_ORDER_ID
     assert broker.submit_calls == 1
+    assert kill_switch_reads == 2
     assert repository.get_attempt(CLIENT_ORDER_ID).attempt_status == PAPER_ATTEMPT_ACCEPTED
     with pytest.raises(PaperExecutionDuplicateError):
         service.submit_approved_order(instruction, approval, broker=second_broker)
@@ -173,21 +191,147 @@ def test_successful_submission_reserves_ids_records_receipt_and_blocks_duplicate
 
 def test_existing_broker_order_is_reconciled_without_second_submission(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     service, repository = _ready_service(tmp_path)
     instruction = make_instruction()
     approval = make_approval(instruction)
-    receipt = make_receipt(instruction)
-    broker = FakePaperBroker(existing_receipt=receipt)
+    snapshot = make_broker_order_snapshot(instruction)
+    broker = FakePaperBroker(existing_order=snapshot)
+    kill_switch_reads = 0
+    real_kill_switch_state = repository.get_kill_switch_state
+
+    def counted_kill_switch_state() -> object:
+        nonlocal kill_switch_reads
+        kill_switch_reads += 1
+        return real_kill_switch_state()
+
+    monkeypatch.setattr(repository, "get_kill_switch_state", counted_kill_switch_state)
 
     returned = service.submit_approved_order(instruction, approval, broker=broker)
 
-    assert returned == receipt
+    assert returned.signal_id == instruction.signal_id
+    assert returned.instruction_fingerprint == instruction.instruction_fingerprint
     assert broker.submit_calls == 0
     assert broker.lookup_calls == 1
+    assert kill_switch_reads == 1
     assert repository.get_attempt(CLIENT_ORDER_ID).attempt_status == (
         PAPER_ATTEMPT_BROKER_EXISTING_ORDER_FOUND
     )
+
+
+def test_final_kill_switch_reread_blocks_after_reservation_and_keeps_ids(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, repository = _ready_service(tmp_path)
+    instruction = make_instruction()
+    approval = make_approval(instruction)
+    broker = FakePaperBroker()
+    real_kill_switch_state = repository.get_kill_switch_state
+    kill_switch_reads = 0
+
+    def race_kill_switch_state() -> object:
+        nonlocal kill_switch_reads
+        kill_switch_reads += 1
+        if kill_switch_reads == 2:
+            connection = sqlite3.connect(tmp_path / "phase8.sqlite3")
+            try:
+                connection.execute(
+                    """
+                    UPDATE paper_execution_control
+                    SET kill_switch_engaged = 1, reason = 'race_engaged'
+                    WHERE singleton_id = 1
+                    """
+                )
+                connection.commit()
+            finally:
+                connection.close()
+        return real_kill_switch_state()
+
+    monkeypatch.setattr(repository, "get_kill_switch_state", race_kill_switch_state)
+
+    with pytest.raises(PaperExecutionKillSwitchError) as exc_info:
+        service.submit_approved_order(instruction, approval, broker=broker)
+
+    attempt = repository.get_attempt(CLIENT_ORDER_ID)
+    event_types = [
+        event.event_type for event in repository.list_events(client_order_id=CLIENT_ORDER_ID)
+    ]
+
+    assert exc_info.value.code == "kill_switch_engaged_before_submission"
+    assert broker.submit_calls == 0
+    assert broker.lookup_calls == 1
+    assert kill_switch_reads == 2
+    assert attempt.attempt_status == PAPER_ATTEMPT_BLOCKED
+    assert attempt.failure_code == "kill_switch_engaged_before_submission"
+    assert event_types == ["attempt_reserved", "final_kill_switch_blocked"]
+    with pytest.raises(PaperExecutionDuplicateError):
+        repository.reserve_attempt(
+            instruction,
+            approval,
+            execution_risk_approved=True,
+            now_utc=BROKER_TIME,
+        )
+
+
+def test_final_kill_switch_read_failure_blocks_submission_safely(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, repository = _ready_service(tmp_path)
+    instruction = make_instruction()
+    approval = make_approval(instruction)
+    broker = FakePaperBroker()
+    real_kill_switch_state = repository.get_kill_switch_state
+    kill_switch_reads = 0
+
+    def failing_final_kill_switch_state() -> object:
+        nonlocal kill_switch_reads
+        kill_switch_reads += 1
+        if kill_switch_reads == 2:
+            raise PaperExecutionIntegrityError(
+                "invalid_kill_switch_state",
+                "paper-execution kill switch state is invalid and must be treated as engaged.",
+            )
+        return real_kill_switch_state()
+
+    monkeypatch.setattr(repository, "get_kill_switch_state", failing_final_kill_switch_state)
+
+    with pytest.raises(PaperExecutionKillSwitchError) as exc_info:
+        service.submit_approved_order(instruction, approval, broker=broker)
+
+    attempt = repository.get_attempt(CLIENT_ORDER_ID)
+
+    assert exc_info.value.code == "kill_switch_state_unavailable_before_submission"
+    assert broker.submit_calls == 0
+    assert kill_switch_reads == 2
+    assert attempt.attempt_status == PAPER_ATTEMPT_BLOCKED
+    assert attempt.failure_code == "kill_switch_state_unavailable_before_submission"
+
+
+def test_no_broker_operation_occurs_after_final_kill_switch_check_except_submit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, repository = _ready_service(tmp_path)
+    instruction = make_instruction()
+    approval = make_approval(instruction)
+    broker = FakePaperBroker()
+    operations: list[str] = []
+    broker.operation_log = operations
+    real_kill_switch_state = repository.get_kill_switch_state
+
+    def logged_kill_switch_state() -> object:
+        operations.append("kill_switch_read")
+        return real_kill_switch_state()
+
+    monkeypatch.setattr(repository, "get_kill_switch_state", logged_kill_switch_state)
+
+    service.submit_approved_order(instruction, approval, broker=broker)
+
+    final_read_index = len(operations) - 1 - operations[::-1].index("kill_switch_read")
+    assert operations[final_read_index + 1] == "submit_market_day_order"
 
 
 def test_timeout_marks_submission_unknown_and_reconciliation_never_submits(
@@ -211,7 +355,7 @@ def test_timeout_marks_submission_unknown_and_reconciliation_never_submits(
         service.submit_approved_order(instruction, approval, broker=duplicate_broker)
     assert duplicate_broker.submit_calls == 0
 
-    reconcile_broker = FakePaperBroker(existing_receipt=make_receipt(instruction))
+    reconcile_broker = FakePaperBroker(existing_order=make_broker_order_snapshot(instruction))
     reconciled = service.reconcile_by_client_order_id(
         CLIENT_ORDER_ID,
         broker=reconcile_broker,
@@ -221,6 +365,158 @@ def test_timeout_marks_submission_unknown_and_reconciliation_never_submits(
     assert reconciled is not None
     assert reconcile_broker.submit_calls == 0
     assert repository.get_attempt(CLIENT_ORDER_ID).attempt_status == PAPER_ATTEMPT_RECONCILED
+
+
+def test_definitive_broker_rejection_records_rejected_without_retry(tmp_path: Path) -> None:
+    service, repository = _ready_service(tmp_path)
+    instruction = make_instruction()
+    approval = make_approval(instruction)
+    broker = FakePaperBroker(
+        submit_error=PaperExecutionBrokerRejectionError(
+            "broker_order_rejected",
+            "paper broker rejected the order.",
+        )
+    )
+
+    with pytest.raises(PaperExecutionBrokerRejectionError):
+        service.submit_approved_order(instruction, approval, broker=broker)
+
+    assert broker.submit_calls == 1
+    assert repository.get_attempt(CLIENT_ORDER_ID).attempt_status == PAPER_ATTEMPT_REJECTED
+    with pytest.raises(PaperExecutionDuplicateError):
+        service.submit_approved_order(instruction, approval, broker=FakePaperBroker())
+
+
+@pytest.mark.parametrize(
+    "submit_error",
+    [
+        TimeoutError("raw secret timeout"),
+        ConnectionError("raw secret connection loss"),
+        RuntimeError("raw secret sdk failure"),
+        asyncio.CancelledError("raw secret cancellation"),
+    ],
+)
+def test_uncertain_submit_exceptions_become_submission_unknown(
+    tmp_path: Path,
+    submit_error: BaseException,
+) -> None:
+    service, repository = _ready_service(tmp_path)
+    instruction = make_instruction()
+    approval = make_approval(instruction)
+    broker = FakePaperBroker(submit_error=submit_error)
+
+    with pytest.raises(PaperExecutionSubmissionUnknownError) as exc_info:
+        service.submit_approved_order(instruction, approval, broker=broker)
+
+    assert "secret" not in str(exc_info.value).lower()
+    assert broker.submit_calls == 1
+    assert repository.get_attempt(CLIENT_ORDER_ID).attempt_status == (
+        PAPER_ATTEMPT_SUBMISSION_UNKNOWN
+    )
+    assert repository.get_attempt(CLIENT_ORDER_ID).attempt_status != PAPER_ATTEMPT_REJECTED
+    with pytest.raises(PaperExecutionDuplicateError):
+        service.submit_approved_order(instruction, approval, broker=FakePaperBroker())
+
+
+@pytest.mark.parametrize(
+    "snapshot_change",
+    [
+        {"broker_order_id": ""},
+        {"client_order_id": "other-client-order"},
+        {"symbol": "QQQ"},
+        {"side": "sell"},
+        {"submitted_quantity": 11},
+        {"order_type": "limit"},
+        {"time_in_force": "gtc"},
+        {"extended_hours": True},
+    ],
+)
+def test_post_submit_malformed_or_contradictory_snapshot_is_unknown_not_rejected(
+    tmp_path: Path,
+    snapshot_change: dict[str, object],
+) -> None:
+    service, repository = _ready_service(tmp_path)
+    instruction = make_instruction()
+    approval = make_approval(instruction)
+    snapshot = make_broker_order_snapshot(instruction)
+    for field_name, value in snapshot_change.items():
+        object.__setattr__(snapshot, field_name, value)
+    broker = FakePaperBroker(submit_snapshot=snapshot)
+
+    with pytest.raises(PaperExecutionSubmissionUnknownError):
+        service.submit_approved_order(instruction, approval, broker=broker)
+
+    attempt = repository.get_attempt(CLIENT_ORDER_ID)
+    assert broker.submit_calls == 1
+    assert attempt.attempt_status == PAPER_ATTEMPT_SUBMISSION_UNKNOWN
+    assert attempt.failure_code == "broker_snapshot_mismatch"
+    with pytest.raises(PaperExecutionDuplicateError):
+        service.submit_approved_order(instruction, approval, broker=FakePaperBroker())
+
+
+def test_existing_mismatching_broker_order_fails_closed_without_submission(
+    tmp_path: Path,
+) -> None:
+    service, repository = _ready_service(tmp_path)
+    instruction = make_instruction()
+    approval = make_approval(instruction)
+    snapshot = replace(make_broker_order_snapshot(instruction), side="sell")
+    broker = FakePaperBroker(existing_order=snapshot)
+
+    with pytest.raises(PaperExecutionSubmissionUnknownError):
+        service.submit_approved_order(instruction, approval, broker=broker)
+
+    attempt = repository.get_attempt(CLIENT_ORDER_ID)
+    events = repository.list_events(client_order_id=CLIENT_ORDER_ID)
+    assert broker.submit_calls == 0
+    assert attempt.attempt_status == PAPER_ATTEMPT_SUBMISSION_UNKNOWN
+    assert events[-1].event_type == "broker_order_mismatch"
+
+
+def test_reconciliation_rejects_mismatch_and_never_submits(tmp_path: Path) -> None:
+    service, repository = _ready_service(tmp_path)
+    instruction = make_instruction()
+    approval = make_approval(instruction)
+    repository.reserve_attempt(
+        instruction,
+        approval,
+        execution_risk_approved=True,
+        now_utc=BROKER_TIME,
+    )
+    broker = FakePaperBroker(
+        existing_order=replace(make_broker_order_snapshot(instruction), submitted_quantity=1)
+    )
+
+    with pytest.raises(PaperExecutionSubmissionUnknownError):
+        service.reconcile_by_client_order_id(
+            CLIENT_ORDER_ID,
+            broker=broker,
+            now_utc=BROKER_TIME + timedelta(minutes=1),
+        )
+
+    assert broker.submit_calls == 0
+    assert repository.get_attempt(CLIENT_ORDER_ID).attempt_status == (
+        PAPER_ATTEMPT_SUBMISSION_UNKNOWN
+    )
+
+
+def test_reconciliation_does_not_convert_terminal_attempt(tmp_path: Path) -> None:
+    service, repository = _ready_service(tmp_path)
+    instruction = make_instruction()
+    approval = make_approval(instruction)
+    broker = FakePaperBroker()
+    service.submit_approved_order(instruction, approval, broker=broker)
+    reconcile_broker = FakePaperBroker(existing_order=make_broker_order_snapshot(instruction))
+
+    with pytest.raises(PaperExecutionIntegrityError):
+        service.reconcile_by_client_order_id(
+            CLIENT_ORDER_ID,
+            broker=reconcile_broker,
+            now_utc=BROKER_TIME + timedelta(minutes=1),
+        )
+
+    assert reconcile_broker.submit_calls == 0
+    assert repository.get_attempt(CLIENT_ORDER_ID).attempt_status == PAPER_ATTEMPT_ACCEPTED
 
 
 @pytest.mark.parametrize(

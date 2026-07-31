@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -10,9 +12,11 @@ from spy_market_agent.config import Settings
 from spy_market_agent.execution.approvals import validate_matching_approval
 from spy_market_agent.execution.errors import (
     PaperExecutionApprovalError,
+    PaperExecutionBrokerRejectionError,
     PaperExecutionBrokerStateError,
     PaperExecutionConfigurationError,
     PaperExecutionError,
+    PaperExecutionIntegrityError,
     PaperExecutionKillSwitchError,
     PaperExecutionPermissionError,
     PaperExecutionRiskError,
@@ -22,15 +26,21 @@ from spy_market_agent.execution.errors import (
 from spy_market_agent.execution.models import (
     ALPACA_PAPER_ENDPOINT,
     PAPER_ATTEMPT_ACCEPTED,
+    PAPER_ATTEMPT_BLOCKED,
     PAPER_ATTEMPT_BROKER_EXISTING_ORDER_FOUND,
+    PAPER_ATTEMPT_RECONCILED,
     PAPER_ATTEMPT_REJECTED,
+    PAPER_ATTEMPT_RESERVED,
+    PAPER_ATTEMPT_SUBMISSION_UNKNOWN,
     BrokerAccountConfigurationSnapshot,
     BrokerAccountSnapshot,
     BrokerAssetSnapshot,
     BrokerClockSnapshot,
     BrokerEnvironmentSnapshot,
     BrokerOpenOrderSnapshot,
+    BrokerOrderSnapshot,
     BrokerPositionSnapshot,
+    PaperExecutionAttempt,
     PaperOrderApproval,
     PaperOrderInstruction,
     PaperOrderReceipt,
@@ -136,7 +146,7 @@ class PaperExecutionService:
                 "execution_risk_rejected",
                 "execution-time risk evaluation rejected the order.",
             )
-        self._repository.reserve_attempt(
+        reserved = self._repository.reserve_attempt(
             instruction,
             approval,
             execution_risk_approved=execution_risk.approved,
@@ -144,21 +154,63 @@ class PaperExecutionService:
         )
         existing = broker.get_order_by_client_order_id(instruction.client_order_id)
         if existing is not None:
+            try:
+                receipt = _receipt_from_broker_snapshot(
+                    existing,
+                    attempt=reserved,
+                    reconciliation_status="broker_existing_order_found",
+                )
+            except PaperExecutionError as exc:
+                self._repository.mark_submission_unknown(
+                    client_order_id=instruction.client_order_id,
+                    signal_id=instruction.signal_id,
+                    failure_code="broker_order_mismatch",
+                    now_utc=clock.timestamp,
+                    event_type="broker_order_mismatch",
+                )
+                raise PaperExecutionSubmissionUnknownError(
+                    "broker_order_mismatch",
+                    "broker order state does not match the reserved paper-execution attempt.",
+                ) from exc
             self._repository.record_receipt(
-                existing,
+                receipt,
                 status=PAPER_ATTEMPT_BROKER_EXISTING_ORDER_FOUND,
                 account_id_fingerprint=account.account_id_fingerprint,
                 now_utc=clock.timestamp,
                 event_type="broker_existing_order_found",
             )
-            return existing
+            return receipt
+        self._assert_final_kill_switch_gate(
+            instruction=instruction,
+            now_utc=clock.timestamp,
+        )
         try:
-            receipt = broker.submit_market_day_order(instruction)
-        except PaperExecutionBrokerStateError as exc:
+            snapshot = broker.submit_market_day_order(instruction)
+        except PaperExecutionBrokerRejectionError as exc:
             self._repository.mark_failure(
                 client_order_id=instruction.client_order_id,
                 signal_id=instruction.signal_id,
                 status=PAPER_ATTEMPT_REJECTED,
+                failure_code=exc.code,
+                now_utc=clock.timestamp,
+                event_type="broker_order_rejected",
+            )
+            raise
+        except asyncio.CancelledError as exc:
+            self._repository.mark_submission_unknown(
+                client_order_id=instruction.client_order_id,
+                signal_id=instruction.signal_id,
+                failure_code="submission_outcome_unknown",
+                now_utc=clock.timestamp,
+            )
+            raise PaperExecutionSubmissionUnknownError(
+                "submission_outcome_unknown",
+                "paper-order submission outcome is unknown; do not resubmit automatically.",
+            ) from exc
+        except PaperExecutionSubmissionUnknownError as exc:
+            self._repository.mark_submission_unknown(
+                client_order_id=instruction.client_order_id,
+                signal_id=instruction.signal_id,
                 failure_code=exc.code,
                 now_utc=clock.timestamp,
             )
@@ -170,11 +222,37 @@ class PaperExecutionService:
                 failure_code="submission_outcome_unknown",
                 now_utc=clock.timestamp,
             )
-            if isinstance(exc, PaperExecutionSubmissionUnknownError):
-                raise
             raise PaperExecutionSubmissionUnknownError(
                 "submission_outcome_unknown",
                 "paper-order submission outcome is unknown; do not resubmit automatically.",
+            ) from exc
+        try:
+            receipt = _receipt_from_broker_snapshot(
+                snapshot,
+                attempt=reserved,
+                reconciliation_status="broker_verified",
+            )
+        except PaperExecutionError as exc:
+            self._repository.mark_submission_unknown(
+                client_order_id=instruction.client_order_id,
+                signal_id=instruction.signal_id,
+                failure_code="broker_snapshot_mismatch",
+                now_utc=clock.timestamp,
+            )
+            raise PaperExecutionSubmissionUnknownError(
+                "broker_snapshot_mismatch",
+                "broker order response does not match the reserved paper-execution attempt.",
+            ) from exc
+        except (AttributeError, TypeError, ValueError) as exc:
+            self._repository.mark_submission_unknown(
+                client_order_id=instruction.client_order_id,
+                signal_id=instruction.signal_id,
+                failure_code="broker_snapshot_mismatch",
+                now_utc=clock.timestamp,
+            )
+            raise PaperExecutionSubmissionUnknownError(
+                "broker_snapshot_mismatch",
+                "broker order response does not match the reserved paper-execution attempt.",
             ) from exc
         self._repository.record_receipt(
             receipt,
@@ -193,17 +271,89 @@ class PaperExecutionService:
         now_utc: datetime,
     ) -> PaperOrderReceipt | None:
         attempt = self._repository.get_attempt(client_order_id)
-        receipt = broker.get_order_by_client_order_id(attempt.client_order_id)
-        if receipt is None:
+        if attempt.attempt_status not in {
+            PAPER_ATTEMPT_RESERVED,
+            PAPER_ATTEMPT_SUBMISSION_UNKNOWN,
+        }:
+            raise PaperExecutionIntegrityError(
+                "invalid_reconciliation_state",
+                "paper-order attempt is not eligible for reconciliation.",
+            )
+        snapshot = broker.get_order_by_client_order_id(attempt.client_order_id)
+        if snapshot is None:
             return None
+        try:
+            receipt = _receipt_from_broker_snapshot(
+                snapshot,
+                attempt=attempt,
+                reconciliation_status="broker_reconciled",
+            )
+        except PaperExecutionError as exc:
+            self._repository.mark_submission_unknown(
+                client_order_id=attempt.client_order_id,
+                signal_id=attempt.signal_id,
+                failure_code="broker_order_mismatch",
+                now_utc=now_utc,
+                event_type="broker_order_mismatch",
+            )
+            raise PaperExecutionSubmissionUnknownError(
+                "broker_order_mismatch",
+                "broker order state does not match the reserved paper-execution attempt.",
+            ) from exc
         self._repository.record_receipt(
             receipt,
-            status="reconciled",
+            status=PAPER_ATTEMPT_RECONCILED,
             account_id_fingerprint=None,
             now_utc=now_utc,
             event_type="broker_order_reconciled",
         )
         return receipt
+
+    def _assert_final_kill_switch_gate(
+        self,
+        *,
+        instruction: PaperOrderInstruction,
+        now_utc: datetime,
+    ) -> None:
+        try:
+            state = self._repository.get_kill_switch_state()
+        except PaperExecutionError as exc:
+            self._mark_reserved_blocked(
+                instruction=instruction,
+                now_utc=now_utc,
+                failure_code="kill_switch_state_unavailable_before_submission",
+            )
+            raise PaperExecutionKillSwitchError(
+                "kill_switch_state_unavailable_before_submission",
+                "paper-execution kill switch state is unavailable or invalid.",
+            ) from exc
+        if state.kill_switch_engaged:
+            self._mark_reserved_blocked(
+                instruction=instruction,
+                now_utc=now_utc,
+                failure_code="kill_switch_engaged_before_submission",
+            )
+            raise PaperExecutionKillSwitchError(
+                "kill_switch_engaged_before_submission",
+                "paper-execution kill switch is engaged.",
+            )
+
+    def _mark_reserved_blocked(
+        self,
+        *,
+        instruction: PaperOrderInstruction,
+        now_utc: datetime,
+        failure_code: str,
+    ) -> None:
+        with suppress(PaperExecutionError):
+            self._repository.mark_failure(
+                client_order_id=instruction.client_order_id,
+                signal_id=instruction.signal_id,
+                status=PAPER_ATTEMPT_BLOCKED,
+                failure_code=failure_code,
+                now_utc=now_utc,
+                event_type="final_kill_switch_blocked",
+            )
 
     def _assert_local_permission_gates(self) -> None:
         if self._settings.execution_mode != "paper":
@@ -406,6 +556,75 @@ def _secret_present(value: object) -> bool:
     if getter is None:
         return bool(str(value).strip())
     return bool(str(getter()).strip())
+
+
+def _receipt_from_broker_snapshot(
+    snapshot: BrokerOrderSnapshot,
+    *,
+    attempt: PaperExecutionAttempt,
+    reconciliation_status: str,
+) -> PaperOrderReceipt:
+    _validate_broker_snapshot_against_attempt(snapshot, attempt=attempt)
+    return PaperOrderReceipt(
+        signal_id=attempt.signal_id,
+        client_order_id=snapshot.client_order_id,
+        instruction_fingerprint=attempt.instruction_fingerprint,
+        broker_order_id=snapshot.broker_order_id,
+        broker_order_status=snapshot.broker_order_status,
+        symbol=snapshot.symbol,
+        side=snapshot.side,
+        submitted_quantity=snapshot.submitted_quantity,
+        filled_quantity=snapshot.filled_quantity,
+        order_type=snapshot.order_type,
+        time_in_force=snapshot.time_in_force,
+        extended_hours=snapshot.extended_hours,
+        submitted_at_utc=snapshot.submitted_at_utc,
+        broker_response_at_utc=snapshot.broker_response_at_utc,
+        sanitized_request_id=snapshot.sanitized_request_id,
+        execution_environment=snapshot.execution_environment,
+        reconciliation_status=reconciliation_status,
+    )
+
+
+def _validate_broker_snapshot_against_attempt(
+    snapshot: BrokerOrderSnapshot,
+    *,
+    attempt: PaperExecutionAttempt,
+) -> None:
+    if snapshot.client_order_id != attempt.client_order_id:
+        raise PaperExecutionBrokerStateError(
+            "broker_client_order_id_mismatch",
+            "broker order client ID does not match the reserved attempt.",
+        )
+    if snapshot.symbol != SUPPORTED_SYMBOL:
+        raise PaperExecutionBrokerStateError(
+            "broker_symbol_mismatch",
+            "broker order symbol does not match the reserved attempt.",
+        )
+    if snapshot.side != attempt.side:
+        raise PaperExecutionBrokerStateError(
+            "broker_side_mismatch",
+            "broker order side does not match the reserved attempt.",
+        )
+    if snapshot.submitted_quantity != attempt.quantity:
+        raise PaperExecutionBrokerStateError(
+            "broker_quantity_mismatch",
+            "broker order quantity does not match the reserved attempt.",
+        )
+    if (
+        snapshot.order_type != "market"
+        or snapshot.time_in_force != "day"
+        or snapshot.extended_hours is not False
+    ):
+        raise PaperExecutionBrokerStateError(
+            "unsupported_broker_order_contract",
+            "broker order response describes an unsupported order contract.",
+        )
+    if snapshot.execution_environment != "alpaca_paper":
+        raise PaperExecutionBrokerStateError(
+            "unsupported_broker_environment",
+            "broker order environment is unsupported.",
+        )
 
 
 __all__ = ["PaperExecutionPreview", "PaperExecutionService"]

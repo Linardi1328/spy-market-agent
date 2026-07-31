@@ -246,8 +246,15 @@ class SQLitePaperExecutionRepository:
         connection = self._connect()
         try:
             connection.execute("BEGIN")
-            prior = _get_attempt_from_connection(connection, receipt.client_order_id)
-            connection.execute(
+            try:
+                prior = _get_attempt_from_connection(connection, receipt.client_order_id)
+            except PaperExecutionNotFoundError as exc:
+                raise PaperExecutionIntegrityError(
+                    "receipt_lineage_mismatch",
+                    "broker receipt does not match a reserved paper-execution attempt.",
+                ) from exc
+            _validate_receipt_against_attempt(receipt, prior=prior, status=status)
+            cursor = connection.execute(
                 """
                 UPDATE paper_execution_attempts
                 SET attempt_status = ?, broker_order_id = ?, broker_status = ?,
@@ -266,10 +273,15 @@ class SQLitePaperExecutionRepository:
                     receipt.client_order_id,
                 ),
             )
+            if cursor.rowcount != 1:
+                raise PaperExecutionIntegrityError(
+                    "attempt_update_row_count_mismatch",
+                    "paper-execution attempt update did not affect exactly one row.",
+                )
             self._insert_event(
                 connection,
-                signal_id=receipt.signal_id,
-                client_order_id=receipt.client_order_id,
+                signal_id=prior.signal_id,
+                client_order_id=prior.client_order_id,
                 event_type=event_type,
                 prior_state=prior.attempt_status,
                 new_state=status,
@@ -279,6 +291,9 @@ class SQLitePaperExecutionRepository:
             )
             connection.commit()
             return _get_attempt_from_connection(connection, receipt.client_order_id)
+        except PaperExecutionIntegrityError:
+            connection.rollback()
+            raise
         except sqlite3.Error as exc:
             connection.rollback()
             raise PaperExecutionIntegrityError(
@@ -295,6 +310,7 @@ class SQLitePaperExecutionRepository:
         signal_id: str,
         failure_code: str,
         now_utc: datetime,
+        event_type: str = "submission_unknown",
     ) -> PaperExecutionAttempt:
         parsed_client_id = require_execution_id(client_order_id, field_name="client_order_id")
         parsed_signal_id = require_execution_id(signal_id, field_name="signal_id")
@@ -303,7 +319,7 @@ class SQLitePaperExecutionRepository:
         try:
             connection.execute("BEGIN")
             prior = _get_attempt_from_connection(connection, parsed_client_id)
-            connection.execute(
+            cursor = connection.execute(
                 """
                 UPDATE paper_execution_attempts
                 SET attempt_status = ?, failure_code = ?, updated_at_utc = ?
@@ -316,11 +332,16 @@ class SQLitePaperExecutionRepository:
                     parsed_client_id,
                 ),
             )
+            if cursor.rowcount != 1:
+                raise PaperExecutionIntegrityError(
+                    "attempt_update_row_count_mismatch",
+                    "paper-execution attempt update did not affect exactly one row.",
+                )
             self._insert_event(
                 connection,
                 signal_id=parsed_signal_id,
                 client_order_id=parsed_client_id,
-                event_type="submission_unknown",
+                event_type=event_type,
                 prior_state=prior.attempt_status,
                 new_state=PAPER_ATTEMPT_SUBMISSION_UNKNOWN,
                 event_timestamp_utc=now_utc,
@@ -346,6 +367,7 @@ class SQLitePaperExecutionRepository:
         status: str,
         failure_code: str,
         now_utc: datetime,
+        event_type: str = "attempt_failed",
     ) -> PaperExecutionAttempt:
         if status not in PAPER_ATTEMPT_STATES:
             raise PaperExecutionInputError(
@@ -358,7 +380,7 @@ class SQLitePaperExecutionRepository:
         try:
             connection.execute("BEGIN")
             prior = _get_attempt_from_connection(connection, parsed_client_id)
-            connection.execute(
+            cursor = connection.execute(
                 """
                 UPDATE paper_execution_attempts
                 SET attempt_status = ?, failure_code = ?, updated_at_utc = ?
@@ -366,11 +388,16 @@ class SQLitePaperExecutionRepository:
                 """,
                 (status, safe_failure_code, _utc_text(now_utc), parsed_client_id),
             )
+            if cursor.rowcount != 1:
+                raise PaperExecutionIntegrityError(
+                    "attempt_update_row_count_mismatch",
+                    "paper-execution attempt update did not affect exactly one row.",
+                )
             self._insert_event(
                 connection,
-                signal_id=parsed_signal_id,
-                client_order_id=parsed_client_id,
-                event_type="attempt_failed",
+                signal_id=prior.signal_id or parsed_signal_id,
+                client_order_id=prior.client_order_id or parsed_client_id,
+                event_type=event_type,
                 prior_state=prior.attempt_status,
                 new_state=status,
                 event_timestamp_utc=now_utc,
@@ -583,6 +610,55 @@ class SQLitePaperExecutionRepository:
                 "paper-execution ledger is unavailable or invalid.",
             ) from exc
         return connection
+
+
+def _validate_receipt_against_attempt(
+    receipt: PaperOrderReceipt,
+    *,
+    prior: PaperExecutionAttempt,
+    status: str,
+) -> None:
+    allowed_prior_states = {
+        PAPER_ATTEMPT_ACCEPTED: {PAPER_ATTEMPT_RESERVED},
+        PAPER_ATTEMPT_BROKER_EXISTING_ORDER_FOUND: {PAPER_ATTEMPT_RESERVED},
+        PAPER_ATTEMPT_RECONCILED: {
+            PAPER_ATTEMPT_RESERVED,
+            PAPER_ATTEMPT_SUBMISSION_UNKNOWN,
+        },
+    }.get(status)
+    if allowed_prior_states is None or prior.attempt_status not in allowed_prior_states:
+        raise PaperExecutionIntegrityError(
+            "invalid_receipt_state_transition",
+            "broker receipt cannot update the paper-execution attempt from its current state.",
+        )
+    if (
+        receipt.signal_id != prior.signal_id
+        or receipt.client_order_id != prior.client_order_id
+        or receipt.instruction_fingerprint != prior.instruction_fingerprint
+        or receipt.symbol != prior.symbol
+        or receipt.side != prior.side
+        or receipt.submitted_quantity != prior.quantity
+    ):
+        raise PaperExecutionIntegrityError(
+            "receipt_lineage_mismatch",
+            "broker receipt does not match the reserved paper-execution attempt.",
+        )
+    if (
+        receipt.order_type != "market"
+        or receipt.time_in_force != "day"
+        or receipt.extended_hours is not False
+    ):
+        raise PaperExecutionIntegrityError(
+            "receipt_contract_mismatch",
+            "broker receipt does not match the supported paper-order contract.",
+        )
+    if status in {PAPER_ATTEMPT_ACCEPTED, PAPER_ATTEMPT_BROKER_EXISTING_ORDER_FOUND} and (
+        prior.attempt_status != PAPER_ATTEMPT_RESERVED
+    ):
+        raise PaperExecutionIntegrityError(
+            "invalid_receipt_state_transition",
+            "broker receipt cannot update a non-reserved paper-execution attempt.",
+        )
 
 
 def _attempt_from_row(row: sqlite3.Row) -> PaperExecutionAttempt:

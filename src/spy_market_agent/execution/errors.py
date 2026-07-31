@@ -49,6 +49,10 @@ class PaperExecutionBrokerTransportError(PaperExecutionError):
     """Raised when a read-only broker preflight call fails."""
 
 
+class PaperExecutionBrokerRejectionError(PaperExecutionError):
+    """Raised when the broker definitively rejects a submitted paper order."""
+
+
 class PaperExecutionSubmissionUnknownError(PaperExecutionError):
     """Raised when broker submission may have reached Alpaca but the outcome is unknown."""
 
@@ -63,6 +67,7 @@ class PaperExecutionNotFoundError(PaperExecutionError):
 
 __all__ = [
     "PaperExecutionApprovalError",
+    "PaperExecutionBrokerRejectionError",
     "PaperExecutionBrokerStateError",
     "PaperExecutionBrokerTransportError",
     "PaperExecutionConfigurationError",
