@@ -10,11 +10,14 @@ from spy_market_agent.config import Settings
 from spy_market_agent.execution import (
     DISENGAGE_KILL_SWITCH_CONFIRMATION,
     PAPER_ATTEMPT_ACCEPTED,
+    PAPER_ATTEMPT_RECONCILED,
     PAPER_ATTEMPT_RESERVED,
     PAPER_ATTEMPT_SUBMISSION_UNKNOWN,
     PaperExecutionDuplicateError,
     PaperExecutionInputError,
     PaperExecutionIntegrityError,
+    PaperOrderInstruction,
+    PaperOrderReceipt,
     SQLitePaperExecutionRepository,
 )
 from spy_market_agent.persistence import initialize_database
@@ -122,6 +125,95 @@ def test_attempt_round_trip_and_duplicate_protection_survive_repository_reopen(
     ] == [
         "attempt_reserved",
         "broker_order_accepted",
+    ]
+
+
+@pytest.mark.parametrize(
+    "receipt_change",
+    [
+        {"signal_id": "other-signal"},
+        {"instruction_fingerprint": "b" * 64},
+        {"client_order_id": "other-client-order"},
+        {"symbol": "QQQ"},
+        {"side": "sell"},
+        {"submitted_quantity": 11},
+        {"order_type": "limit"},
+        {"time_in_force": "gtc"},
+        {"extended_hours": True},
+    ],
+)
+def test_record_receipt_rejects_forged_or_mismatched_lineage_transactionally(
+    tmp_path: Path,
+    receipt_change: dict[str, object],
+) -> None:
+    database_path = tmp_path / "phase8.sqlite3"
+    initialize_database(database_path)
+    instruction = make_instruction()
+    approval = make_approval(instruction)
+    repository = SQLitePaperExecutionRepository(database_path)
+    repository.reserve_attempt(
+        instruction,
+        approval,
+        execution_risk_approved=True,
+        now_utc=instruction.created_at_utc,
+    )
+    forged = _forged_receipt(instruction, **receipt_change)
+
+    with pytest.raises(PaperExecutionIntegrityError):
+        repository.record_receipt(
+            forged,
+            status=PAPER_ATTEMPT_ACCEPTED,
+            account_id_fingerprint="a" * 64,
+            now_utc=instruction.created_at_utc,
+            event_type="broker_order_accepted",
+        )
+
+    attempt = repository.get_attempt(instruction.client_order_id)
+    events = repository.list_events(client_order_id=instruction.client_order_id)
+    assert attempt.attempt_status == PAPER_ATTEMPT_RESERVED
+    assert attempt.broker_order_id is None
+    assert [event.event_type for event in events] == ["attempt_reserved"]
+
+
+def test_record_receipt_rejects_invalid_state_transition_after_reopen(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "phase8.sqlite3"
+    initialize_database(database_path)
+    instruction = make_instruction()
+    approval = make_approval(instruction)
+    repository = SQLitePaperExecutionRepository(database_path)
+    repository.reserve_attempt(
+        instruction,
+        approval,
+        execution_risk_approved=True,
+        now_utc=instruction.created_at_utc,
+    )
+    repository.mark_failure(
+        client_order_id=instruction.client_order_id,
+        signal_id=instruction.signal_id,
+        status="blocked",
+        failure_code="final_kill_switch_blocked",
+        now_utc=instruction.created_at_utc,
+    )
+    reopened = SQLitePaperExecutionRepository(database_path)
+
+    with pytest.raises(PaperExecutionIntegrityError):
+        reopened.record_receipt(
+            make_receipt(instruction),
+            status=PAPER_ATTEMPT_RECONCILED,
+            account_id_fingerprint="a" * 64,
+            now_utc=instruction.created_at_utc,
+            event_type="broker_order_reconciled",
+        )
+
+    assert reopened.get_attempt(instruction.client_order_id).attempt_status == "blocked"
+    assert [
+        event.event_type
+        for event in reopened.list_events(client_order_id=instruction.client_order_id)
+    ] == [
+        "attempt_reserved",
+        "attempt_failed",
     ]
 
 
@@ -246,3 +338,13 @@ def test_unsupported_future_schema_is_rejected_without_migration(
 
     with pytest.raises(PersistenceSchemaError):
         initialize_database(database_path)
+
+
+def _forged_receipt(
+    instruction: PaperOrderInstruction,
+    **changes: object,
+) -> PaperOrderReceipt:
+    receipt = make_receipt(instruction)
+    for field_name, value in changes.items():
+        object.__setattr__(receipt, field_name, value)
+    return receipt

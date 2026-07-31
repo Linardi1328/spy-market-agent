@@ -374,6 +374,16 @@ class BrokerPositionSnapshot:
         available = finite_decimal(self.available_quantity, field_name="available_quantity")
         if quantity != quantity.to_integral_value() or available != available.to_integral_value():
             raise PaperExecutionInputError("fractional_position", "positions must be whole shares.")
+        if available > quantity:
+            raise PaperExecutionInputError(
+                "position_available_exceeds_quantity",
+                "available position quantity must not exceed total quantity.",
+            )
+        if quantity == 0 and available != 0:
+            raise PaperExecutionInputError(
+                "invalid_zero_position_available_quantity",
+                "zero positions must not report available shares.",
+            )
         object.__setattr__(self, "quantity", quantity)
         object.__setattr__(self, "available_quantity", available)
         if self.current_price is not None:
@@ -421,6 +431,11 @@ class BrokerOpenOrderSnapshot:
             raise PaperExecutionInputError(
                 "fractional_open_order", "open orders must use whole shares."
             )
+        if filled_quantity > quantity:
+            raise PaperExecutionInputError(
+                "open_order_filled_exceeds_quantity",
+                "filled open-order quantity must not exceed submitted quantity.",
+            )
         object.__setattr__(self, "quantity", quantity)
         object.__setattr__(self, "filled_quantity", filled_quantity)
         object.__setattr__(self, "status", nonblank_text(self.status, field_name="order_status"))
@@ -430,6 +445,97 @@ class BrokerOpenOrderSnapshot:
                 "submitted_at_utc",
                 utc_datetime(self.submitted_at_utc, field_name="submitted_at_utc"),
             )
+
+
+@dataclass(frozen=True, slots=True)
+class BrokerOrderSnapshot:
+    broker_order_id: str
+    client_order_id: str
+    broker_order_status: str
+    symbol: str
+    side: OrderSide
+    submitted_quantity: int
+    filled_quantity: int | None
+    order_type: str
+    time_in_force: str
+    extended_hours: bool
+    submitted_at_utc: datetime
+    broker_response_at_utc: datetime | None
+    sanitized_request_id: str | None
+    execution_environment: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "broker_order_id",
+            nonblank_text(self.broker_order_id, field_name="broker_order_id"),
+        )
+        object.__setattr__(
+            self,
+            "client_order_id",
+            require_execution_id(self.client_order_id, field_name="client_order_id"),
+        )
+        object.__setattr__(
+            self,
+            "broker_order_status",
+            nonblank_text(self.broker_order_status, field_name="broker_order_status"),
+        )
+        object.__setattr__(self, "symbol", nonblank_text(self.symbol, field_name="symbol"))
+        object.__setattr__(self, "side", side_value(self.side))
+        submitted_quantity = whole_quantity(
+            self.submitted_quantity,
+            field_name="submitted_quantity",
+        )
+        object.__setattr__(self, "submitted_quantity", submitted_quantity)
+        if self.filled_quantity is not None:
+            filled_quantity = whole_quantity(
+                self.filled_quantity,
+                field_name="filled_quantity",
+                allow_zero=True,
+            )
+            if filled_quantity > submitted_quantity:
+                raise PaperExecutionInputError(
+                    "filled_quantity_exceeds_submitted_quantity",
+                    "filled quantity must not exceed submitted quantity.",
+                )
+            object.__setattr__(self, "filled_quantity", filled_quantity)
+        object.__setattr__(
+            self,
+            "order_type",
+            nonblank_text(self.order_type, field_name="order_type"),
+        )
+        object.__setattr__(
+            self,
+            "time_in_force",
+            nonblank_text(self.time_in_force, field_name="time_in_force"),
+        )
+        if type(self.extended_hours) is not bool:
+            raise PaperExecutionInputError(
+                "invalid_extended_hours",
+                "extended_hours must be boolean.",
+            )
+        object.__setattr__(
+            self,
+            "submitted_at_utc",
+            utc_datetime(self.submitted_at_utc, field_name="submitted_at_utc"),
+        )
+        if self.broker_response_at_utc is not None:
+            object.__setattr__(
+                self,
+                "broker_response_at_utc",
+                utc_datetime(self.broker_response_at_utc, field_name="broker_response_at_utc"),
+            )
+        if self.sanitized_request_id is not None:
+            object.__setattr__(
+                self,
+                "sanitized_request_id",
+                nonblank_text(self.sanitized_request_id, field_name="sanitized_request_id"),
+            )
+        object.__setattr__(
+            self,
+            "execution_environment",
+            nonblank_text(self.execution_environment, field_name="execution_environment"),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -485,11 +591,17 @@ class PaperOrderReceipt:
             whole_quantity(self.submitted_quantity, field_name="submitted_quantity"),
         )
         if self.filled_quantity is not None:
-            object.__setattr__(
-                self,
-                "filled_quantity",
-                whole_quantity(self.filled_quantity, field_name="filled_quantity", allow_zero=True),
+            filled_quantity = whole_quantity(
+                self.filled_quantity,
+                field_name="filled_quantity",
+                allow_zero=True,
             )
+            if filled_quantity > self.submitted_quantity:
+                raise PaperExecutionInputError(
+                    "filled_quantity_exceeds_submitted_quantity",
+                    "filled quantity must not exceed submitted quantity.",
+                )
+            object.__setattr__(self, "filled_quantity", filled_quantity)
         if (
             self.order_type != "market"
             or self.time_in_force != "day"
@@ -710,6 +822,7 @@ __all__ = [
     "BrokerClockSnapshot",
     "BrokerEnvironmentSnapshot",
     "BrokerOpenOrderSnapshot",
+    "BrokerOrderSnapshot",
     "BrokerPositionSnapshot",
     "OrderSide",
     "PaperExecutionAttempt",

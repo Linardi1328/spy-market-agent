@@ -18,10 +18,14 @@ from spy_market_agent.dashboard.app import load_dashboard_state
 from spy_market_agent.execution import (
     DISENGAGE_KILL_SWITCH_CONFIRMATION,
     PAPER_ATTEMPT_ACCEPTED,
+    PAPER_ATTEMPT_BLOCKED,
+    PAPER_ATTEMPT_BROKER_EXISTING_ORDER_FOUND,
     PAPER_ATTEMPT_RECONCILED,
     PAPER_ATTEMPT_SUBMISSION_UNKNOWN,
     PaperExecutionConfigurationError,
     PaperExecutionDuplicateError,
+    PaperExecutionIntegrityError,
+    PaperExecutionKillSwitchError,
     PaperExecutionService,
     PaperExecutionSubmissionUnknownError,
     SQLitePaperExecutionRepository,
@@ -40,7 +44,12 @@ from spy_market_agent.risk import (
     evaluate_order_risk,
 )
 from unit.phase7_helpers import persist_phase7_artifacts
-from unit.phase8_helpers import FakePaperBroker, make_approval, make_receipt
+from unit.phase8_helpers import (
+    FakePaperBroker,
+    make_approval,
+    make_broker_order_snapshot,
+    make_receipt,
+)
 
 NEW_YORK = ZoneInfo("America/New_York")
 
@@ -270,7 +279,7 @@ def test_phase8_uncertain_submission_reconciles_without_resubmission(
         )
 
     reconcile_broker = _safe_broker(order, broker_time)
-    reconcile_broker.existing_receipt = make_receipt(instruction)
+    reconcile_broker.existing_order = make_broker_order_snapshot(instruction)
     reconciled = service.reconcile_by_client_order_id(
         instruction.client_order_id,
         broker=reconcile_broker,
@@ -284,6 +293,261 @@ def test_phase8_uncertain_submission_reconciles_without_resubmission(
         PAPER_ATTEMPT_RECONCILED
     )
     _assert_credentials_not_persisted(database_path)
+
+
+def test_phase8_final_kill_switch_race_blocks_after_reservation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database_path = tmp_path / "phase8-kill-race.sqlite3"
+    artifacts = persist_phase7_artifacts(database_path)
+    order, risk = _approved_buy_order_and_risk(
+        artifacts.backtest.proposed_orders,
+        artifacts.backtest.risk_decisions,
+        artifacts.backtest.cost_assumptions,
+    )
+    broker_time = _broker_time(order.execution_session)
+    instruction = build_paper_order_instruction(
+        signal_id="signal-phase8-kill-race",
+        client_order_id="paper-order-phase8-kill-race",
+        proposed_order=order,
+        original_risk_decision=risk,
+        cost_assumptions=artifacts.backtest.cost_assumptions,
+        created_at_utc=broker_time - timedelta(minutes=10),
+        expires_at_utc=broker_time + timedelta(hours=1),
+    )
+    approval = make_approval(
+        instruction,
+        approval_id="approval-phase8-kill-race",
+        approved_at=broker_time - timedelta(minutes=5),
+    )
+    repository = SQLitePaperExecutionRepository(database_path)
+    repository.set_paper_execution_kill_switch(
+        engaged=False,
+        reason="explicit_phase8_kill_race",
+        updated_at_utc=broker_time,
+        confirmation=DISENGAGE_KILL_SWITCH_CONFIRMATION,
+    )
+    service = PaperExecutionService(settings=_enabled_settings(), repository=repository)
+    broker = _safe_broker(order, broker_time)
+    real_kill_switch_state = repository.get_kill_switch_state
+    kill_switch_reads = 0
+
+    def race_kill_switch_state() -> object:
+        nonlocal kill_switch_reads
+        kill_switch_reads += 1
+        if kill_switch_reads == 2:
+            connection = sqlite3.connect(database_path)
+            try:
+                connection.execute(
+                    """
+                    UPDATE paper_execution_control
+                    SET kill_switch_engaged = 1, reason = 'race_engaged'
+                    WHERE singleton_id = 1
+                    """
+                )
+                connection.commit()
+            finally:
+                connection.close()
+        return real_kill_switch_state()
+
+    monkeypatch.setattr(repository, "get_kill_switch_state", race_kill_switch_state)
+
+    with pytest.raises(PaperExecutionKillSwitchError):
+        service.submit_approved_order(instruction, approval, broker=broker)
+
+    attempt = repository.get_attempt(instruction.client_order_id)
+    assert broker.submit_calls == 0
+    assert attempt.attempt_status == PAPER_ATTEMPT_BLOCKED
+    assert attempt.failure_code == "kill_switch_engaged_before_submission"
+    with pytest.raises(PaperExecutionDuplicateError):
+        repository.reserve_attempt(
+            instruction,
+            approval,
+            execution_risk_approved=True,
+            now_utc=broker_time,
+        )
+
+
+def test_phase8_malformed_post_submit_response_is_unknown_and_not_retried(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "phase8-malformed-submit.sqlite3"
+    artifacts = persist_phase7_artifacts(database_path)
+    order, risk = _approved_buy_order_and_risk(
+        artifacts.backtest.proposed_orders,
+        artifacts.backtest.risk_decisions,
+        artifacts.backtest.cost_assumptions,
+    )
+    broker_time = _broker_time(order.execution_session)
+    instruction = build_paper_order_instruction(
+        signal_id="signal-phase8-malformed",
+        client_order_id="paper-order-phase8-malformed",
+        proposed_order=order,
+        original_risk_decision=risk,
+        cost_assumptions=artifacts.backtest.cost_assumptions,
+        created_at_utc=broker_time - timedelta(minutes=10),
+        expires_at_utc=broker_time + timedelta(hours=1),
+    )
+    approval = make_approval(
+        instruction,
+        approval_id="approval-phase8-malformed",
+        approved_at=broker_time - timedelta(minutes=5),
+    )
+    repository = SQLitePaperExecutionRepository(database_path)
+    repository.set_paper_execution_kill_switch(
+        engaged=False,
+        reason="explicit_phase8_malformed",
+        updated_at_utc=broker_time,
+        confirmation=DISENGAGE_KILL_SWITCH_CONFIRMATION,
+    )
+    broker = _safe_broker(order, broker_time)
+    broker.submit_snapshot = make_broker_order_snapshot(instruction)
+    object.__setattr__(broker.submit_snapshot, "symbol", "QQQ")
+    service = PaperExecutionService(settings=_enabled_settings(), repository=repository)
+
+    with pytest.raises(PaperExecutionSubmissionUnknownError):
+        service.submit_approved_order(instruction, approval, broker=broker)
+
+    assert broker.submit_calls == 1
+    assert repository.get_attempt(instruction.client_order_id).attempt_status == (
+        PAPER_ATTEMPT_SUBMISSION_UNKNOWN
+    )
+    with pytest.raises(PaperExecutionDuplicateError):
+        service.submit_approved_order(
+            instruction,
+            approval,
+            broker=_safe_broker(order, broker_time),
+        )
+    reconcile_broker = _safe_broker(order, broker_time)
+    reconcile_broker.existing_order = make_broker_order_snapshot(instruction)
+    reconciled = service.reconcile_by_client_order_id(
+        instruction.client_order_id,
+        broker=reconcile_broker,
+        now_utc=broker_time + timedelta(minutes=1),
+    )
+    assert reconciled is not None
+    assert reconcile_broker.submit_calls == 0
+    assert broker.submit_calls == 1
+
+
+def test_phase8_existing_broker_order_lineage_and_mismatch_paths(tmp_path: Path) -> None:
+    database_path = tmp_path / "phase8-existing.sqlite3"
+    artifacts = persist_phase7_artifacts(database_path)
+    order, risk = _approved_buy_order_and_risk(
+        artifacts.backtest.proposed_orders,
+        artifacts.backtest.risk_decisions,
+        artifacts.backtest.cost_assumptions,
+    )
+    broker_time = _broker_time(order.execution_session)
+    instruction = build_paper_order_instruction(
+        signal_id="signal-phase8-existing",
+        client_order_id="paper-order-phase8-existing",
+        proposed_order=order,
+        original_risk_decision=risk,
+        cost_assumptions=artifacts.backtest.cost_assumptions,
+        created_at_utc=broker_time - timedelta(minutes=10),
+        expires_at_utc=broker_time + timedelta(hours=1),
+    )
+    approval = make_approval(
+        instruction,
+        approval_id="approval-phase8-existing",
+        approved_at=broker_time - timedelta(minutes=5),
+    )
+    repository = SQLitePaperExecutionRepository(database_path)
+    repository.set_paper_execution_kill_switch(
+        engaged=False,
+        reason="explicit_phase8_existing",
+        updated_at_utc=broker_time,
+        confirmation=DISENGAGE_KILL_SWITCH_CONFIRMATION,
+    )
+    service = PaperExecutionService(settings=_enabled_settings(), repository=repository)
+    broker = _safe_broker(order, broker_time)
+    broker.existing_order = make_broker_order_snapshot(instruction)
+
+    receipt = service.submit_approved_order(instruction, approval, broker=broker)
+
+    assert receipt.signal_id == instruction.signal_id
+    assert receipt.instruction_fingerprint == instruction.instruction_fingerprint
+    assert broker.submit_calls == 0
+    assert repository.get_attempt(instruction.client_order_id).attempt_status == (
+        PAPER_ATTEMPT_BROKER_EXISTING_ORDER_FOUND
+    )
+
+    mismatch_instruction = build_paper_order_instruction(
+        signal_id="signal-phase8-existing-mismatch",
+        client_order_id="paper-order-phase8-existing-mismatch",
+        proposed_order=order,
+        original_risk_decision=risk,
+        cost_assumptions=artifacts.backtest.cost_assumptions,
+        created_at_utc=broker_time - timedelta(minutes=10),
+        expires_at_utc=broker_time + timedelta(hours=1),
+    )
+    mismatch_approval = make_approval(
+        mismatch_instruction,
+        approval_id="approval-phase8-existing-mismatch",
+        approved_at=broker_time - timedelta(minutes=5),
+    )
+    mismatch_broker = _safe_broker(order, broker_time)
+    mismatch_broker.existing_order = make_broker_order_snapshot(mismatch_instruction)
+    object.__setattr__(mismatch_broker.existing_order, "submitted_quantity", order.quantity + 1)
+
+    with pytest.raises(PaperExecutionSubmissionUnknownError):
+        service.submit_approved_order(
+            mismatch_instruction,
+            mismatch_approval,
+            broker=mismatch_broker,
+        )
+
+    mismatch_attempt = repository.get_attempt(mismatch_instruction.client_order_id)
+    assert mismatch_broker.submit_calls == 0
+    assert mismatch_attempt.attempt_status == PAPER_ATTEMPT_SUBMISSION_UNKNOWN
+    assert mismatch_attempt.broker_order_id is None
+
+
+def test_phase8_repository_rejects_forged_receipt_from_bypassed_service(tmp_path: Path) -> None:
+    database_path = tmp_path / "phase8-forged-receipt.sqlite3"
+    artifacts = persist_phase7_artifacts(database_path)
+    order, risk = _approved_buy_order_and_risk(
+        artifacts.backtest.proposed_orders,
+        artifacts.backtest.risk_decisions,
+        artifacts.backtest.cost_assumptions,
+    )
+    broker_time = _broker_time(order.execution_session)
+    instruction = build_paper_order_instruction(
+        signal_id="signal-phase8-forged",
+        client_order_id="paper-order-phase8-forged",
+        proposed_order=order,
+        original_risk_decision=risk,
+        cost_assumptions=artifacts.backtest.cost_assumptions,
+        created_at_utc=broker_time - timedelta(minutes=10),
+        expires_at_utc=broker_time + timedelta(hours=1),
+    )
+    approval = make_approval(
+        instruction,
+        approval_id="approval-phase8-forged",
+        approved_at=broker_time - timedelta(minutes=5),
+    )
+    repository = SQLitePaperExecutionRepository(database_path)
+    repository.reserve_attempt(
+        instruction,
+        approval,
+        execution_risk_approved=True,
+        now_utc=broker_time,
+    )
+    forged_receipt = make_receipt(instruction)
+    object.__setattr__(forged_receipt, "signal_id", "other-signal")
+
+    with pytest.raises(PaperExecutionIntegrityError):
+        repository.record_receipt(
+            forged_receipt,
+            status=PAPER_ATTEMPT_ACCEPTED,
+            account_id_fingerprint="a" * 64,
+            now_utc=broker_time,
+            event_type="broker_order_accepted",
+        )
+
+    assert repository.get_attempt(instruction.client_order_id).broker_order_id is None
 
 
 def _approved_buy_order_and_risk(

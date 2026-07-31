@@ -10,7 +10,6 @@ from alpaca.trading.enums import OrderSide, OrderType, TimeInForce
 import spy_market_agent.execution.alpaca_paper as alpaca_paper
 from spy_market_agent.execution.alpaca_paper import AlpacaPaperBroker
 from spy_market_agent.execution.errors import (
-    PaperExecutionBrokerStateError,
     PaperExecutionBrokerTransportError,
     PaperExecutionConfigurationError,
     PaperExecutionSubmissionUnknownError,
@@ -163,15 +162,61 @@ def test_market_day_spy_order_request_mapping_and_response_validation() -> None:
     assert receipt.client_order_id == instruction.client_order_id
     assert receipt.order_type == "market"
     assert receipt.time_in_force == "day"
+    assert not hasattr(receipt, "signal_id")
+    assert not hasattr(receipt, "instruction_fingerprint")
 
 
-def test_adapter_rejects_contradictory_broker_response() -> None:
+def test_lookup_returns_broker_snapshot_without_local_lineage() -> None:
+    broker = AlpacaPaperBroker(api_key="AKTEST", secret_key="SKTEST")
+
+    snapshot = broker.get_order_by_client_order_id("paper-order-20250103")
+
+    assert snapshot is not None
+    assert snapshot.client_order_id == "paper-order-20250103"
+    assert snapshot.symbol == "SPY"
+    assert not hasattr(snapshot, "signal_id")
+    assert not hasattr(snapshot, "instruction_fingerprint")
+
+
+def test_adapter_treats_contradictory_post_submit_response_as_unknown() -> None:
     instruction = make_instruction()
     broker = AlpacaPaperBroker(api_key="AKTEST", secret_key="SKTEST")
     _last_client().order = FakeOrder(symbol="QQQ")
 
-    with pytest.raises(PaperExecutionBrokerStateError):
+    with pytest.raises(PaperExecutionSubmissionUnknownError):
         broker.submit_market_day_order(instruction)
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    [
+        "client_order_id",
+        "symbol",
+        "side",
+        "qty",
+        "type",
+        "time_in_force",
+        "extended_hours",
+    ],
+)
+def test_adapter_post_submit_response_mismatches_are_unknown(field_name: str) -> None:
+    instruction = make_instruction()
+    broker = AlpacaPaperBroker(api_key="AKTEST", secret_key="SKTEST")
+    replacement = {
+        "client_order_id": "other-client-order",
+        "symbol": "QQQ",
+        "side": OrderSide.SELL,
+        "qty": "11",
+        "type": OrderType.LIMIT,
+        "time_in_force": TimeInForce.GTC,
+        "extended_hours": True,
+    }[field_name]
+    setattr(_last_client().order, field_name, replacement)
+
+    with pytest.raises(PaperExecutionSubmissionUnknownError):
+        broker.submit_market_day_order(instruction)
+
+    assert len(_last_client().submitted_requests) == 1
 
 
 def test_submit_sdk_exception_becomes_uncertain_without_retry() -> None:
