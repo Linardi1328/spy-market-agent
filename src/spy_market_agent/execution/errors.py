@@ -49,6 +49,10 @@ class PaperExecutionBrokerTransportError(PaperExecutionError):
     """Raised when a read-only broker preflight call fails."""
 
 
+class PaperExecutionBrokerRequestError(PaperExecutionError):
+    """Raised when a paper order request cannot be constructed before submission."""
+
+
 class PaperExecutionBrokerRejectionError(PaperExecutionError):
     """Raised when the broker definitively rejects a submitted paper order."""
 
@@ -68,6 +72,7 @@ class PaperExecutionNotFoundError(PaperExecutionError):
 __all__ = [
     "PaperExecutionApprovalError",
     "PaperExecutionBrokerRejectionError",
+    "PaperExecutionBrokerRequestError",
     "PaperExecutionBrokerStateError",
     "PaperExecutionBrokerTransportError",
     "PaperExecutionConfigurationError",

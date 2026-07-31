@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -10,7 +11,10 @@ from spy_market_agent.config import Settings
 from spy_market_agent.execution import (
     DISENGAGE_KILL_SWITCH_CONFIRMATION,
     PAPER_ATTEMPT_ACCEPTED,
+    PAPER_ATTEMPT_BLOCKED,
+    PAPER_ATTEMPT_BROKER_EXISTING_ORDER_FOUND,
     PAPER_ATTEMPT_RECONCILED,
+    PAPER_ATTEMPT_REJECTED,
     PAPER_ATTEMPT_RESERVED,
     PAPER_ATTEMPT_SUBMISSION_UNKNOWN,
     PaperExecutionDuplicateError,
@@ -248,6 +252,310 @@ def test_submission_unknown_retains_reservation(tmp_path: Path) -> None:
         )
 
 
+def test_submission_unknown_transition_allows_reserved_and_same_state(
+    tmp_path: Path,
+) -> None:
+    repository, instruction, _approval = _repository_with_reserved_attempt(tmp_path)
+
+    first = repository.mark_submission_unknown(
+        client_order_id=instruction.client_order_id,
+        signal_id=instruction.signal_id,
+        failure_code="timeout",
+        now_utc=instruction.created_at_utc,
+    )
+    second = repository.mark_submission_unknown(
+        client_order_id=instruction.client_order_id,
+        signal_id=instruction.signal_id,
+        failure_code="broker_order_mismatch",
+        now_utc=instruction.created_at_utc,
+        event_type="broker_order_mismatch",
+    )
+    events = repository.list_events(client_order_id=instruction.client_order_id)
+
+    assert first.attempt_status == PAPER_ATTEMPT_SUBMISSION_UNKNOWN
+    assert second.attempt_status == PAPER_ATTEMPT_SUBMISSION_UNKNOWN
+    assert second.failure_code == "broker_order_mismatch"
+    assert [event.event_type for event in events] == [
+        "attempt_reserved",
+        "submission_unknown",
+        "broker_order_mismatch",
+    ]
+    assert events[-1].signal_id == instruction.signal_id
+    assert events[-1].client_order_id == instruction.client_order_id
+
+
+@pytest.mark.parametrize(
+    "terminal_status",
+    [
+        PAPER_ATTEMPT_ACCEPTED,
+        PAPER_ATTEMPT_BROKER_EXISTING_ORDER_FOUND,
+        PAPER_ATTEMPT_RECONCILED,
+        PAPER_ATTEMPT_REJECTED,
+        PAPER_ATTEMPT_BLOCKED,
+    ],
+)
+def test_submission_unknown_rejects_terminal_state_regression(
+    tmp_path: Path,
+    terminal_status: str,
+) -> None:
+    repository, instruction, _approval = _repository_with_reserved_attempt(tmp_path)
+    _move_attempt_to_status(repository, instruction, terminal_status)
+    before_attempt = repository.get_attempt(instruction.client_order_id)
+    before_events = repository.list_events(client_order_id=instruction.client_order_id)
+
+    with pytest.raises(PaperExecutionIntegrityError):
+        repository.mark_submission_unknown(
+            client_order_id=instruction.client_order_id,
+            signal_id=instruction.signal_id,
+            failure_code="late_unknown",
+            now_utc=instruction.created_at_utc,
+        )
+
+    assert repository.get_attempt(instruction.client_order_id) == before_attempt
+    assert repository.list_events(client_order_id=instruction.client_order_id) == before_events
+
+
+@pytest.mark.parametrize("target_status", [PAPER_ATTEMPT_BLOCKED, PAPER_ATTEMPT_REJECTED])
+def test_failure_transition_allows_reserved_to_blocked_or_rejected(
+    tmp_path: Path,
+    target_status: str,
+) -> None:
+    repository, instruction, _approval = _repository_with_reserved_attempt(tmp_path)
+
+    failed = repository.mark_failure(
+        client_order_id=instruction.client_order_id,
+        signal_id=instruction.signal_id,
+        status=target_status,
+        failure_code=f"{target_status}_reason",
+        now_utc=instruction.created_at_utc,
+    )
+    events = repository.list_events(client_order_id=instruction.client_order_id)
+
+    assert failed.attempt_status == target_status
+    assert events[-1].signal_id == instruction.signal_id
+    assert events[-1].client_order_id == instruction.client_order_id
+
+
+@pytest.mark.parametrize(
+    "target_status",
+    [
+        PAPER_ATTEMPT_RESERVED,
+        PAPER_ATTEMPT_ACCEPTED,
+        PAPER_ATTEMPT_BROKER_EXISTING_ORDER_FOUND,
+        PAPER_ATTEMPT_SUBMISSION_UNKNOWN,
+        PAPER_ATTEMPT_RECONCILED,
+    ],
+)
+def test_failure_transition_rejects_unsupported_target_states(
+    tmp_path: Path,
+    target_status: str,
+) -> None:
+    repository, instruction, _approval = _repository_with_reserved_attempt(tmp_path)
+
+    with pytest.raises(PaperExecutionInputError):
+        repository.mark_failure(
+            client_order_id=instruction.client_order_id,
+            signal_id=instruction.signal_id,
+            status=target_status,
+            failure_code="invalid_target",
+            now_utc=instruction.created_at_utc,
+        )
+
+    assert repository.get_attempt(instruction.client_order_id).attempt_status == (
+        PAPER_ATTEMPT_RESERVED
+    )
+    assert len(repository.list_events(client_order_id=instruction.client_order_id)) == 1
+
+
+@pytest.mark.parametrize(
+    "terminal_status",
+    [
+        PAPER_ATTEMPT_ACCEPTED,
+        PAPER_ATTEMPT_BROKER_EXISTING_ORDER_FOUND,
+        PAPER_ATTEMPT_RECONCILED,
+        PAPER_ATTEMPT_REJECTED,
+        PAPER_ATTEMPT_BLOCKED,
+    ],
+)
+def test_failure_transition_rejects_terminal_state_regression(
+    tmp_path: Path,
+    terminal_status: str,
+) -> None:
+    repository, instruction, _approval = _repository_with_reserved_attempt(tmp_path)
+    _move_attempt_to_status(repository, instruction, terminal_status)
+    before_attempt = repository.get_attempt(instruction.client_order_id)
+    before_events = repository.list_events(client_order_id=instruction.client_order_id)
+
+    with pytest.raises(PaperExecutionIntegrityError):
+        repository.mark_failure(
+            client_order_id=instruction.client_order_id,
+            signal_id=instruction.signal_id,
+            status=PAPER_ATTEMPT_BLOCKED,
+            failure_code="late_block",
+            now_utc=instruction.created_at_utc,
+        )
+
+    assert repository.get_attempt(instruction.client_order_id) == before_attempt
+    assert repository.list_events(client_order_id=instruction.client_order_id) == before_events
+
+
+def test_wrong_signal_lineage_rejected_by_unknown_and_failure_updates(
+    tmp_path: Path,
+) -> None:
+    repository, instruction, _approval = _repository_with_reserved_attempt(tmp_path)
+    before_attempt = repository.get_attempt(instruction.client_order_id)
+    before_events = repository.list_events(client_order_id=instruction.client_order_id)
+
+    with pytest.raises(PaperExecutionIntegrityError):
+        repository.mark_submission_unknown(
+            client_order_id=instruction.client_order_id,
+            signal_id="other-signal",
+            failure_code="timeout",
+            now_utc=instruction.created_at_utc,
+        )
+    with pytest.raises(PaperExecutionIntegrityError):
+        repository.mark_failure(
+            client_order_id=instruction.client_order_id,
+            signal_id="other-signal",
+            status=PAPER_ATTEMPT_BLOCKED,
+            failure_code="blocked",
+            now_utc=instruction.created_at_utc,
+        )
+
+    assert repository.get_attempt(instruction.client_order_id) == before_attempt
+    assert repository.list_events(client_order_id=instruction.client_order_id) == before_events
+
+
+def test_update_row_count_mismatch_is_rejected_transactionally(tmp_path: Path) -> None:
+    database_path = tmp_path / "phase8.sqlite3"
+    initialize_database(database_path)
+    instruction = make_instruction()
+    approval = make_approval(instruction)
+    repository = SQLitePaperExecutionRepository(database_path)
+    repository.reserve_attempt(
+        instruction,
+        approval,
+        execution_risk_approved=True,
+        now_utc=instruction.created_at_utc,
+    )
+    before_attempt = repository.get_attempt(instruction.client_order_id)
+    before_events = repository.list_events(client_order_id=instruction.client_order_id)
+    connection = sqlite3.connect(database_path)
+    try:
+        connection.execute(
+            """
+            CREATE TRIGGER skip_paper_attempt_update
+            BEFORE UPDATE ON paper_execution_attempts
+            BEGIN
+                SELECT RAISE(IGNORE);
+            END
+            """
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    with pytest.raises(PaperExecutionIntegrityError):
+        repository.mark_submission_unknown(
+            client_order_id=instruction.client_order_id,
+            signal_id=instruction.signal_id,
+            failure_code="timeout",
+            now_utc=instruction.created_at_utc,
+        )
+
+    assert repository.get_attempt(instruction.client_order_id) == before_attempt
+    assert repository.list_events(client_order_id=instruction.client_order_id) == before_events
+
+
+def test_sqlite_failure_rolls_back_attempt_update_and_event_append(tmp_path: Path) -> None:
+    database_path = tmp_path / "phase8.sqlite3"
+    initialize_database(database_path)
+    instruction = make_instruction()
+    approval = make_approval(instruction)
+    repository = SQLitePaperExecutionRepository(database_path)
+    repository.reserve_attempt(
+        instruction,
+        approval,
+        execution_risk_approved=True,
+        now_utc=instruction.created_at_utc,
+    )
+    before_attempt = repository.get_attempt(instruction.client_order_id)
+    before_events = repository.list_events(client_order_id=instruction.client_order_id)
+    connection = sqlite3.connect(database_path)
+    try:
+        connection.execute(
+            """
+            CREATE TRIGGER fail_submission_unknown_event
+            BEFORE INSERT ON paper_execution_events
+            WHEN NEW.event_type = 'submission_unknown'
+            BEGIN
+                SELECT RAISE(FAIL, 'raw sqlite failure with secret text');
+            END
+            """
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    with pytest.raises(PaperExecutionIntegrityError) as exc_info:
+        repository.mark_submission_unknown(
+            client_order_id=instruction.client_order_id,
+            signal_id=instruction.signal_id,
+            failure_code="timeout",
+            now_utc=instruction.created_at_utc,
+        )
+
+    assert "secret" not in str(exc_info.value).lower()
+    assert repository.get_attempt(instruction.client_order_id) == before_attempt
+    assert repository.list_events(client_order_id=instruction.client_order_id) == before_events
+
+
+def test_receipt_environment_must_be_alpaca_paper(tmp_path: Path) -> None:
+    repository, instruction, _approval = _repository_with_reserved_attempt(tmp_path)
+    accepted = repository.record_receipt(
+        make_receipt(instruction),
+        status=PAPER_ATTEMPT_ACCEPTED,
+        account_id_fingerprint="a" * 64,
+        now_utc=instruction.created_at_utc,
+        event_type="broker_order_accepted",
+    )
+
+    assert accepted.broker_environment == "alpaca_paper"
+
+
+@pytest.mark.parametrize("environment", ["alpaca_live", "live", "production", "paper", "unknown"])
+def test_forged_receipt_environment_is_rejected_transactionally(
+    tmp_path: Path,
+    environment: str,
+) -> None:
+    repository, instruction, _approval = _repository_with_reserved_attempt(tmp_path)
+    before_attempt = repository.get_attempt(instruction.client_order_id)
+    before_events = repository.list_events(client_order_id=instruction.client_order_id)
+    forged = _forged_receipt(instruction, execution_environment=environment)
+
+    with pytest.raises(PaperExecutionIntegrityError) as exc_info:
+        repository.record_receipt(
+            forged,
+            status=PAPER_ATTEMPT_ACCEPTED,
+            account_id_fingerprint="a" * 64,
+            now_utc=instruction.created_at_utc,
+            event_type="broker_order_accepted",
+        )
+
+    assert exc_info.value.code == "receipt_environment_mismatch"
+    assert repository.get_attempt(instruction.client_order_id) == before_attempt
+    assert repository.list_events(client_order_id=instruction.client_order_id) == before_events
+    reopened = SQLitePaperExecutionRepository(tmp_path / "phase8.sqlite3")
+    assert reopened.get_attempt(instruction.client_order_id) == before_attempt
+
+
+def test_blank_receipt_environment_is_rejected_by_model_validation() -> None:
+    instruction = make_instruction()
+
+    with pytest.raises(PaperExecutionInputError):
+        replace(make_receipt(instruction), execution_environment="")
+
+
 def test_tampered_attempt_rows_fail_with_project_owned_integrity_error(
     tmp_path: Path,
 ) -> None:
@@ -348,3 +656,71 @@ def _forged_receipt(
     for field_name, value in changes.items():
         object.__setattr__(receipt, field_name, value)
     return receipt
+
+
+def _repository_with_reserved_attempt(
+    tmp_path: Path,
+) -> tuple[SQLitePaperExecutionRepository, PaperOrderInstruction, object]:
+    database_path = tmp_path / "phase8.sqlite3"
+    initialize_database(database_path)
+    instruction = make_instruction()
+    approval = make_approval(instruction)
+    repository = SQLitePaperExecutionRepository(database_path)
+    repository.reserve_attempt(
+        instruction,
+        approval,
+        execution_risk_approved=True,
+        now_utc=instruction.created_at_utc,
+    )
+    return repository, instruction, approval
+
+
+def _move_attempt_to_status(
+    repository: SQLitePaperExecutionRepository,
+    instruction: PaperOrderInstruction,
+    status: str,
+) -> None:
+    if status == PAPER_ATTEMPT_RESERVED:
+        return
+    if status == PAPER_ATTEMPT_SUBMISSION_UNKNOWN:
+        repository.mark_submission_unknown(
+            client_order_id=instruction.client_order_id,
+            signal_id=instruction.signal_id,
+            failure_code="submission_unknown",
+            now_utc=instruction.created_at_utc,
+        )
+        return
+    if status in {PAPER_ATTEMPT_ACCEPTED, PAPER_ATTEMPT_BROKER_EXISTING_ORDER_FOUND}:
+        repository.record_receipt(
+            make_receipt(instruction),
+            status=status,
+            account_id_fingerprint="a" * 64,
+            now_utc=instruction.created_at_utc,
+            event_type=f"{status}_event",
+        )
+        return
+    if status == PAPER_ATTEMPT_RECONCILED:
+        repository.mark_submission_unknown(
+            client_order_id=instruction.client_order_id,
+            signal_id=instruction.signal_id,
+            failure_code="timeout",
+            now_utc=instruction.created_at_utc,
+        )
+        repository.record_receipt(
+            make_receipt(instruction),
+            status=PAPER_ATTEMPT_RECONCILED,
+            account_id_fingerprint="a" * 64,
+            now_utc=instruction.created_at_utc,
+            event_type="broker_order_reconciled",
+        )
+        return
+    if status in {PAPER_ATTEMPT_BLOCKED, PAPER_ATTEMPT_REJECTED}:
+        repository.mark_failure(
+            client_order_id=instruction.client_order_id,
+            signal_id=instruction.signal_id,
+            status=status,
+            failure_code=f"{status}_reason",
+            now_utc=instruction.created_at_utc,
+        )
+        return
+    raise AssertionError(f"unsupported test status {status}")

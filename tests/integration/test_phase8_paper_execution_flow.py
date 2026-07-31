@@ -4,13 +4,24 @@ import sqlite3
 from datetime import UTC, datetime, time, timedelta
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 from zoneinfo import ZoneInfo
 
 import pytest
+from alpaca.trading.enums import (
+    AccountStatus,
+    AssetClass,
+    AssetStatus,
+    OrderStatus,
+    OrderType,
+    PositionSide,
+    TimeInForce,
+)
+from alpaca.trading.enums import OrderSide as AlpacaOrderSide
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
+import spy_market_agent.execution.alpaca_paper as alpaca_paper
 from spy_market_agent.api import create_app
 from spy_market_agent.backtesting import BacktestCostAssumptions, estimate_order_cost
 from spy_market_agent.config import Settings
@@ -21,7 +32,9 @@ from spy_market_agent.execution import (
     PAPER_ATTEMPT_BLOCKED,
     PAPER_ATTEMPT_BROKER_EXISTING_ORDER_FOUND,
     PAPER_ATTEMPT_RECONCILED,
+    PAPER_ATTEMPT_RESERVED,
     PAPER_ATTEMPT_SUBMISSION_UNKNOWN,
+    PaperExecutionBrokerRequestError,
     PaperExecutionConfigurationError,
     PaperExecutionDuplicateError,
     PaperExecutionIntegrityError,
@@ -135,6 +148,129 @@ class ApiClientAdapter:
         return payload
 
 
+class _NotFound(Exception):
+    status_code = 404
+
+
+class EnumBackedTradingClient:
+    constructed: ClassVar[list[dict[str, Any]]] = []
+    last_instance: ClassVar[EnumBackedTradingClient | None] = None
+    clock_time: ClassVar[datetime] = datetime(2025, 1, 3, 15, 30, tzinfo=UTC)
+
+    def __init__(self, **kwargs: Any) -> None:
+        EnumBackedTradingClient.constructed.append(kwargs)
+        EnumBackedTradingClient.last_instance = self
+        self.submit_calls = 0
+        self.lookup_calls = 0
+
+    def get_account(self) -> object:
+        return type(
+            "Account",
+            (),
+            {
+                "status": AccountStatus.ACTIVE,
+                "currency": "USD",
+                "cash": "10000",
+                "equity": "10000",
+                "buying_power": "10000",
+                "trading_blocked": False,
+                "account_blocked": False,
+                "trade_suspended_by_user": False,
+                "id": "full-account-id",
+            },
+        )()
+
+    def get_account_configurations(self) -> object:
+        return type(
+            "Configuration",
+            (),
+            {
+                "no_shorting": True,
+                "max_margin_multiplier": "1",
+                "fractional_trading": False,
+                "suspend_trade": False,
+            },
+        )()
+
+    def get_clock(self) -> object:
+        return type(
+            "Clock",
+            (),
+            {
+                "timestamp": self.clock_time,
+                "is_open": True,
+                "next_open": self.clock_time + timedelta(days=1),
+                "next_close": self.clock_time + timedelta(hours=5),
+            },
+        )()
+
+    def get_asset(self, symbol: str) -> object:
+        assert symbol == "SPY"
+        return type(
+            "Asset",
+            (),
+            {
+                "symbol": "SPY",
+                "status": AssetStatus.ACTIVE,
+                "tradable": True,
+                "fractionable": False,
+                "asset_class": AssetClass.US_EQUITY,
+            },
+        )()
+
+    def get_all_positions(self) -> list[object]:
+        return [
+            type(
+                "Position",
+                (),
+                {
+                    "symbol": "SPY",
+                    "side": PositionSide.LONG,
+                    "qty": "0",
+                    "qty_available": "0",
+                    "current_price": "100",
+                },
+            )()
+        ]
+
+    def get_orders(self, *, filter: object) -> list[object]:
+        assert filter
+        return []
+
+    def get_order_by_client_id(self, client_id: str) -> object:
+        assert client_id
+        self.lookup_calls += 1
+        raise _NotFound()
+
+    def submit_order(self, *, order_data: Any) -> object:
+        self.submit_calls += 1
+        return type(
+            "Order",
+            (),
+            {
+                "id": "enum-backed-paper-order",
+                "client_order_id": order_data.client_order_id,
+                "symbol": "SPY",
+                "side": AlpacaOrderSide.BUY,
+                "qty": str(order_data.qty),
+                "filled_qty": "0",
+                "status": OrderStatus.ACCEPTED,
+                "type": OrderType.MARKET,
+                "time_in_force": TimeInForce.DAY,
+                "extended_hours": False,
+                "submitted_at": self.clock_time,
+                "updated_at": self.clock_time,
+            },
+        )()
+
+
+def _last_enum_client() -> EnumBackedTradingClient:
+    client = EnumBackedTradingClient.last_instance
+    if client is None:
+        raise AssertionError("expected enum-backed trading client to be constructed")
+    return client
+
+
 def test_phase8_paper_execution_flow_is_explicit_auditable_and_duplicate_safe(
     tmp_path: Path,
 ) -> None:
@@ -228,6 +364,127 @@ def test_phase8_paper_execution_flow_is_explicit_auditable_and_duplicate_safe(
     assert dashboard_state.paper_order_rows.total == 1
     assert fake_broker.submit_calls == 1
     _assert_credentials_not_persisted(database_path)
+
+
+def test_phase8_real_sdk_enum_adapter_flow_submits_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database_path = tmp_path / "phase8-enum-adapter.sqlite3"
+    artifacts = persist_phase7_artifacts(database_path)
+    order, risk = _approved_buy_order_and_risk(
+        artifacts.backtest.proposed_orders,
+        artifacts.backtest.risk_decisions,
+        artifacts.backtest.cost_assumptions,
+    )
+    broker_time = _broker_time(order.execution_session)
+    instruction = build_paper_order_instruction(
+        signal_id="signal-phase8-enum",
+        client_order_id="paper-order-phase8-enum",
+        proposed_order=order,
+        original_risk_decision=risk,
+        cost_assumptions=artifacts.backtest.cost_assumptions,
+        created_at_utc=broker_time - timedelta(minutes=10),
+        expires_at_utc=broker_time + timedelta(hours=1),
+    )
+    approval = make_approval(
+        instruction,
+        approval_id="approval-phase8-enum",
+        approved_at=broker_time - timedelta(minutes=5),
+    )
+    repository = SQLitePaperExecutionRepository(database_path)
+    repository.set_paper_execution_kill_switch(
+        engaged=False,
+        reason="explicit_phase8_enum",
+        updated_at_utc=broker_time,
+        confirmation=DISENGAGE_KILL_SWITCH_CONFIRMATION,
+    )
+    EnumBackedTradingClient.constructed = []
+    EnumBackedTradingClient.last_instance = None
+    EnumBackedTradingClient.clock_time = broker_time
+    monkeypatch.setattr(alpaca_paper, "TradingClient", EnumBackedTradingClient)
+    broker = alpaca_paper.AlpacaPaperBroker(api_key="AKPHASE8TEST", secret_key="SKPHASE8TEST")
+    service = PaperExecutionService(settings=_enabled_settings(), repository=repository)
+
+    receipt = service.submit_approved_order(instruction, approval, broker=broker)
+
+    assert receipt.client_order_id == instruction.client_order_id
+    assert receipt.execution_environment == "alpaca_paper"
+    assert EnumBackedTradingClient.constructed == [
+        {"api_key": "AKPHASE8TEST", "secret_key": "SKPHASE8TEST", "paper": True}
+    ]
+    enum_client = _last_enum_client()
+    assert enum_client.lookup_calls == 1
+    assert enum_client.submit_calls == 1
+    assert repository.get_attempt(instruction.client_order_id).attempt_status == (
+        PAPER_ATTEMPT_ACCEPTED
+    )
+    _assert_credentials_not_persisted(database_path)
+
+
+def test_phase8_local_request_construction_failure_blocks_without_sdk_submit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database_path = tmp_path / "phase8-request-build.sqlite3"
+    artifacts = persist_phase7_artifacts(database_path)
+    order, risk = _approved_buy_order_and_risk(
+        artifacts.backtest.proposed_orders,
+        artifacts.backtest.risk_decisions,
+        artifacts.backtest.cost_assumptions,
+    )
+    broker_time = _broker_time(order.execution_session)
+    instruction = build_paper_order_instruction(
+        signal_id="signal-phase8-request-build",
+        client_order_id="paper-order-phase8-request-build",
+        proposed_order=order,
+        original_risk_decision=risk,
+        cost_assumptions=artifacts.backtest.cost_assumptions,
+        created_at_utc=broker_time - timedelta(minutes=10),
+        expires_at_utc=broker_time + timedelta(hours=1),
+    )
+    approval = make_approval(
+        instruction,
+        approval_id="approval-phase8-request-build",
+        approved_at=broker_time - timedelta(minutes=5),
+    )
+    repository = SQLitePaperExecutionRepository(database_path)
+    repository.set_paper_execution_kill_switch(
+        engaged=False,
+        reason="explicit_phase8_request_build",
+        updated_at_utc=broker_time,
+        confirmation=DISENGAGE_KILL_SWITCH_CONFIRMATION,
+    )
+    EnumBackedTradingClient.constructed = []
+    EnumBackedTradingClient.last_instance = None
+    EnumBackedTradingClient.clock_time = broker_time
+    monkeypatch.setattr(alpaca_paper, "TradingClient", EnumBackedTradingClient)
+
+    class FailingMarketOrderRequest:
+        def __init__(self, **_: object) -> None:
+            raise ValueError("raw request model validation secret")
+
+    monkeypatch.setattr(alpaca_paper, "MarketOrderRequest", FailingMarketOrderRequest)
+    broker = alpaca_paper.AlpacaPaperBroker(api_key="AKPHASE8TEST", secret_key="SKPHASE8TEST")
+    service = PaperExecutionService(settings=_enabled_settings(), repository=repository)
+
+    with pytest.raises(PaperExecutionBrokerRequestError) as exc_info:
+        service.submit_approved_order(instruction, approval, broker=broker)
+
+    assert "secret" not in str(exc_info.value).lower()
+    enum_client = _last_enum_client()
+    assert enum_client.lookup_calls == 1
+    assert enum_client.submit_calls == 0
+    attempt = repository.get_attempt(instruction.client_order_id)
+    assert attempt.attempt_status == PAPER_ATTEMPT_BLOCKED
+    assert attempt.failure_code == "broker_request_construction_failed"
+    assert attempt.attempt_status != PAPER_ATTEMPT_SUBMISSION_UNKNOWN
+    with pytest.raises(PaperExecutionDuplicateError):
+        service.submit_approved_order(
+            instruction,
+            approval,
+            broker=_safe_broker(order, broker_time),
+        )
 
 
 def test_phase8_uncertain_submission_reconciles_without_resubmission(
@@ -548,6 +805,134 @@ def test_phase8_repository_rejects_forged_receipt_from_bypassed_service(tmp_path
         )
 
     assert repository.get_attempt(instruction.client_order_id).broker_order_id is None
+
+
+def test_phase8_terminal_states_cannot_regress_through_repository(tmp_path: Path) -> None:
+    database_path = tmp_path / "phase8-terminal-lineage.sqlite3"
+    artifacts = persist_phase7_artifacts(database_path)
+    order, risk = _approved_buy_order_and_risk(
+        artifacts.backtest.proposed_orders,
+        artifacts.backtest.risk_decisions,
+        artifacts.backtest.cost_assumptions,
+    )
+    broker_time = _broker_time(order.execution_session)
+    instruction = build_paper_order_instruction(
+        signal_id="signal-phase8-terminal",
+        client_order_id="paper-order-phase8-terminal",
+        proposed_order=order,
+        original_risk_decision=risk,
+        cost_assumptions=artifacts.backtest.cost_assumptions,
+        created_at_utc=broker_time - timedelta(minutes=10),
+        expires_at_utc=broker_time + timedelta(hours=1),
+    )
+    approval = make_approval(
+        instruction,
+        approval_id="approval-phase8-terminal",
+        approved_at=broker_time - timedelta(minutes=5),
+    )
+    repository = SQLitePaperExecutionRepository(database_path)
+    repository.reserve_attempt(
+        instruction,
+        approval,
+        execution_risk_approved=True,
+        now_utc=broker_time,
+    )
+    repository.record_receipt(
+        make_receipt(instruction),
+        status=PAPER_ATTEMPT_ACCEPTED,
+        account_id_fingerprint="a" * 64,
+        now_utc=broker_time,
+        event_type="broker_order_accepted",
+    )
+    before_attempt = repository.get_attempt(instruction.client_order_id)
+    before_events = repository.list_events(client_order_id=instruction.client_order_id)
+
+    with pytest.raises(PaperExecutionIntegrityError):
+        repository.mark_submission_unknown(
+            client_order_id=instruction.client_order_id,
+            signal_id=instruction.signal_id,
+            failure_code="late_unknown",
+            now_utc=broker_time,
+        )
+    with pytest.raises(PaperExecutionIntegrityError):
+        repository.mark_failure(
+            client_order_id=instruction.client_order_id,
+            signal_id=instruction.signal_id,
+            status=PAPER_ATTEMPT_BLOCKED,
+            failure_code="late_block",
+            now_utc=broker_time,
+        )
+
+    assert repository.get_attempt(instruction.client_order_id) == before_attempt
+    assert repository.list_events(client_order_id=instruction.client_order_id) == before_events
+
+
+def test_phase8_wrong_signal_id_and_live_receipt_are_rejected_transactionally(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "phase8-wrong-lineage-live.sqlite3"
+    artifacts = persist_phase7_artifacts(database_path)
+    order, risk = _approved_buy_order_and_risk(
+        artifacts.backtest.proposed_orders,
+        artifacts.backtest.risk_decisions,
+        artifacts.backtest.cost_assumptions,
+    )
+    broker_time = _broker_time(order.execution_session)
+    instruction = build_paper_order_instruction(
+        signal_id="signal-phase8-live-receipt",
+        client_order_id="paper-order-phase8-live-receipt",
+        proposed_order=order,
+        original_risk_decision=risk,
+        cost_assumptions=artifacts.backtest.cost_assumptions,
+        created_at_utc=broker_time - timedelta(minutes=10),
+        expires_at_utc=broker_time + timedelta(hours=1),
+    )
+    approval = make_approval(
+        instruction,
+        approval_id="approval-phase8-live-receipt",
+        approved_at=broker_time - timedelta(minutes=5),
+    )
+    repository = SQLitePaperExecutionRepository(database_path)
+    repository.reserve_attempt(
+        instruction,
+        approval,
+        execution_risk_approved=True,
+        now_utc=broker_time,
+    )
+    before_attempt = repository.get_attempt(instruction.client_order_id)
+    before_events = repository.list_events(client_order_id=instruction.client_order_id)
+
+    with pytest.raises(PaperExecutionIntegrityError):
+        repository.mark_submission_unknown(
+            client_order_id=instruction.client_order_id,
+            signal_id="other-signal",
+            failure_code="timeout",
+            now_utc=broker_time,
+        )
+    with pytest.raises(PaperExecutionIntegrityError):
+        repository.mark_failure(
+            client_order_id=instruction.client_order_id,
+            signal_id="other-signal",
+            status=PAPER_ATTEMPT_BLOCKED,
+            failure_code="blocked",
+            now_utc=broker_time,
+        )
+    forged = make_receipt(instruction)
+    object.__setattr__(forged, "execution_environment", "alpaca_live")
+    with pytest.raises(PaperExecutionIntegrityError):
+        repository.record_receipt(
+            forged,
+            status=PAPER_ATTEMPT_ACCEPTED,
+            account_id_fingerprint="a" * 64,
+            now_utc=broker_time,
+            event_type="broker_order_accepted",
+        )
+
+    assert repository.get_attempt(instruction.client_order_id) == before_attempt
+    assert repository.list_events(client_order_id=instruction.client_order_id) == before_events
+    assert repository.get_attempt(instruction.client_order_id).attempt_status == (
+        PAPER_ATTEMPT_RESERVED
+    )
 
 
 def _approved_buy_order_and_risk(

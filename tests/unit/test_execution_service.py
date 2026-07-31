@@ -20,6 +20,7 @@ from spy_market_agent.execution import (
     PAPER_ATTEMPT_REJECTED,
     PAPER_ATTEMPT_SUBMISSION_UNKNOWN,
     PaperExecutionBrokerRejectionError,
+    PaperExecutionBrokerRequestError,
     PaperExecutionBrokerStateError,
     PaperExecutionConfigurationError,
     PaperExecutionDuplicateError,
@@ -187,6 +188,40 @@ def test_successful_submission_reserves_ids_records_receipt_and_blocks_duplicate
     with pytest.raises(PaperExecutionDuplicateError):
         service.submit_approved_order(instruction, approval, broker=second_broker)
     assert second_broker.submit_calls == 0
+
+
+def test_broker_request_construction_failure_blocks_reserved_attempt(
+    tmp_path: Path,
+) -> None:
+    service, repository = _ready_service(tmp_path)
+    instruction = make_instruction()
+    approval = make_approval(instruction)
+    broker = FakePaperBroker(
+        submit_error=PaperExecutionBrokerRequestError(
+            "broker_request_construction_failed",
+            "paper-order request could not be constructed locally.",
+        )
+    )
+
+    with pytest.raises(PaperExecutionBrokerRequestError) as exc_info:
+        service.submit_approved_order(instruction, approval, broker=broker)
+
+    attempt = repository.get_attempt(CLIENT_ORDER_ID)
+    events = repository.list_events(client_order_id=CLIENT_ORDER_ID)
+
+    assert "reconciliation" not in str(exc_info.value).lower()
+    assert broker.submit_calls == 1
+    assert broker.lookup_calls == 1
+    assert attempt.attempt_status == PAPER_ATTEMPT_BLOCKED
+    assert attempt.failure_code == "broker_request_construction_failed"
+    assert [event.event_type for event in events] == [
+        "attempt_reserved",
+        "broker_request_construction_failed",
+    ]
+    assert events[-1].signal_id == instruction.signal_id
+    assert events[-1].client_order_id == instruction.client_order_id
+    with pytest.raises(PaperExecutionDuplicateError):
+        service.submit_approved_order(instruction, approval, broker=FakePaperBroker())
 
 
 def test_existing_broker_order_is_reconciled_without_second_submission(
@@ -537,6 +572,24 @@ def test_reconciliation_does_not_convert_terminal_attempt(tmp_path: Path) -> Non
         (
             FakePaperBroker(
                 account=BrokerAccountSnapshot(
+                    status="INACTIVE",
+                    currency="USD",
+                    cash=Decimal("10000"),
+                    equity=Decimal("10000"),
+                    buying_power=Decimal("10000"),
+                    trading_blocked=False,
+                    account_blocked=False,
+                    trade_suspended_by_user=False,
+                    account_id_fingerprint="a" * 64,
+                    retrieved_at_utc=BROKER_TIME,
+                )
+            ),
+            PaperExecutionBrokerStateError,
+            "account_not_active",
+        ),
+        (
+            FakePaperBroker(
+                account=BrokerAccountSnapshot(
                     status="active",
                     currency="USD",
                     cash=Decimal("10000"),
@@ -590,6 +643,20 @@ def test_reconciliation_does_not_convert_terminal_attempt(tmp_path: Path) -> Non
             ),
             PaperExecutionBrokerStateError,
             "pyramiding_forbidden",
+        ),
+        (
+            FakePaperBroker(
+                positions=(
+                    BrokerPositionSnapshot(
+                        symbol="SPY",
+                        side="short",
+                        quantity=Decimal("1"),
+                        available_quantity=Decimal("1"),
+                    ),
+                )
+            ),
+            PaperExecutionBrokerStateError,
+            "short_position",
         ),
         (
             FakePaperBroker(

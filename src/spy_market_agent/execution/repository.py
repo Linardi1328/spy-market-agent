@@ -15,8 +15,10 @@ from spy_market_agent.execution.identifiers import require_execution_id
 from spy_market_agent.execution.models import (
     DISENGAGE_KILL_SWITCH_CONFIRMATION,
     PAPER_ATTEMPT_ACCEPTED,
+    PAPER_ATTEMPT_BLOCKED,
     PAPER_ATTEMPT_BROKER_EXISTING_ORDER_FOUND,
     PAPER_ATTEMPT_RECONCILED,
+    PAPER_ATTEMPT_REJECTED,
     PAPER_ATTEMPT_RESERVED,
     PAPER_ATTEMPT_STATES,
     PAPER_ATTEMPT_SUBMISSION_UNKNOWN,
@@ -50,6 +52,23 @@ from spy_market_agent.persistence.serialization import (
     text_to_datetime,
     validate_checksum,
 )
+
+_RECEIPT_TRANSITIONS = {
+    PAPER_ATTEMPT_ACCEPTED: {PAPER_ATTEMPT_RESERVED},
+    PAPER_ATTEMPT_BROKER_EXISTING_ORDER_FOUND: {PAPER_ATTEMPT_RESERVED},
+    PAPER_ATTEMPT_RECONCILED: {
+        PAPER_ATTEMPT_RESERVED,
+        PAPER_ATTEMPT_SUBMISSION_UNKNOWN,
+    },
+}
+_SUBMISSION_UNKNOWN_PRIOR_STATES = {
+    PAPER_ATTEMPT_RESERVED,
+    PAPER_ATTEMPT_SUBMISSION_UNKNOWN,
+}
+_FAILURE_TARGET_STATES = {
+    PAPER_ATTEMPT_BLOCKED,
+    PAPER_ATTEMPT_REJECTED,
+}
 
 
 class SQLitePaperExecutionRepository:
@@ -317,8 +336,10 @@ class SQLitePaperExecutionRepository:
         safe_failure_code = _safe_text(failure_code, field_name="failure_code")
         connection = self._connect()
         try:
-            connection.execute("BEGIN")
+            connection.execute("BEGIN IMMEDIATE")
             prior = _get_attempt_from_connection(connection, parsed_client_id)
+            _require_signal_matches(parsed_signal_id, prior=prior)
+            _require_submission_unknown_transition(prior)
             cursor = connection.execute(
                 """
                 UPDATE paper_execution_attempts
@@ -339,8 +360,8 @@ class SQLitePaperExecutionRepository:
                 )
             self._insert_event(
                 connection,
-                signal_id=parsed_signal_id,
-                client_order_id=parsed_client_id,
+                signal_id=prior.signal_id,
+                client_order_id=prior.client_order_id,
                 event_type=event_type,
                 prior_state=prior.attempt_status,
                 new_state=PAPER_ATTEMPT_SUBMISSION_UNKNOWN,
@@ -350,6 +371,9 @@ class SQLitePaperExecutionRepository:
             )
             connection.commit()
             return _get_attempt_from_connection(connection, parsed_client_id)
+        except (PaperExecutionIntegrityError, PaperExecutionNotFoundError):
+            connection.rollback()
+            raise
         except sqlite3.Error as exc:
             connection.rollback()
             raise PaperExecutionIntegrityError(
@@ -369,7 +393,7 @@ class SQLitePaperExecutionRepository:
         now_utc: datetime,
         event_type: str = "attempt_failed",
     ) -> PaperExecutionAttempt:
-        if status not in PAPER_ATTEMPT_STATES:
+        if status not in _FAILURE_TARGET_STATES:
             raise PaperExecutionInputError(
                 "invalid_attempt_status", "attempt status is unsupported."
             )
@@ -378,8 +402,10 @@ class SQLitePaperExecutionRepository:
         safe_failure_code = _safe_text(failure_code, field_name="failure_code")
         connection = self._connect()
         try:
-            connection.execute("BEGIN")
+            connection.execute("BEGIN IMMEDIATE")
             prior = _get_attempt_from_connection(connection, parsed_client_id)
+            _require_signal_matches(parsed_signal_id, prior=prior)
+            _require_failure_transition(prior, target_status=status)
             cursor = connection.execute(
                 """
                 UPDATE paper_execution_attempts
@@ -395,8 +421,8 @@ class SQLitePaperExecutionRepository:
                 )
             self._insert_event(
                 connection,
-                signal_id=prior.signal_id or parsed_signal_id,
-                client_order_id=prior.client_order_id or parsed_client_id,
+                signal_id=prior.signal_id,
+                client_order_id=prior.client_order_id,
                 event_type=event_type,
                 prior_state=prior.attempt_status,
                 new_state=status,
@@ -406,6 +432,9 @@ class SQLitePaperExecutionRepository:
             )
             connection.commit()
             return _get_attempt_from_connection(connection, parsed_client_id)
+        except (PaperExecutionIntegrityError, PaperExecutionNotFoundError):
+            connection.rollback()
+            raise
         except sqlite3.Error as exc:
             connection.rollback()
             raise PaperExecutionIntegrityError(
@@ -618,14 +647,7 @@ def _validate_receipt_against_attempt(
     prior: PaperExecutionAttempt,
     status: str,
 ) -> None:
-    allowed_prior_states = {
-        PAPER_ATTEMPT_ACCEPTED: {PAPER_ATTEMPT_RESERVED},
-        PAPER_ATTEMPT_BROKER_EXISTING_ORDER_FOUND: {PAPER_ATTEMPT_RESERVED},
-        PAPER_ATTEMPT_RECONCILED: {
-            PAPER_ATTEMPT_RESERVED,
-            PAPER_ATTEMPT_SUBMISSION_UNKNOWN,
-        },
-    }.get(status)
+    allowed_prior_states = _RECEIPT_TRANSITIONS.get(status)
     if allowed_prior_states is None or prior.attempt_status not in allowed_prior_states:
         raise PaperExecutionIntegrityError(
             "invalid_receipt_state_transition",
@@ -652,12 +674,46 @@ def _validate_receipt_against_attempt(
             "receipt_contract_mismatch",
             "broker receipt does not match the supported paper-order contract.",
         )
-    if status in {PAPER_ATTEMPT_ACCEPTED, PAPER_ATTEMPT_BROKER_EXISTING_ORDER_FOUND} and (
-        prior.attempt_status != PAPER_ATTEMPT_RESERVED
-    ):
+    if receipt.execution_environment != "alpaca_paper":
         raise PaperExecutionIntegrityError(
-            "invalid_receipt_state_transition",
-            "broker receipt cannot update a non-reserved paper-execution attempt.",
+            "receipt_environment_mismatch",
+            "broker receipt environment does not match the approved paper ledger.",
+        )
+
+
+def _require_signal_matches(signal_id: str, *, prior: PaperExecutionAttempt) -> None:
+    if signal_id != prior.signal_id:
+        raise PaperExecutionIntegrityError(
+            "attempt_lineage_mismatch",
+            "paper-execution attempt lineage does not match the supplied identifiers.",
+        )
+
+
+def _require_submission_unknown_transition(prior: PaperExecutionAttempt) -> None:
+    if prior.attempt_status not in _SUBMISSION_UNKNOWN_PRIOR_STATES:
+        raise PaperExecutionIntegrityError(
+            "invalid_submission_unknown_transition",
+            (
+                "paper-execution attempt cannot transition to submission_unknown "
+                "from its current state."
+            ),
+        )
+
+
+def _require_failure_transition(
+    prior: PaperExecutionAttempt,
+    *,
+    target_status: str,
+) -> None:
+    if target_status not in _FAILURE_TARGET_STATES:
+        raise PaperExecutionIntegrityError(
+            "invalid_failure_transition",
+            "paper-execution failure transition target is unsupported.",
+        )
+    if prior.attempt_status != PAPER_ATTEMPT_RESERVED:
+        raise PaperExecutionIntegrityError(
+            "invalid_failure_transition",
+            "paper-execution attempt cannot transition to failure from its current state.",
         )
 
 
