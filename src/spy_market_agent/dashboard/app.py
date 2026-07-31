@@ -18,6 +18,7 @@ DASHBOARD_WARNING = (
 DASHBOARD_PREVIEW_LIMIT = 250
 DASHBOARD_MODEL_PREVIEW_LIMIT = 100
 DASHBOARD_EQUITY_PAGE_LIMIT = 500
+DASHBOARD_PAPER_ORDER_PREVIEW_LIMIT = 100
 
 
 class DashboardClient(Protocol):
@@ -54,6 +55,10 @@ class DashboardClient(Protocol):
     ) -> dict[str, Any]: ...
 
     def fills(self, run_id: str, *, limit: int = 250, offset: int = 0) -> dict[str, Any]: ...
+
+    def paper_trading_status(self) -> dict[str, Any]: ...
+
+    def paper_orders(self, *, limit: int = 100, offset: int = 0) -> dict[str, Any]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,6 +103,9 @@ class DashboardState:
     order_rows: PaginatedItems
     risk_decision_rows: PaginatedItems
     fill_rows: PaginatedItems
+    paper_trading_status: dict[str, Any] | None
+    paper_order_rows: PaginatedItems
+    paper_trading_error: str | None = None
     error_message: str | None = None
 
 
@@ -129,6 +137,16 @@ def load_dashboard_state(client: DashboardClient) -> DashboardState:
             order_rows = _paginated(client.orders(run_id, limit=DASHBOARD_PREVIEW_LIMIT))
             risk_rows = _paginated(client.risk_decisions(run_id, limit=DASHBOARD_PREVIEW_LIMIT))
             fill_rows = _paginated(client.fills(run_id, limit=DASHBOARD_PREVIEW_LIMIT))
+        paper_status: dict[str, Any] | None = None
+        paper_orders = PaginatedItems.empty()
+        paper_error: str | None = None
+        try:
+            paper_status = client.paper_trading_status()
+            paper_orders = _paginated(
+                client.paper_orders(limit=DASHBOARD_PAPER_ORDER_PREVIEW_LIMIT)
+            )
+        except (DashboardApiError, AttributeError, KeyError, TypeError, ValueError) as exc:
+            paper_error = str(exc) or "Paper-trading status is unavailable."
         return DashboardState(
             api_available=True,
             health=health,
@@ -142,6 +160,9 @@ def load_dashboard_state(client: DashboardClient) -> DashboardState:
             order_rows=order_rows,
             risk_decision_rows=risk_rows,
             fill_rows=fill_rows,
+            paper_trading_status=paper_status,
+            paper_order_rows=paper_orders,
+            paper_trading_error=paper_error,
         )
     except (DashboardApiError, KeyError, TypeError, ValueError) as exc:
         return DashboardState(
@@ -157,6 +178,9 @@ def load_dashboard_state(client: DashboardClient) -> DashboardState:
             order_rows=PaginatedItems.empty(),
             risk_decision_rows=PaginatedItems.empty(),
             fill_rows=PaginatedItems.empty(),
+            paper_trading_status=None,
+            paper_order_rows=PaginatedItems.empty(),
+            paper_trading_error=None,
             error_message=str(exc) or "Read API is unavailable.",
         )
 
@@ -170,7 +194,14 @@ def render_dashboard(st: Any, state: DashboardState) -> None:
         return
 
     tabs = st.tabs(
-        ["Overview", "Data Quality", "Model Evaluation", "Backtest Results", "Risk and Audit"]
+        [
+            "Overview",
+            "Data Quality",
+            "Model Evaluation",
+            "Backtest Results",
+            "Risk and Audit",
+            "Paper Trading Status",
+        ]
     )
     with tabs[0]:
         _render_overview(st, state)
@@ -182,6 +213,8 @@ def render_dashboard(st: Any, state: DashboardState) -> None:
         _render_backtest_results(st, state)
     with tabs[4]:
         _render_risk_audit(st, state)
+    with tabs[5]:
+        _render_paper_trading_status(st, state)
 
 
 def _render_overview(st: Any, state: DashboardState) -> None:
@@ -289,6 +322,52 @@ def _render_risk_audit(st: Any, state: DashboardState) -> None:
         st.dataframe(pd.DataFrame(state.fill_rows.items))
 
 
+def _render_paper_trading_status(st: Any, state: DashboardState) -> None:
+    st.subheader("Paper Trading Status")
+    st.warning(
+        "Paper trading only. Educational and experimental local execution state. It is "
+        "not investment advice, and paper fills can differ from historical backtests and "
+        "live fills."
+    )
+    if state.paper_trading_error is not None:
+        st.error(state.paper_trading_error)
+    status = state.paper_trading_status
+    if status is None:
+        st.info("No local paper-execution status is available.")
+        return
+    status_rows = [
+        {
+            "execution_mode": status.get("execution_mode", "unknown"),
+            "paper_execution_enabled": status.get("paper_execution_enabled", False),
+            "dry_run": status.get("dry_run", True),
+            "kill_switch_engaged": status.get("kill_switch_engaged", True),
+            "alpaca_api_key_present": _bool_label(status.get("alpaca_api_key_present", False)),
+            "alpaca_secret_key_present": _bool_label(
+                status.get("alpaca_secret_key_present", False)
+            ),
+            "last_local_attempt_status": status.get("last_local_attempt_status"),
+            "last_successful_submission_at_utc": status.get("last_successful_submission_at_utc"),
+            "unresolved_submission_count": status.get("unresolved_submission_count", 0),
+        }
+    ]
+    st.dataframe(pd.DataFrame(status_rows))
+    if state.paper_order_rows:
+        _write_page_status(st, "paper-order attempts", state.paper_order_rows)
+        fields = [
+            "client_order_id",
+            "signal_id",
+            "side",
+            "quantity",
+            "attempt_status",
+            "broker_status",
+            "updated_at_utc",
+            "failure_code",
+        ]
+        st.dataframe(pd.DataFrame(state.paper_order_rows.items).reindex(columns=fields))
+    else:
+        st.info("No local paper-order attempts are persisted.")
+
+
 def _items(payload: dict[str, Any]) -> list[dict[str, Any]]:
     items = payload.get("items", [])
     if not isinstance(items, list) or any(not isinstance(item, dict) for item in items):
@@ -359,6 +438,10 @@ def _positive_int(value: object, *, field_name: str) -> int:
 
 def _write_page_status(st: Any, label: str, page: PaginatedItems) -> None:
     st.write(f"Showing {page.visible_count} of {page.total} {label}.")
+
+
+def _bool_label(value: object) -> str:
+    return "present" if value is True else "not present"
 
 
 def _equity_chart_frame(equity_frame: pd.DataFrame) -> pd.DataFrame:

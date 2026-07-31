@@ -291,6 +291,62 @@ class FillPageResponse(PaginatedResponse):
     items: list[FillRowResponse]
 
 
+class PaperTradingStatusResponse(BaseModel):
+    kill_switch_engaged: bool
+    execution_mode: str
+    paper_execution_enabled: bool
+    dry_run: bool
+    alpaca_api_key_present: bool
+    alpaca_secret_key_present: bool
+    last_local_attempt_status: str | None
+    last_successful_submission_at_utc: str | None
+    unresolved_submission_count: int
+    scope: str = "paper trading only; local persisted execution state only"
+    limitation: str = (
+        "Paper fills are experimental, may differ from historical backtests and live fills, "
+        "and are not investment advice."
+    )
+    educational_warning: str = EDUCATIONAL_WARNING
+
+
+class PaperOrderAttemptResponse(BaseModel):
+    signal_id: str
+    client_order_id: str
+    approval_id: str
+    instruction_fingerprint: str
+    execution_schema_version: str
+    symbol: str
+    side: str
+    quantity: int
+    signal_session: str
+    execution_session: str
+    instruction_created_at_utc: str
+    expires_at_utc: str
+    approval_at_utc: str
+    approval_source: str
+    original_risk_approved: bool
+    execution_risk_approved: bool
+    attempt_status: str
+    broker_order_id: str | None
+    broker_status: str | None
+    broker_environment: str | None
+    account_id_fingerprint: str | None
+    sanitized_request_id: str | None
+    created_at_utc: str
+    updated_at_utc: str
+    failure_code: str | None
+    limitation: str = "Local paper-order attempts are audit records, not recommendations."
+    educational_warning: str = EDUCATIONAL_WARNING
+
+
+class PaperOrderListResponse(BaseModel):
+    items: list[PaperOrderAttemptResponse]
+    total: int
+    limit: int = Field(ge=1)
+    offset: int = Field(ge=0)
+    educational_warning: str = EDUCATIONAL_WARNING
+
+
 __all__ = [
     "EDUCATIONAL_WARNING",
     "ApiErrorResponse",
@@ -312,6 +368,9 @@ __all__ = [
     "ModelRunSummaryResponse",
     "OrderPageResponse",
     "OrderRowResponse",
+    "PaperOrderAttemptResponse",
+    "PaperOrderListResponse",
+    "PaperTradingStatusResponse",
     "PredictionPageResponse",
     "PredictionRowResponse",
     "RiskConfigResponse",

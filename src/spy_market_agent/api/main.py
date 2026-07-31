@@ -17,10 +17,25 @@ from spy_market_agent.api.schemas import (
     ModelRunDetailResponse,
     ModelRunListResponse,
     OrderPageResponse,
+    PaperOrderAttemptResponse,
+    PaperOrderListResponse,
+    PaperTradingStatusResponse,
     PredictionPageResponse,
     RiskDecisionPageResponse,
 )
-from spy_market_agent.api.services import MAX_PAGE_LIMIT, ReadRepository, ReadService
+from spy_market_agent.api.services import (
+    MAX_PAGE_LIMIT,
+    ExecutionReadRepository,
+    ReadRepository,
+    ReadService,
+)
+from spy_market_agent.config import Settings
+from spy_market_agent.execution.errors import (
+    PaperExecutionError,
+    PaperExecutionInputError,
+    PaperExecutionNotFoundError,
+)
+from spy_market_agent.execution.repository import SQLitePaperExecutionRepository
 from spy_market_agent.persistence.models import (
     PersistenceError,
     PersistenceInputError,
@@ -38,15 +53,23 @@ OffsetParam = Annotated[int, Query(ge=0)]
 def create_app(
     *,
     repository: ReadRepository | None = None,
+    execution_repository: ExecutionReadRepository | None = None,
     service: ReadService | None = None,
     database_path: str | None = None,
+    settings: Settings | None = None,
 ) -> FastAPI:
     read_service = service
     if read_service is None:
-        read_repository = repository or SQLiteArtifactRepository(
-            database_path or DEFAULT_SQLITE_DATABASE_PATH
+        sqlite_path = database_path or DEFAULT_SQLITE_DATABASE_PATH
+        read_repository = repository or SQLiteArtifactRepository(sqlite_path)
+        read_execution_repository = execution_repository or SQLitePaperExecutionRepository(
+            sqlite_path
         )
-        read_service = ReadService(read_repository)
+        read_service = ReadService(
+            read_repository,
+            execution_repository=read_execution_repository,
+            settings=settings,
+        )
 
     app = FastAPI(title="SPY Market Agent Read API", version="1.0.0")
 
@@ -80,6 +103,42 @@ def create_app(
             content=ApiErrorResponse(
                 code=exc.code,
                 message="Persisted research data is unavailable or invalid.",
+            ).model_dump(),
+        )
+
+    @app.exception_handler(PaperExecutionNotFoundError)
+    async def _paper_not_found_handler(
+        _request: Request,
+        exc: PaperExecutionNotFoundError,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=404,
+            content=ApiErrorResponse(code=exc.code, message=str(exc)).model_dump(),
+        )
+
+    @app.exception_handler(PaperExecutionInputError)
+    async def _paper_input_handler(
+        _request: Request,
+        exc: PaperExecutionInputError,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content=ApiErrorResponse(
+                code=exc.code,
+                message="Request parameters are invalid.",
+            ).model_dump(),
+        )
+
+    @app.exception_handler(PaperExecutionError)
+    async def _paper_execution_handler(
+        _request: Request,
+        exc: PaperExecutionError,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content=ApiErrorResponse(
+                code=exc.code,
+                message="Persisted paper-execution data is unavailable or invalid.",
             ).model_dump(),
         )
 
@@ -176,6 +235,27 @@ def create_app(
     ) -> FillPageResponse:
         return reads.fills(run_id, limit=limit, offset=offset)
 
+    @app.get("/api/v1/paper-trading/status", response_model=PaperTradingStatusResponse)
+    def paper_trading_status(
+        reads: ReadService = service_dependency_marker,
+    ) -> PaperTradingStatusResponse:
+        return reads.paper_trading_status()
+
+    @app.get("/api/v1/paper-orders", response_model=PaperOrderListResponse)
+    def paper_orders(
+        reads: ReadService = service_dependency_marker,
+        limit: LimitParam = 100,
+        offset: OffsetParam = 0,
+    ) -> PaperOrderListResponse:
+        return reads.paper_orders(limit=limit, offset=offset)
+
+    @app.get("/api/v1/paper-orders/{client_order_id}", response_model=PaperOrderAttemptResponse)
+    def paper_order_detail(
+        client_order_id: RunIdParam,
+        reads: ReadService = service_dependency_marker,
+    ) -> PaperOrderAttemptResponse:
+        return reads.paper_order_detail(client_order_id)
+
     _assert_read_only_routes(app.routes)
     return app
 
@@ -185,7 +265,7 @@ def _assert_read_only_routes(routes: Sequence[object]) -> None:
     for route in routes:
         methods = getattr(route, "methods", None)
         if methods is not None and state_changing.intersection(set(methods)):
-            raise RuntimeError("Phase 7 API may only expose read-only application routes.")
+            raise RuntimeError("Phase 8 API may only expose read-only application routes.")
 
 
 __all__ = ["DEFAULT_SQLITE_DATABASE_PATH", "create_app"]
