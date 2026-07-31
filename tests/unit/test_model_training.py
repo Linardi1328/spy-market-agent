@@ -6,14 +6,17 @@ from dataclasses import FrozenInstanceError, replace
 from datetime import timedelta
 from typing import Any, cast
 
+import numpy as np
 import pandas as pd
 import pytest
+import sklearn
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.tree import DecisionTreeRegressor
 
+import spy_market_agent.modeling.models as modeling_models
 from spy_market_agent.datasets.splits import DatasetPartition, DatasetPartitionMetadata
 from spy_market_agent.features.models import FEATURE_COLUMNS
 from spy_market_agent.modeling import (
@@ -269,12 +272,407 @@ def test_logistic_candidate_estimator_has_fixed_pipeline_specification() -> None
     assert isinstance(estimator.named_steps["scaler"], StandardScaler)
     classifier = estimator.named_steps["classifier"]
     assert isinstance(classifier, LogisticRegression)
-    assert classifier.penalty == "l2"
+    assert classifier.l1_ratio == 0.0
     assert classifier.C == 1.0
     assert classifier.solver == "liblinear"
     assert classifier.max_iter == 2000
     assert classifier.class_weight is None
     assert classifier.random_state == 7
+
+
+def test_modeling_scalar_validation_helpers_reject_malformed_values() -> None:
+    with pytest.raises(ModelTrainingError, match="invalid_created_at"):
+        modeling_models.require_aware_utc(
+            "2025-01-02",
+            field_name="created_at",
+            error_type=ModelTrainingError,
+        )
+    with pytest.raises(ModelTrainingError, match="naive_created_at"):
+        modeling_models.require_aware_utc(
+            CREATED_AT.replace(tzinfo=None),
+            field_name="created_at",
+            error_type=ModelTrainingError,
+        )
+    with pytest.raises(ModelTrainingError, match=r"plain datetime\.date"):
+        modeling_models.require_plain_date(
+            CREATED_AT,
+            field_name="session",
+            error_type=ModelTrainingError,
+        )
+    with pytest.raises(ModelTrainingError, match="SHA-256"):
+        modeling_models.validate_checksum(
+            123,
+            field_name="dataset_checksum",
+            error_type=ModelTrainingError,
+        )
+    with pytest.raises(ModelTrainingError, match="SHA-256"):
+        modeling_models.validate_checksum(
+            "A" * 64,
+            field_name="dataset_checksum",
+            error_type=ModelTrainingError,
+        )
+    with pytest.raises(ModelTrainingError, match="model_name"):
+        modeling_models.validate_model_name(123, error_type=ModelTrainingError)
+    with pytest.raises(ModelTrainingError, match="model_name"):
+        modeling_models.validate_model_name("neural_network", error_type=ModelTrainingError)
+    with pytest.raises(ModelTrainingError, match="partition_name"):
+        modeling_models.validate_partition_name(123, error_type=ModelTrainingError)
+    with pytest.raises(ModelTrainingError, match="partition_name"):
+        modeling_models.validate_partition_name("holdout", error_type=ModelTrainingError)
+    with pytest.raises(ModelTrainingError, match="tuple"):
+        modeling_models.validate_feature_columns(
+            list(FEATURE_COLUMNS),
+            error_type=ModelTrainingError,
+            code="invalid_feature_columns",
+        )
+    with pytest.raises(ModelTrainingError, match="ordered Phase 4"):
+        modeling_models.validate_feature_columns(
+            tuple(reversed(FEATURE_COLUMNS)),
+            error_type=ModelTrainingError,
+            code="invalid_feature_columns",
+        )
+    with pytest.raises(ModelTrainingError, match="non-empty"):
+        modeling_models.validate_runtime_sklearn_version("", error_type=ModelTrainingError)
+    with pytest.raises(ModelTrainingError, match="runtime version"):
+        modeling_models.validate_runtime_sklearn_version("0.0", error_type=ModelTrainingError)
+    assert (
+        modeling_models.validate_runtime_sklearn_version(
+            sklearn.__version__,
+            error_type=ModelTrainingError,
+        )
+        == sklearn.__version__
+    )
+
+
+@pytest.mark.parametrize("value", [True, "7", -1])
+def test_modeling_integer_validation_rejects_noncanonical_values(value: object) -> None:
+    with pytest.raises(ModelTrainingError, match="random_seed"):
+        modeling_models.validate_int(
+            value,
+            field_name="random_seed",
+            error_type=ModelTrainingError,
+            code="invalid_random_seed",
+            minimum=0,
+        )
+
+
+@pytest.mark.parametrize("value", [True, object(), "bad", float("nan"), float("inf")])
+def test_modeling_finite_float_validation_rejects_noncanonical_values(value: object) -> None:
+    with pytest.raises(ModelTrainingError, match="threshold"):
+        modeling_models.validate_finite_float(
+            value,
+            field_name="threshold",
+            error_type=ModelTrainingError,
+            code="invalid_threshold",
+        )
+
+
+def test_modeling_series_validation_helpers_reject_missing_dtype_and_order_issues() -> None:
+    with pytest.raises(ModelTrainingError, match="target"):
+        modeling_models._validate_binary_integer_series(
+            pd.Series([0, pd.NA], dtype="Int64"),
+            field_name="target",
+            error_type=ModelTrainingError,
+            missing_code="missing_target",
+            dtype_code="invalid_target_dtype",
+            value_code="invalid_target_value",
+        )
+    with pytest.raises(ModelTrainingError, match="integer binary dtype"):
+        modeling_models._validate_binary_integer_series(
+            pd.Series([0.0, 1.0], dtype="float64"),
+            field_name="target",
+            error_type=ModelTrainingError,
+            missing_code="missing_target",
+            dtype_code="invalid_target_dtype",
+            value_code="invalid_target_value",
+        )
+    with pytest.raises(ModelTrainingError, match="only 0 and 1"):
+        modeling_models._validate_binary_integer_series(
+            pd.Series([0, 2], dtype="int64"),
+            field_name="target",
+            error_type=ModelTrainingError,
+            missing_code="missing_target",
+            dtype_code="invalid_target_dtype",
+            value_code="invalid_target_value",
+        )
+    with pytest.raises(ModelTrainingError, match="unique"):
+        modeling_models._validate_strictly_increasing_dates(
+            pd.Series([pd.Timestamp("2025-01-02").date(), pd.Timestamp("2025-01-02").date()]),
+            field_name="session",
+            error_type=ModelTrainingError,
+            duplicate_code="duplicate_session",
+            unordered_code="unordered_session",
+        )
+    with pytest.raises(ModelTrainingError, match="strictly increasing"):
+        modeling_models._validate_strictly_increasing_dates(
+            pd.Series([pd.Timestamp("2025-01-03").date(), pd.Timestamp("2025-01-02").date()]),
+            field_name="session",
+            error_type=ModelTrainingError,
+            duplicate_code="duplicate_session",
+            unordered_code="unordered_session",
+        )
+
+
+def test_modeling_feature_and_class_validation_helpers_reject_malformed_state() -> None:
+    partitions = make_partitions()
+    bad_dtype_features = partitions.train.features.copy(deep=True)
+    bad_dtype_features[FEATURE_COLUMNS[0]] = bad_dtype_features[FEATURE_COLUMNS[0]].astype("int64")
+    with pytest.raises(ModelTrainingError, match="float64"):
+        modeling_models.validate_finite_float64_features(
+            bad_dtype_features,
+            error_type=ModelTrainingError,
+        )
+    non_finite_features = partitions.train.features.copy(deep=True)
+    non_finite_features.loc[non_finite_features.index[0], FEATURE_COLUMNS[0]] = np.inf
+    with pytest.raises(ModelTrainingError, match="finite"):
+        modeling_models.validate_finite_float64_features(
+            non_finite_features,
+            error_type=ModelTrainingError,
+        )
+
+    class MissingClasses:
+        pass
+
+    class ScalarClasses:
+        classes_ = object()
+
+    class NonListClasses:
+        class Values:
+            def tolist(self) -> tuple[int, int]:
+                return (0, 1)
+
+        classes_ = Values()
+
+    for estimator in (MissingClasses(), ScalarClasses(), NonListClasses()):
+        with pytest.raises(ModelTrainingError):
+            modeling_models.validate_estimator_learned_binary_classes(
+                estimator,
+                error_type=ModelTrainingError,
+            )
+
+    for classes in ([True, 1], ["bad", 1], [0.5, 1], [0, 1, 2]):
+        estimator = type("Estimator", (), {"classes_": classes})()
+        with pytest.raises(ModelTrainingError, match="classes"):
+            modeling_models.validate_estimator_learned_binary_classes(
+                estimator,
+                error_type=ModelTrainingError,
+            )
+
+
+def test_modeling_parameter_and_fitted_state_helpers_fail_closed() -> None:
+    class ParamsReadFailure:
+        def get_params(self, *, deep: bool) -> dict[str, object]:
+            _ = deep
+            raise ValueError("bad estimator")
+
+    class ParamsNotDict:
+        def get_params(self, *, deep: bool) -> list[str]:
+            _ = deep
+            return ["bad"]
+
+    with pytest.raises(ModelTrainingError, match="estimator_missing_parameters"):
+        modeling_models._public_parameter_dict(object(), error_type=ModelTrainingError)
+    with pytest.raises(ModelTrainingError, match="estimator_parameter_read_failed"):
+        modeling_models._public_parameter_dict(ParamsReadFailure(), error_type=ModelTrainingError)
+    with pytest.raises(ModelTrainingError, match="invalid_estimator_parameters"):
+        modeling_models._public_parameter_dict(ParamsNotDict(), error_type=ModelTrainingError)
+    with pytest.raises(ModelTrainingError, match="missing_estimator_fitted_state"):
+        modeling_models._require_learned_attribute(object(), "coef_", error_type=ModelTrainingError)
+    with pytest.raises(ModelTrainingError, match="missing_estimator_fitted_state"):
+        modeling_models._require_learned_attribute(
+            type("Estimator", (), {"coef_": None})(),
+            "coef_",
+            error_type=ModelTrainingError,
+        )
+    with pytest.raises(ModelTrainingError, match="estimator_not_fitted"):
+        modeling_models._require_check_is_fitted(
+            object(),
+            estimator_description="plain object",
+            error_type=ModelTrainingError,
+        )
+
+
+def test_modeling_shape_and_numeric_learned_value_helpers_fail_closed() -> None:
+    class ArrayLike:
+        def __init__(self, value: object, shape: object) -> None:
+            self._value = value
+            self.shape = shape
+
+        def tolist(self) -> object:
+            return self._value
+
+    for value in (
+        object(),
+        ArrayLike([1.0], (True,)),
+        ArrayLike([1.0], (object(),)),
+        ArrayLike([1.0], (1.5,)),
+    ):
+        with pytest.raises(ModelTrainingError, match="invalid_estimator_fitted_shape"):
+            modeling_models._shape_tuple(
+                value,
+                attribute_name="coef_",
+                error_type=ModelTrainingError,
+            )
+
+    for value in (True, "1.0", object(), [float("inf")], []):
+        with pytest.raises(ModelTrainingError):
+            modeling_models._plain_numeric_values(
+                value,
+                attribute_name="coef_",
+                error_type=ModelTrainingError,
+            )
+
+    with pytest.raises(ModelTrainingError, match="estimator_fitted_shape_mismatch"):
+        modeling_models._validate_numeric_learned_array(
+            type("Estimator", (), {"coef_": ArrayLike([[1.0, 2.0]], (1, 2))})(),
+            "coef_",
+            expected_shape=(1, len(FEATURE_COLUMNS)),
+            error_type=ModelTrainingError,
+        )
+    with pytest.raises(ModelTrainingError, match="invalid_estimator_sample_count"):
+        modeling_models._validate_positive_sample_count(
+            type("Estimator", (), {"n_samples_seen_": [0]})(),
+            "n_samples_seen_",
+            error_type=ModelTrainingError,
+        )
+    with pytest.raises(ModelTrainingError, match="estimator_fitted_shape_mismatch"):
+        modeling_models._validate_positive_iteration_count(
+            type("Estimator", (), {"n_iter_": ArrayLike([1], (2,))})(),
+            "n_iter_",
+            expected_shape=(1,),
+            error_type=ModelTrainingError,
+        )
+    with pytest.raises(ModelTrainingError, match="invalid_estimator_iteration_count"):
+        modeling_models._validate_positive_iteration_count(
+            type("Estimator", (), {"n_iter_": ArrayLike([0], (1,))})(),
+            "n_iter_",
+            expected_shape=(1,),
+            error_type=ModelTrainingError,
+        )
+    with pytest.raises(ModelTrainingError, match="estimator_feature_count_mismatch"):
+        modeling_models._validate_feature_count_attribute(
+            type("Estimator", (), {"n_features_in_": 1})(),
+            expected_feature_count=len(FEATURE_COLUMNS),
+            error_type=ModelTrainingError,
+        )
+
+
+def test_modeling_estimator_object_array_helpers_fail_closed() -> None:
+    class StageArray:
+        def __init__(self, value: object, shape: object) -> None:
+            self._value = value
+            self.shape = shape
+
+        def tolist(self) -> object:
+            return self._value
+
+    malformed_arrays = (
+        StageArray([[object()]], (2, 1)),
+        StageArray((object(),), (1, 1)),
+        StageArray([object()], (1, 1)),
+        StageArray([[None]], (1, 1)),
+    )
+    for array in malformed_arrays:
+        with pytest.raises(ModelTrainingError):
+            modeling_models._validate_estimator_object_array(
+                type("Estimator", (), {"estimators_": array})(),
+                "estimators_",
+                expected_shape=(1, 1),
+                error_type=ModelTrainingError,
+            )
+
+
+def test_modeling_probability_result_helpers_fail_closed() -> None:
+    class ProbabilityRows(list[list[float]]):
+        shape = (1, 2)
+
+    class NotConvertible:
+        shape = (1, 2)
+
+    class TupleRows:
+        shape = (1, 2)
+
+        def tolist(self) -> tuple[list[float]]:
+            return ([0.5, 0.5],)
+
+    assert modeling_models._probability_rows_from_result(
+        ProbabilityRows([[0.5, 0.5]]),
+        error_type=ModelTrainingError,
+    ) == [[0.5, 0.5]]
+    with pytest.raises(ModelTrainingError, match="two-dimensional"):
+        modeling_models._probability_rows_from_result(object(), error_type=ModelTrainingError)
+    with pytest.raises(ModelTrainingError, match="plain rows"):
+        modeling_models._probability_rows_from_result(
+            NotConvertible(),
+            error_type=ModelTrainingError,
+        )
+    with pytest.raises(ModelTrainingError, match="plain rows"):
+        modeling_models._probability_rows_from_result(TupleRows(), error_type=ModelTrainingError)
+
+    class TupleValues:
+        def tolist(self) -> tuple[float, float]:
+            return (0.5, 0.5)
+
+    for row in ("bad", TupleValues(), [True, 0.5], [object(), 0.5], [float("nan"), 0.5]):
+        with pytest.raises(ModelTrainingError, match="probability"):
+            modeling_models._probability_row_values(row, error_type=ModelTrainingError)
+
+
+def test_modeling_probability_smoke_check_failures_are_structured() -> None:
+    class Predicts:
+        def __init__(self, result: object) -> None:
+            self._result = result
+
+        def predict_proba(self, _features: pd.DataFrame) -> object:
+            return self._result
+
+    class Raises:
+        def predict_proba(self, _features: pd.DataFrame) -> object:
+            raise ValueError("bad model")
+
+    class ProbabilityRows:
+        def __init__(self, rows: list[list[float]]) -> None:
+            self._rows = rows
+            self.shape = (len(rows), len(rows[0]) if rows else 2)
+
+        def tolist(self) -> list[list[float]]:
+            return self._rows
+
+    with pytest.raises(ModelTrainingError, match="estimator_missing_predict_proba"):
+        modeling_models._validate_probability_smoke_check(
+            object(),
+            feature_columns=FEATURE_COLUMNS,
+            learned_classes=(0, 1),
+            error_type=ModelTrainingError,
+        )
+    with pytest.raises(ModelTrainingError, match="estimator_probability_prediction_failed"):
+        modeling_models._validate_probability_smoke_check(
+            Raises(),
+            feature_columns=FEATURE_COLUMNS,
+            learned_classes=(0, 1),
+            error_type=ModelTrainingError,
+        )
+    with pytest.raises(ModelTrainingError, match="probability_row_count_mismatch"):
+        modeling_models._validate_probability_smoke_check(
+            Predicts(ProbabilityRows([[0.5, 0.5], [0.5, 0.5]])),
+            feature_columns=FEATURE_COLUMNS,
+            learned_classes=(0, 1),
+            error_type=ModelTrainingError,
+        )
+    with pytest.raises(ModelTrainingError, match="probability_class_count_mismatch"):
+        modeling_models._validate_probability_smoke_check(
+            Predicts(ProbabilityRows([[0.2, 0.3, 0.5]])),
+            feature_columns=FEATURE_COLUMNS,
+            learned_classes=(0, 1),
+            error_type=ModelTrainingError,
+        )
+    with pytest.raises(ModelTrainingError, match="sum to 1"):
+        modeling_models._validate_probability_smoke_check(
+            Predicts(ProbabilityRows([[0.25, 0.25]])),
+            feature_columns=FEATURE_COLUMNS,
+            learned_classes=(0, 1),
+            error_type=ModelTrainingError,
+        )
 
 
 def test_gradient_boosting_candidate_has_fixed_specification_without_scaler() -> None:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import asdict
 from decimal import Decimal
 
@@ -107,6 +108,21 @@ def with_bad_cell(frame: pd.DataFrame, column: str, value: object) -> pd.DataFra
     changed = frame.copy(deep=True)
     changed[column] = changed[column].astype("object")
     changed.at[0, column] = value
+    return changed
+
+
+MetricFrames = tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]
+
+
+def duplicate_first_row(frame: pd.DataFrame) -> pd.DataFrame:
+    return pd.concat([frame, frame.iloc[[0]].copy(deep=True)], ignore_index=True)
+
+
+def with_zero_first_equity(frame: pd.DataFrame) -> pd.DataFrame:
+    changed = frame.copy(deep=True)
+    changed.loc[0, ["cash", "market_value", "equity"]] = 0.0
+    changed.loc[0, "daily_return"] = -1.0
+    changed.loc[0, "drawdown"] = -1.0
     return changed
 
 
@@ -244,6 +260,210 @@ def test_metric_frames_reject_malformed_public_values(
             proposed,
             decisions,
             initial_cash=Decimal("10000"),
+        )
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda portfolio, fills, proposed, decisions: (
+            portfolio.iloc[0:0].copy(),
+            fills,
+            proposed,
+            decisions,
+        ),
+        lambda portfolio, fills, proposed, decisions: (
+            portfolio.drop(columns=["cash"]),
+            fills,
+            proposed,
+            decisions,
+        ),
+        lambda portfolio, fills, proposed, decisions: (
+            with_bad_cell(portfolio, "target_position", 2),
+            fills,
+            proposed,
+            decisions,
+        ),
+        lambda portfolio, fills, proposed, decisions: (
+            with_bad_cell(portfolio, "close_price", 0.0),
+            fills,
+            proposed,
+            decisions,
+        ),
+        lambda portfolio, fills, proposed, decisions: (
+            with_bad_cell(portfolio, "cash", -1.0),
+            fills,
+            proposed,
+            decisions,
+        ),
+        lambda portfolio, fills, proposed, decisions: (
+            with_bad_cell(portfolio, "market_value", 1.0),
+            fills,
+            proposed,
+            decisions,
+        ),
+        lambda portfolio, fills, proposed, decisions: (
+            with_bad_cell(portfolio, "drawdown", 0.1),
+            fills,
+            proposed,
+            decisions,
+        ),
+        lambda portfolio, fills, proposed, decisions: (
+            with_zero_first_equity(portfolio),
+            fills,
+            proposed,
+            decisions,
+        ),
+        lambda portfolio, fills, proposed, decisions: (
+            portfolio.iloc[::-1].reset_index(drop=True),
+            fills,
+            proposed,
+            decisions,
+        ),
+        lambda portfolio, fills, proposed, decisions: (
+            portfolio,
+            with_bad_cell(fills, "symbol", "QQQ"),
+            proposed,
+            decisions,
+        ),
+        lambda portfolio, fills, proposed, decisions: (
+            portfolio,
+            with_bad_cell(fills, "side", "hold"),
+            proposed,
+            decisions,
+        ),
+        lambda portfolio, fills, proposed, decisions: (
+            portfolio,
+            with_bad_cell(fills, "execution_session", fills.iloc[0]["signal_session"]),
+            proposed,
+            decisions,
+        ),
+        lambda portfolio, fills, proposed, decisions: (
+            portfolio,
+            with_bad_cell(fills, "risk_approved", False),
+            proposed,
+            decisions,
+        ),
+        lambda portfolio, fills, proposed, decisions: (
+            portfolio,
+            with_bad_cell(fills, "shares_after", 98),
+            proposed,
+            decisions,
+        ),
+        lambda portfolio, fills, proposed, decisions: (
+            portfolio,
+            fills,
+            with_bad_cell(proposed, "symbol", "QQQ"),
+            decisions,
+        ),
+        lambda portfolio, fills, proposed, decisions: (
+            portfolio,
+            fills,
+            with_bad_cell(proposed, "side", "hold"),
+            decisions,
+        ),
+        lambda portfolio, fills, proposed, decisions: (
+            portfolio,
+            fills,
+            with_bad_cell(proposed, "execution_session", proposed.iloc[0]["signal_session"]),
+            decisions,
+        ),
+        lambda portfolio, fills, proposed, decisions: (
+            portfolio,
+            fills,
+            with_bad_cell(proposed, "target_position", 2),
+            decisions,
+        ),
+        lambda portfolio, fills, proposed, decisions: (
+            portfolio,
+            fills,
+            duplicate_first_row(proposed),
+            decisions,
+        ),
+        lambda portfolio, fills, proposed, decisions: (
+            portfolio,
+            fills,
+            proposed,
+            with_bad_cell(decisions, "reason_codes", ()),
+        ),
+        lambda portfolio, fills, proposed, decisions: (
+            portfolio,
+            fills,
+            proposed,
+            with_bad_cell(decisions, "reason_codes", ("approved", "approved")),
+        ),
+        lambda portfolio, fills, proposed, decisions: (
+            portfolio,
+            fills,
+            proposed,
+            with_bad_cell(decisions, "reason_codes", ("unknown",)),
+        ),
+        lambda portfolio, fills, proposed, decisions: (
+            portfolio,
+            fills,
+            proposed,
+            with_bad_cell(decisions, "reason_codes", ("insufficient_cash",)),
+        ),
+        lambda portfolio, fills, proposed, decisions: (
+            portfolio,
+            fills,
+            proposed,
+            with_bad_cell(
+                with_bad_cell(decisions, "approved", False),
+                "reason_codes",
+                ("approved",),
+            ),
+        ),
+        lambda portfolio, fills, proposed, decisions: (
+            portfolio,
+            fills,
+            proposed,
+            duplicate_first_row(decisions),
+        ),
+        lambda portfolio, fills, proposed, decisions: (
+            portfolio,
+            fills,
+            proposed.iloc[0:0].copy(),
+            decisions,
+        ),
+    ],
+)
+def test_metric_frames_reject_audit_invariant_violations(
+    mutate: Callable[[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame], MetricFrames],
+) -> None:
+    portfolio, fills, proposed, decisions = mutate(
+        portfolio_frame(),
+        fill_frame(),
+        proposed_frame(),
+        decisions_frame(),
+    )
+
+    with pytest.raises(BacktestMetricError):
+        calculate_backtest_metrics(
+            portfolio,
+            fills,
+            proposed,
+            decisions,
+            initial_cash=Decimal("10000"),
+        )
+
+
+def test_metric_calculation_rejects_non_frame_inputs_and_wrong_initial_cash() -> None:
+    with pytest.raises(BacktestMetricError):
+        calculate_backtest_metrics(
+            object(),
+            fill_frame(),
+            proposed_frame(),
+            decisions_frame(),
+            initial_cash=Decimal("10000"),
+        )
+    with pytest.raises(BacktestMetricError):
+        calculate_backtest_metrics(
+            portfolio_frame(),
+            fill_frame(),
+            proposed_frame(),
+            decisions_frame(),
+            initial_cash=Decimal("9999"),
         )
 
 
