@@ -49,6 +49,8 @@ class Settings(BaseSettings):
     execution_mode: str = "paper"
     enable_paper_execution: bool = False
     dry_run: bool = True
+    paper_execution_kill_switch: bool = True
+    paper_execution_require_market_open: bool = True
     initial_capital_usd: Decimal = Field(default=Decimal("10000"), gt=Decimal("0"))
     database_url: str = Field(default="sqlite:///./spy_market_agent.db", repr=False)
     sqlite_database_path: str = "./spy_market_agent.sqlite3"
@@ -116,6 +118,10 @@ class Settings(BaseSettings):
 
         safe_values = self.model_dump(mode="json")
         safe_values["database_url"] = _display_safe_database_url(self.database_url)
+        safe_values["alpaca_api_key_present"] = _secret_present(self.alpaca_api_key)
+        safe_values["alpaca_secret_key_present"] = _secret_present(self.alpaca_secret_key)
+        safe_values.pop("alpaca_api_key", None)
+        safe_values.pop("alpaca_secret_key", None)
         return safe_values
 
 
@@ -142,3 +148,9 @@ def _display_safe_database_url(url: str) -> str:
     if any(marker in candidate for marker in _CREDENTIAL_MARKERS):
         return REDACTED_DATABASE_URL
     return url
+
+
+def _secret_present(value: SecretStr | None) -> bool:
+    if value is None:
+        return False
+    return bool(value.get_secret_value().strip())

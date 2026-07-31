@@ -4,7 +4,8 @@ import sqlite3
 
 from spy_market_agent.persistence.models import PersistenceSchemaError
 
-PERSISTENCE_SCHEMA_VERSION = "spy-sqlite-persistence-v1"
+PERSISTENCE_SCHEMA_VERSION_V1 = "spy-sqlite-persistence-v1"
+PERSISTENCE_SCHEMA_VERSION = "spy-sqlite-persistence-v2"
 
 
 SCHEMA_SQL = """
@@ -323,6 +324,58 @@ CREATE TABLE IF NOT EXISTS backtest_metrics (
 );
 """
 
+EXECUTION_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS paper_execution_control (
+    singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+    kill_switch_engaged INTEGER NOT NULL CHECK (kill_switch_engaged IN (0, 1)),
+    updated_at_utc TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    control_schema_version TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS paper_execution_attempts (
+    client_order_id TEXT PRIMARY KEY,
+    signal_id TEXT NOT NULL UNIQUE,
+    approval_id TEXT NOT NULL UNIQUE,
+    instruction_fingerprint TEXT NOT NULL,
+    execution_schema_version TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    side TEXT NOT NULL,
+    quantity INTEGER NOT NULL CHECK (quantity > 0),
+    signal_session TEXT NOT NULL,
+    execution_session TEXT NOT NULL,
+    instruction_created_at_utc TEXT NOT NULL,
+    expires_at_utc TEXT NOT NULL,
+    approval_at_utc TEXT NOT NULL,
+    approval_source TEXT NOT NULL,
+    original_risk_approved INTEGER NOT NULL CHECK (original_risk_approved IN (0, 1)),
+    execution_risk_approved INTEGER NOT NULL CHECK (execution_risk_approved IN (0, 1)),
+    attempt_status TEXT NOT NULL,
+    broker_order_id TEXT,
+    broker_status TEXT,
+    broker_environment TEXT,
+    account_id_fingerprint TEXT,
+    sanitized_request_id TEXT,
+    created_at_utc TEXT NOT NULL,
+    updated_at_utc TEXT NOT NULL,
+    failure_code TEXT
+);
+
+CREATE TABLE IF NOT EXISTS paper_execution_events (
+    event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    signal_id TEXT,
+    client_order_id TEXT,
+    event_type TEXT NOT NULL,
+    prior_state TEXT,
+    new_state TEXT,
+    event_timestamp_utc TEXT NOT NULL,
+    safe_reason_code TEXT NOT NULL,
+    safe_metadata_json TEXT NOT NULL,
+    FOREIGN KEY (client_order_id)
+        REFERENCES paper_execution_attempts(client_order_id) ON DELETE RESTRICT
+);
+"""
+
 
 def initialize_schema(connection: sqlite3.Connection) -> None:
     connection.execute(
@@ -333,8 +386,25 @@ def initialize_schema(connection: sqlite3.Connection) -> None:
         )
         """
     )
-    _reject_unsupported_versions(connection)
-    connection.executescript(SCHEMA_SQL)
+    versions = _schema_versions(connection)
+    _reject_unsupported_versions(versions)
+    _execute_script(connection, SCHEMA_SQL)
+    _execute_script(connection, EXECUTION_SCHEMA_SQL)
+    connection.execute(
+        """
+        INSERT OR IGNORE INTO paper_execution_control (
+            singleton_id, kill_switch_engaged, updated_at_utc, reason, control_schema_version
+        )
+        VALUES (
+            1, 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), 'default_engaged',
+            'spy-paper-execution-control-v1'
+        )
+        """
+    )
+    connection.execute(
+        "DELETE FROM schema_migrations WHERE version = ?",
+        (PERSISTENCE_SCHEMA_VERSION_V1,),
+    )
     connection.execute(
         "INSERT OR IGNORE INTO schema_migrations(version) VALUES (?)",
         (PERSISTENCE_SCHEMA_VERSION,),
@@ -354,13 +424,22 @@ def validate_schema_version(connection: sqlite3.Connection) -> None:
             "missing_schema_version",
             "database has not been explicitly initialized.",
         )
-    _reject_unsupported_versions(connection)
+    versions = _schema_versions(connection)
+    _reject_unsupported_versions(versions)
+    if PERSISTENCE_SCHEMA_VERSION not in versions:
+        raise PersistenceSchemaError(
+            "schema_migration_required",
+            "database requires explicit Phase 8 schema migration.",
+        )
 
 
-def _reject_unsupported_versions(connection: sqlite3.Connection) -> None:
+def _schema_versions(connection: sqlite3.Connection) -> set[str]:
     rows = connection.execute("SELECT version FROM schema_migrations").fetchall()
-    versions = {str(row[0]) for row in rows}
-    unsupported = versions - {PERSISTENCE_SCHEMA_VERSION}
+    return {str(row[0]) for row in rows}
+
+
+def _reject_unsupported_versions(versions: set[str]) -> None:
+    unsupported = versions - {PERSISTENCE_SCHEMA_VERSION_V1, PERSISTENCE_SCHEMA_VERSION}
     if unsupported:
         raise PersistenceSchemaError(
             "unsupported_schema_version",
@@ -368,8 +447,16 @@ def _reject_unsupported_versions(connection: sqlite3.Connection) -> None:
         )
 
 
+def _execute_script(connection: sqlite3.Connection, script: str) -> None:
+    for statement in script.split(";"):
+        cleaned = statement.strip()
+        if cleaned:
+            connection.execute(cleaned)
+
+
 __all__ = [
     "PERSISTENCE_SCHEMA_VERSION",
+    "PERSISTENCE_SCHEMA_VERSION_V1",
     "initialize_schema",
     "validate_schema_version",
 ]

@@ -149,8 +149,11 @@ def test_secret_values_are_redacted_from_repr_and_display_serialization() -> Non
 
     assert "paper-key" not in repr(settings)
     assert "paper-secret" not in repr(settings)
-    assert settings.display_safe_dict()["alpaca_api_key"] == "**********"
-    assert settings.display_safe_dict()["alpaca_secret_key"] == "**********"
+    displayed = settings.display_safe_dict()
+    assert "alpaca_api_key" not in displayed
+    assert "alpaca_secret_key" not in displayed
+    assert displayed["alpaca_api_key_present"] is True
+    assert displayed["alpaca_secret_key_present"] is True
 
 
 def test_database_url_is_excluded_from_settings_repr() -> None:
