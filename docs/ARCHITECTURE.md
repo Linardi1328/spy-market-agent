@@ -81,9 +81,9 @@ flowchart TD
 
 ## Version 2 Phase 1 Acquisition Flow
 
-**Implementation in review:** Phase 1 adds a separate explicit acquisition path. It is not
-called by imports, tests, API startup, dashboard startup, model training, backtesting, or
-paper execution.
+**Accepted for alpha release preparation:** Phase 1 adds a separate explicit acquisition
+path. It is not called by imports, tests, API startup, dashboard startup, model training,
+backtesting, or paper execution.
 
 ```mermaid
 flowchart TD

@@ -252,7 +252,8 @@ def test_corrupted_manifest_fails_verification(tmp_path: Path) -> None:
     )
     manifest_path = tmp_path / artifacts.manifest.generated_file_locations.manifest_path
     manifest_path.write_text(
-        manifest_path.read_text(encoding="utf-8").replace("1.0.0", "9.9.9"), encoding="utf-8"
+        manifest_path.read_text(encoding="utf-8").replace("2.0.0a1", "9.9.9"),
+        encoding="utf-8",
     )
     store = DatasetStore(Path("data"), repository_root=tmp_path)
 

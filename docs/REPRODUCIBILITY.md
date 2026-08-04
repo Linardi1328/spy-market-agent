@@ -56,8 +56,9 @@ API or dashboard inspection.
 
 ## Version 2 Phase 1 Data Foundation
 
-**Implementation in review:** Phase 1 adds explicit historical SPY daily-data acquisition.
-Normal verification remains offline and does not require market-data credentials.
+**Accepted for alpha release preparation:** Phase 1 adds explicit historical SPY daily-data
+acquisition. Normal verification remains offline and does not require market-data
+credentials.
 
 Example explicit acquisition command:
 

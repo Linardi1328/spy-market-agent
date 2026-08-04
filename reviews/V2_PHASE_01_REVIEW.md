@@ -1,17 +1,32 @@
 # Version 2 Phase 1 Review
 
-Starting main SHA: `3f5e3612bbf78b44845f3dedc24da35185a171f7`
+Starting Phase 1 implementation main SHA:
+`3f5e3612bbf78b44845f3dedc24da35185a171f7`
 
-Branch: `review/v2-phase-01-real-spy-data`
+Hardened implementation commit:
+`050364e` (`fix: harden version 2 data foundation`)
 
-Final branch SHA: pending until commit; the final response records the pushed commit SHA.
+Phase 1 implementation merge commit:
+`c66d9e5ae7c99eeb7ab01e00a3c3494b2da1a7b0`
 
-Package version: `1.0.0`
+Release-preparation branch:
+`review/v2-phase-01-release-preparation`
 
-## Scope Implemented
+Release-preparation commit:
+reported externally in the final Codex response after commit.
 
-Implemented the Version 2 Phase 1 historical SPY daily-data foundation as an unreleased
-review candidate:
+Package target:
+`2.0.0a1`
+
+Public Git identifier:
+`v2.0.0-alpha.1`
+
+Phase status:
+accepted; release preparation in review.
+
+## Scope Accepted
+
+Version 2 Phase 1 implements a historical SPY daily-data foundation:
 
 - Explicit acquisition request validation.
 - Separate market-data credentials.
@@ -23,93 +38,90 @@ review candidate:
 - SHA-256 source, canonical content, artifact, and manifest self-checksums.
 - Deterministic dataset identity.
 - Safe repository-relative storage and atomic writes.
-- Local dataset verification command.
+- Multi-artifact rollback when later writes fail.
+- Deep offline dataset verification.
 - Synthetic offline fixtures and tests.
 
-## Hardening Update
+## Hardening Accepted
 
-This branch was hardened before the controlled real-provider smoke test:
+The hardened implementation added these release-blocking corrections before the
+real-provider smoke test:
 
-- `MARKET_DATA_TIMEOUT_SECONDS` now reaches the actual Alpaca SDK HTTP request boundary
-  through a timeout-enforcing `requests.Session` wrapper installed on the explicit
-  market-data SDK client.
-- Retry count and request timeout remain separate settings; retry sleep no longer uses the
-  timeout value as its cap.
+- `MARKET_DATA_TIMEOUT_SECONDS` reaches the actual Alpaca SDK HTTP request boundary through
+  a timeout-enforcing `requests.Session` wrapper installed only on the explicit market-data
+  SDK client.
+- Retry count and request timeout remain separate settings.
 - The provider access path remains a small isolated adapter around
   `StockHistoricalDataClient.get(path="/stocks/bars", data=...)`.
-- The documented public SDK method,
-  `StockHistoricalDataClient.get_stock_bars(StockBarsRequest)`, was reviewed and tested
-  against installed `alpaca-py==0.43.5`; it is not used for durable raw-page storage because
-  it merges paginated pages and does not preserve page-level `next_page_token` metadata.
-- Alpaca's installed SDK docstring states that `raw_data` is not implemented, so Phase 1 does
-  not rely on that flag as a public guarantee.
+- The documented public SDK method `get_stock_bars(StockBarsRequest)` was reviewed but not
+  used for durable raw-page storage because the installed SDK merges paginated pages and
+  does not preserve page-level `next_page_token` metadata.
+- Alpaca's installed SDK docstring states that `raw_data` is not implemented, so Phase 1
+  does not rely on that flag as a public guarantee.
 - Acquisition captures one timestamp at operation start and reuses it for snapshot
   timestamping, incomplete-session validation, manifest reasoning, and lineage.
-- Multi-artifact writes now clean up every file newly created by the current attempt if a
-  later raw/canonical/manifest stage fails, while preserving valid matching artifacts that
-  existed before the attempt.
-- Offline verification now reconstructs manifest, raw snapshot, canonical bars, checksums,
-  dataset identity, filenames, generated paths, row counts, session ranges, lineage, and XNYS
-  validation before accepting a dataset.
+- Multi-artifact writes remove files newly created by the failed attempt while preserving
+  valid matching artifacts that existed before the attempt.
+- Offline verification reconstructs manifest, raw snapshot, canonical bars, checksums,
+  dataset identity, filenames, generated paths, row counts, session ranges, lineage, and
+  XNYS validation before accepting a dataset.
 
 ## Provider Decision
 
-Selected provider: Alpaca Market Data API, provisionally for Phase 1.
+Selected provider:
+Alpaca Market Data API.
 
 SDK and access method:
 
 - `alpaca-py`
 - `StockHistoricalDataClient`
 - `/v2/stocks/bars`
-- `feed`, `adjustment`, `sort=asc`, and pagination are explicit.
-- Per-request timeout enforced by a timeout-capable SDK session wrapper.
+- explicit `feed`
+- explicit `adjustment`
+- ascending chronological sorting
+- pagination token handling
+- request-boundary timeout wrapper
 
-Provider decision record: `docs/V2_PHASE_01_PROVIDER_DECISION.md`.
+Provider decision record:
+`docs/V2_PHASE_01_PROVIDER_DECISION.md`.
+
+## Owner-Run Smoke-Test Evidence
+
+Codex did not execute a real-provider request and did not receive credentials, account
+identifiers, authorization headers, raw provider payloads, screenshots, or generated dataset
+files.
+
+The owner executed the controlled real Alpaca market-data smoke test on 2026-08-05.
+Owner-reported evidence:
+
+- Alpaca authentication succeeded.
+- Provider: Alpaca Market Data API.
+- Symbol: SPY.
+- Timeframe: `1Day`.
+- Feed: `iex`.
+- Adjustment mode: `all`.
+- Requested range: 2024-01-02 through 2024-01-05.
+- Actual session range: 2024-01-02..2024-01-05.
+- Four valid XNYS sessions were returned.
+- Acquisition exit code: 0.
+- Deep offline verification passed.
+- `git status --short` after acquisition had no output.
+- Generated raw, canonical, and manifest artifacts remained in ignored local data
+  directories.
+- No trading endpoint was contacted.
+- No order was submitted.
+- No credential was recorded in Git, documentation, or this review report.
 
 ## Provider Limitations
 
+- The owner-run smoke test confirmed only a narrow 2024-01-02 through 2024-01-05 IEX range.
 - Official support documentation does not prove SPY inception coverage.
 - Alpaca support documentation says data is not available further back than 2016 and notes
   some missing early data points.
 - SIP access can be subscription-limited.
 - Alpaca API data must not be redistributed.
-- Corporate-action evidence is limited to the provider adjustment policy in this
-  implementation candidate; no separate corporate-action snapshot is acquired.
-- No real-provider request was executed by Codex.
-
-## Files Created
-
-- `data/canonical/.gitkeep`
-- `data/fixtures/v2_phase1_synthetic_alpaca_bars.json`
-- `data/manifests/.gitkeep`
-- `docs/V2_PHASE_01_PROVIDER_DECISION.md`
-- `reviews/V2_PHASE_01_REVIEW.md`
-- `src/spy_market_agent/market_data/acquisition.py`
-- `src/spy_market_agent/market_data/alpaca_provider.py`
-- `src/spy_market_agent/market_data/canonicalization.py`
-- `src/spy_market_agent/market_data/cli.py`
-- `src/spy_market_agent/market_data/errors.py`
-- `src/spy_market_agent/market_data/manifest.py`
-- `src/spy_market_agent/market_data/pipeline.py`
-- `src/spy_market_agent/market_data/storage.py`
-- `tests/integration/test_v2_phase1_acquisition_flow.py`
-- `tests/unit/test_v2_phase1_market_data.py`
-
-## Files Modified
-
-- `.env.example`
-- `.gitignore`
-- `CHANGELOG.md`
-- `README.md`
-- `docs/ARCHITECTURE.md`
-- `docs/REPRODUCIBILITY.md`
-- `docs/SECURITY_AND_SAFETY.md`
-- `docs/V2_PHASE_01_REAL_SPY_DATA_SPEC.md`
-- `docs/WORKFLOWS.md`
-- `docs/V2_PHASE_01_PROVIDER_DECISION.md`
-- `reviews/V2_PHASE_01_REVIEW.md`
-- `src/spy_market_agent/config/settings.py`
-- `src/spy_market_agent/market_data/__init__.py`
+- Corporate-action evidence remains limited to the provider adjustment policy; no separate
+  corporate-action snapshot is acquired.
 
 ## Storage Formats
 
@@ -150,7 +162,8 @@ Manifest:
   timeframe, adjustment mode, and corporate-action policy; local paths and derived lineage
   identifiers are excluded.
 - Artifact checksum: SHA-256 over complete written raw or canonical artifact bytes.
-- Manifest self-checksum: SHA-256 over the manifest with `manifest_artifact_checksum` unset.
+- Manifest self-checksum: SHA-256 over the manifest with `manifest_artifact_checksum`
+  unset.
 
 ## Dataset Identity
 
@@ -177,6 +190,7 @@ package version.
 - Imports, `--help`, invalid CLI input, missing acknowledgement, and missing credentials do
   not construct an Alpaca client.
 - API and dashboard startup do not acquire market data.
+- Acquisition never constructs `TradingClient`.
 - Storage rejects absolute roots, `..` traversal, source/doc/test/Git directories, symlink
   artifact paths, existing conflicts, and checksum mismatches.
 - Generated provider data is ignored under `data/raw/`, `data/canonical/`, and
@@ -209,51 +223,48 @@ package version.
 - Corrupted artifact rejection.
 - Deep verification tamper rejection after manifest self-checksum recomputation.
 - Import/startup side-effect protection.
-
-## Tests Deliberately Not Run
-
-- Real Alpaca provider network smoke test.
-
-Reason: the task explicitly says not to run it automatically. It requires owner credentials,
-explicit opt-in, provider terms review, an isolated ignored output directory, and a narrow
-completed historical range.
-
-## Real Alpaca Request
-
-No real Alpaca request was executed.
+- Release metadata and documentation consistency.
 
 ## Remaining Acceptance Items
 
-- Owner review of this implementation branch.
+Completed:
+
+- Owner review of the implementation branch.
 - Owner-run controlled real-provider smoke test with market-data credentials only.
-- Confirmation of account-specific Alpaca coverage, subscription, and licensing constraints.
-- Final release-preparation correction that sets package/runtime version to `2.0.0a1` only
-  after Phase 1 acceptance criteria pass.
-- Merge to `main`, final verification on `main`, and only then optional creation of
-  `v2.0.0-alpha.1`.
+- Confirmation of account-specific Alpaca authentication for the narrow IEX smoke-test
+  range.
+- Release-preparation branch sets package/runtime version to `2.0.0a1`.
+
+Remaining after this branch:
+
+- Review and approval of the release-preparation branch.
+- Merge into `main`.
+- Full verification on merged `main`.
+- Creation of `v2.0.0-alpha.1` only after merged-main verification passes.
 
 ## Verification Results
 
-- `python -m pip install -e ".[dev]"`: passed.
-- `pytest --cov-fail-under=85`: 972 passed, 85.20% coverage.
-- `pytest tests/unit -q`: passed; 926 unit tests collected.
-- `pytest tests/integration -q`: 46 passed.
-- `pytest -W error::FutureWarning`: 972 passed.
-- `ruff check .`: passed.
-- `ruff format --check .`: passed.
-- `mypy src tests`: passed.
-- `git diff --check`: passed.
-- `python -c "import importlib.metadata as m; import spy_market_agent; print(m.version('spy-market-agent'), spy_market_agent.__version__)"`:
-  `1.0.0 1.0.0`.
+Release-preparation verification on 2026-08-05:
 
-- `pytest tests/unit/test_v2_phase1_market_data.py tests/integration/test_v2_phase1_acquisition_flow.py -q`:
-  78 passed.
-
-Collection count checks:
-
-- Unit tests: 926.
-- Integration tests: 46.
-- Targeted Phase 1 tests: 78.
+- Fresh Python 3.12 virtual environment: created with `python3.12 -m venv
+  .venv-test`.
+- Editable development install: `python -m pip install -e ".[dev]"` passed.
+- Full test suite: `pytest --cov-fail-under=85` passed with 975 tests.
+- Coverage: 85.20%, above the 85% gate.
+- Unit tests: `pytest tests/unit -q` passed; 929 unit tests collected.
+- Integration tests: `pytest tests/integration -q` passed with 46 tests.
+- Targeted Phase 1/release-metadata tests: 94 tests passed.
+- FutureWarning gate: `pytest -W error::FutureWarning` passed.
+- Ruff: `ruff check .` passed.
+- Formatting: `ruff format --check .` passed.
+- MyPy: `mypy src tests` passed.
+- Whitespace diff check: `git diff --check` passed.
+- Package metadata/runtime version: `2.0.0a1 2.0.0a1`.
+- `v2.0.0-alpha.1` tag remained absent on the review branch.
+- Codex did not run a real Alpaca/provider network request.
+- Owner-run smoke-test evidence is the only accepted real-provider evidence.
+- No real provider data, credentials, account identifiers, authorization headers,
+  generated SQLite database, coverage output, or private screenshots were committed.
 
 ## Explicit Confirmations
 
@@ -263,9 +274,9 @@ Collection count checks:
 - No API write route was added.
 - No dashboard execution control was added.
 - No paper-order behavior changed.
-- No trading client was contacted.
+- No trading client was contacted by Codex.
 - No live support was added.
 - No real market dataset was committed.
 - No secret was committed.
-- Package version remains `1.0.0`.
+- Package version is prepared as `2.0.0a1`.
 - No Git tag was created.

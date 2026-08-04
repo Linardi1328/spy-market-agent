@@ -1,13 +1,18 @@
 # Version 2 Phase 1 — Real SPY Data Foundation Specification
 
-Status: Implementation in review
+Status: Accepted - alpha release preparation in review
 
 Target release: `v2.0.0-alpha.1`
 
 Planned implementation branch: `review/v2-phase-01-real-spy-data`
 
-This specification authorizes no implementation until it is reviewed and explicitly approved.
-It is planning documentation only.
+The Phase 1 implementation and owner-run real-provider smoke test have passed. This
+release-preparation branch is preparing package version `2.0.0a1`; the public Git tag
+`v2.0.0-alpha.1` must still not be created until this branch is approved, merged, and fully
+verified on `main`.
+
+This document does not authorize Version 2 Phase 2 implementation. Phase 2 requires its own
+approved specification.
 
 ## A. Purpose
 
@@ -23,12 +28,11 @@ Version 1 behavior outside the authorized Phase 1 data scope.
 
 ## Versioning Contract
 
-This planning and repository-alignment branch keeps package metadata and runtime
-`__version__` at `1.0.0`.
+The planning and repository-alignment branch kept package metadata and runtime `__version__`
+at `1.0.0`.
 
 Version 2 Phase 1 must not bump the package version at the beginning of implementation. Once
-all Phase 1 acceptance criteria pass, its final release-preparation commit on
-`review/v2-phase-01-real-spy-data` must set:
+all Phase 1 acceptance criteria pass, its final release-preparation branch must set:
 
 - `pyproject.toml` package version to `2.0.0a1`
 - `spy_market_agent.__version__` to `2.0.0a1`
@@ -41,8 +45,8 @@ the package version changes.
 
 The tag must be created only after:
 
-1. Phase 1 is approved.
-2. The Phase 1 branch is merged.
+1. Phase 1 release-preparation branch is approved.
+2. The release-preparation branch is merged.
 3. Main passes final verification.
 
 If Phase 1 is rejected or incomplete, no alpha tag is created.
@@ -383,7 +387,7 @@ Phase 1 may be approved only when:
 
 ## R. Planned Implementation Deliverables
 
-Expected future deliverables, after approval:
+Implemented Phase 1 deliverables:
 
 - Provider adapter.
 - Explicit acquisition command.
@@ -399,9 +403,15 @@ Expected future deliverables, after approval:
   Phase 1 acceptance criteria pass and before merge.
 - Git tag `v2.0.0-alpha.1` only after merge and successful verification on `main`.
 
-These deliverables are listed for planning only and are not implemented by this document.
+The package and release metadata for `2.0.0a1` are prepared by the release-preparation
+branch after Phase 1 acceptance criteria and the owner-run smoke test passed. The Git tag
+`v2.0.0-alpha.1` is created only after merge and successful verification on `main`.
 
 ## S. Approval Boundary
 
-This specification is planning documentation only. Implementation of Version 2 Phase 1 must
-not begin until this document is reviewed and explicitly approved.
+Version 2 Phase 1 implementation is accepted for alpha release preparation. The
+`v2.0.0-alpha.1` tag must still not be created until release-preparation review, merge, and
+successful verification on `main` are complete.
+
+This specification does not authorize Version 2 Phase 2. Phase 2 requires a separate
+approved specification and review branch.

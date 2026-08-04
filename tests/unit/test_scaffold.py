@@ -7,6 +7,19 @@ from importlib.metadata import version
 from pathlib import Path
 
 import spy_market_agent
+from spy_market_agent.backtesting import BACKTEST_SCHEMA_VERSION
+from spy_market_agent.datasets import LABEL_SCHEMA_VERSION
+from spy_market_agent.execution import PAPER_EXECUTION_SCHEMA_VERSION
+from spy_market_agent.features import FEATURE_SCHEMA_VERSION
+from spy_market_agent.market_data import (
+    PHASE1_MANIFEST_SCHEMA_VERSION,
+    PHASE1_SCHEMA_VERSION,
+)
+from spy_market_agent.market_data.models import SCHEMA_VERSION as MARKET_DATA_SCHEMA_VERSION
+from spy_market_agent.modeling import MODEL_SCHEMA_VERSION
+from spy_market_agent.persistence.schema import PERSISTENCE_SCHEMA_VERSION
+from spy_market_agent.risk import RISK_SCHEMA_VERSION
+from spy_market_agent.strategies import STRATEGY_SCHEMA_VERSION
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -44,19 +57,33 @@ def test_package_version_matches_installed_metadata() -> None:
     assert spy_market_agent.__version__ == version("spy-market-agent")
 
 
-def test_version_1_release_version_matches_pyproject_and_metadata() -> None:
+def test_version_2_alpha_release_version_matches_pyproject_and_metadata() -> None:
     with (ROOT / "pyproject.toml").open("rb") as pyproject_file:
         pyproject = tomllib.load(pyproject_file)
 
-    assert pyproject["project"]["version"] == "1.0.0"
-    assert version("spy-market-agent") == "1.0.0"
-    assert spy_market_agent.__version__ == "1.0.0"
+    assert pyproject["project"]["version"] == "2.0.0a1"
+    assert version("spy-market-agent") == "2.0.0a1"
+    assert spy_market_agent.__version__ == "2.0.0a1"
 
 
 def test_required_top_level_documentation_files_exist() -> None:
     assert (ROOT / "PROJECT_SPEC.md").is_file()
     assert (ROOT / "AGENTS.md").is_file()
     assert (ROOT / "README.md").is_file()
+
+
+def test_release_preparation_keeps_data_api_and_database_schema_versions_stable() -> None:
+    assert MARKET_DATA_SCHEMA_VERSION == "spy-daily-ohlcv-v1"
+    assert FEATURE_SCHEMA_VERSION == "spy-daily-features-v1"
+    assert LABEL_SCHEMA_VERSION == "spy-open-t1-to-open-t6-net-positive-v1"
+    assert MODEL_SCHEMA_VERSION == "spy-binary-models-v1"
+    assert STRATEGY_SCHEMA_VERSION == "spy-long-cash-strategy-v1"
+    assert RISK_SCHEMA_VERSION == "spy-long-only-risk-v1"
+    assert BACKTEST_SCHEMA_VERSION == "spy-daily-next-open-backtest-v1"
+    assert PAPER_EXECUTION_SCHEMA_VERSION == "spy-paper-execution-v1"
+    assert PERSISTENCE_SCHEMA_VERSION == "spy-sqlite-persistence-v2"
+    assert PHASE1_SCHEMA_VERSION == "spy-v2-phase1-canonical-daily-bars-v1"
+    assert PHASE1_MANIFEST_SCHEMA_VERSION == "spy-v2-phase1-dataset-manifest-v1"
 
 
 def test_real_env_file_is_not_tracked_or_required() -> None:
