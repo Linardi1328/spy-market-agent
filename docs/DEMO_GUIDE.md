@@ -42,15 +42,42 @@ Run the Phase 7 integration flow:
 pytest tests/integration/test_phase7_persistence_api_dashboard_flow.py -q
 ```
 
-For manual API and dashboard startup against an explicitly initialized local database:
+For manual API and dashboard startup against an explicitly initialized local database, use two
+separate terminals. Each server command stays active until stopped. Start FastAPI before
+opening Streamlit.
+
+### Terminal A - FastAPI
 
 ```bash
-python -m uvicorn "spy_market_agent.api.main:create_app" --factory --host 127.0.0.1 --port 8000
+python -m uvicorn "spy_market_agent.api.main:create_app" \
+  --factory \
+  --host 127.0.0.1 \
+  --port 8000
+```
+
+The default API address is `http://127.0.0.1:8000`.
+
+### Terminal B - Streamlit
+
+```bash
 streamlit run src/spy_market_agent/dashboard/streamlit_app.py
 ```
 
-An empty initialized database is expected to show no persisted model runs or backtests. This
-is normal unless you have populated the database through supported repository APIs.
+The dashboard normally becomes available at `http://127.0.0.1:8501` and reads from the API
+address configured by `DASHBOARD_API_BASE_URL`.
+
+For non-interactive smoke testing, avoid the first-run Streamlit prompt with headless mode:
+
+```bash
+streamlit run src/spy_market_agent/dashboard/streamlit_app.py \
+  --server.headless true \
+  --browser.gatherUsageStats false
+```
+
+An empty initialized database may correctly show no persisted model runs or backtests. This
+is normal unless you have populated the database through supported repository APIs. The API
+and dashboard are read-only and cannot approve, submit, reconcile, cancel, replace, or change
+paper orders.
 
 ## Demonstrate Paper Status Without Submitting
 
@@ -104,5 +131,6 @@ Remove generated local artifacts before committing:
 git status --short
 ```
 
-Generated SQLite files, coverage HTML, private screenshots, downloaded market data, and real
-credential files must not be committed.
+Generated SQLite files such as `spy_market_agent.sqlite3` or `demo.sqlite3`, local virtual
+environments such as `.venv-test/`, coverage HTML, private screenshots, downloaded market
+data, and real credential files must not be committed.

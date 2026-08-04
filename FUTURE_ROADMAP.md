@@ -62,9 +62,9 @@ Required principles for all future work:
 ## 2. Version 1 Baseline
 
 **Implemented baseline:** Version 1.0.0 is frozen at tag `v1.0.0`. The tag dereferences to
-commit `7798ce95193be2ce5778772e139933fac025bb32`. The current `main` branch used to create
-this roadmap is `05c2e9c680b43174ed91cfbe198ba1842c291227`, which includes the Version 1
-release plus a maintenance ignore-rule update for local test artifacts.
+commit `7798ce95193be2ce5778772e139933fac025bb32`. The initial roadmap branch was created
+from base `main` commit `05c2e9c680b43174ed91cfbe198ba1842c291227`, which includes the
+Version 1 release plus a maintenance ignore-rule update for local test artifacts.
 
 Version 1 includes:
 
@@ -317,6 +317,10 @@ Release meanings:
 | V2 Phase 5 | `v2.0.0-beta.2` | Production Paper Operation | `review/v2-phase-05-production-paper` | Production paper operation, reconciliation, recovery runbooks, and observation evidence. |
 | V2 Phase 6 | `v2.0.0-rc.1` | Version 2 Release Candidate | `review/v2-phase-06-release-candidate` | Feature-complete Version 2 audit for real-data, shadow, and production-paper scope. |
 | Final | `v2.0.0` | Approved Real-Data, Shadow, and Production-Paper Platform | Release from approved RC | Version 2 release after final audit; excludes real-money trading and live pilot approval. |
+
+The Phase 1 planning specification is
+[Version 2 Phase 1 - Real SPY Data Foundation Specification](docs/V2_PHASE_01_REAL_SPY_DATA_SPEC.md).
+It remains planning-only until reviewed and explicitly approved.
 
 Recommended branch sequence:
 
@@ -616,9 +620,16 @@ Roadmap governance:
 - Keep profitability, investment-advice, and real-money-readiness claims out of roadmap
   language unless separately reviewed and legally approved.
 
+Related documents:
+
+- [Project Specification](PROJECT_SPEC.md): frozen Version 1 implementation baseline.
+- [Version 2 Phase 1 - Real SPY Data Foundation Specification](docs/V2_PHASE_01_REAL_SPY_DATA_SPEC.md):
+  planning specification for `v2.0.0-alpha.1`.
+
 Change log:
 
-| Date | Main SHA | Change |
+| Date | Base Main SHA | Change |
 | --- | --- | --- |
+| 2026-08-04 | `0947c391b6c7646a27c1baeb7778cd229726bacb` | Added the Version 2 Phase 1 specification reference and clarified roadmap SHA metadata as base-main context; documentation-only planning with no Version 2 implementation. |
 | 2026-08-04 | `05c2e9c680b43174ed91cfbe198ba1842c291227` | Refined the development-stage summary table and added Version 2 phase and release tracking; documentation-only planning with no implementation approval. |
 | 2026-08-04 | `05c2e9c680b43174ed91cfbe198ba1842c291227` | Initial long-term future-development roadmap created as documentation-only planning after Version 1.0.0 was merged and tagged. |

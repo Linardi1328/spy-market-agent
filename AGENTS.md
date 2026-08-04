@@ -2,28 +2,56 @@
 
 These instructions are permanent guardrails for future Codex tasks in this repository.
 
-## Required First Step
+## Required Reading Order
 
-- Read `PROJECT_SPEC.md` before making changes.
-- Treat `PROJECT_SPEC.md` as the source of truth for the agreed project scope, architecture, safety requirements, and development sequence.
-- If a user request conflicts with `PROJECT_SPEC.md`, explain the conflict and ask for explicit approval before changing the architecture or scope.
+Before making changes, read the relevant repository guidance in this order:
+
+1. `AGENTS.md`
+2. `PROJECT_SPEC.md` - frozen Version 1 implementation baseline
+3. `FUTURE_ROADMAP.md` - approved long-term planning sequence
+4. The active phase specification - binding implementation authority for the current
+   approved phase
+
+`PROJECT_SPEC.md` remains the authoritative record for Version 1 scope, architecture,
+safety requirements, and development sequence. `FUTURE_ROADMAP.md` is planning
+documentation; it is not automatic permission to implement every stage. Each future
+development phase requires an approved phase specification, and Codex must implement only the
+currently authorized phase.
+
+Version 2 Phase 1 is governed by `docs/V2_PHASE_01_REAL_SPY_DATA_SPEC.md` after that
+specification is reviewed and explicitly approved. Real-data-provider selection belongs to
+Version 2 Phase 1, not to an old Version 1 phase.
+
+If a user request conflicts with `PROJECT_SPEC.md`, `FUTURE_ROADMAP.md`, or the active phase
+specification, explain the conflict and ask for explicit approval before changing the
+architecture, safety posture, or scope.
+
+## Branch and Review Discipline
+
+- Do not modify `main` directly.
+- Every implementation, documentation, or maintenance change must occur on a review or
+  maintenance branch.
+- Branch work must be reviewed before merge.
+- Do not push directly to `main`.
+- Do not create release tags unless the repository owner explicitly asks for that tag.
 
 ## Engineering Standards
 
 - Use Python 3.12.
 - Use type hints for Python code.
 - Prefer small, modular, reviewable changes.
-- Keep implementation files aligned with the proposed package boundaries.
-- Add or update tests for every feature.
-- Run Pytest, Ruff, and MyPy after implementation changes.
+- Keep implementation files aligned with the approved package boundaries.
+- Add or update tests for every implementation feature.
 - Clearly document assumptions and limitations.
 - Ask for explicit approval before introducing a new major dependency.
 - Ask for explicit approval before changing the agreed architecture.
-- The market-data provider may remain undecided until Phase 3, but all market-data access must use a provider interface.
+- Version 2 or roadmap work must not change Version 1 runtime behavior unless the active
+  approved phase specification explicitly authorizes that change.
 
 ## Trading Safety Rules
 
-- Never introduce live-trading support.
+- Never introduce live-money trading support.
+- Live-money execution remains prohibited.
 - Separate execution mode from execution permission.
 - `EXECUTION_MODE` may only be `paper`.
 - Any request for `live` execution must raise `RuntimeError`.
@@ -31,6 +59,8 @@ These instructions are permanent guardrails for future Codex tasks in this repos
 - `DRY_RUN` must default to `true`.
 - Starting the application must not automatically submit paper orders.
 - Paper-order submission must require deliberate configuration and explicit approval.
+- Paper execution already exists in Version 1 and must remain paper-only, explicitly invoked,
+  and isolated from models, API write paths, dashboard controls, and imports.
 - Never permit short selling in Version 1.
 - Never permit leverage in Version 1.
 - Never permit assets other than SPY in Version 1.
@@ -39,33 +69,42 @@ These instructions are permanent guardrails for future Codex tasks in this repos
 - No model output may override risk limits.
 - The prediction model must not communicate directly with a broker or execution adapter.
 - Every proposed trade must pass through an independent risk-management layer.
-- The application must fail safely by refusing to trade when required information is missing or uncertain.
-- Future paper execution must require unique signal identifiers and unique client-order identifiers.
-- Future paper execution must reject duplicate orders and stale signals.
-- Future paper execution must include a global kill switch.
-- Future paper execution must verify broker account type and paper endpoint before order submission.
+- The application must fail safely by refusing to trade when required information is missing
+  or uncertain.
+- Paper execution requires unique signal identifiers and unique client-order identifiers.
+- Paper execution must reject duplicate orders and stale signals.
+- Paper execution must include configuration and durable kill switches.
+- Paper execution must verify broker account type and paper endpoint before order submission.
 
 ## Data and Modeling Rules
 
 - Never randomly shuffle financial time-series observations.
 - All model evaluation must preserve chronological order.
-- Use a gap of at least five trading observations between training and validation and between validation and final testing.
+- Use a gap of at least five trading observations between training and validation and between
+  validation and final testing.
 - Apply the same minimum gap in time-series cross-validation.
-- Keep the final test period untouched until feature selection, model selection, probability calibration, and signal-threshold selection are complete.
+- Keep the final test period untouched until feature selection, model selection, probability
+  calibration, and signal-threshold selection are complete.
 - Never use centered rolling windows.
 - Never use backward filling that introduces future information.
 - Feature engineering must not use future observations.
-- The Version 1 target is: using information available through the close of trading day `t`, predict whether entering SPY at the open of `t + 1` and exiting at the open of `t + 6` produces a positive return after estimated round-trip transaction costs and slippage.
+- The Version 1 target is: using information available through the close of trading day `t`,
+  predict whether entering SPY at the open of `t + 1` and exiting at the open of `t + 6`
+  produces a positive return after estimated round-trip transaction costs and slippage.
 - Features may use data only through the close of day `t`.
 - Prediction is generated after day `t` is complete.
 - Entry may occur no earlier than the open of `t + 1`.
 - Exit for the five-day target occurs at the open of `t + 6`.
-- The target is `1` only when the executable return after estimated costs is greater than zero.
+- The target is `1` only when the executable return after estimated costs is greater than
+  zero.
 - Future return and target columns must never appear in model features.
 - Backtests must include configurable transaction costs and estimated slippage.
-- Maintain explicit alignment between raw data, features, labels, predictions, signals, and fills.
-- Preserve the original vendor response as an immutable raw snapshot.
-- Use one consistently adjusted OHLCV series for features, labels, backtesting, and benchmark calculations.
+- Maintain explicit alignment between raw data, features, labels, predictions, signals, and
+  fills.
+- Preserve the original vendor response as an immutable raw snapshot when data acquisition is
+  implemented under an approved phase.
+- Use one consistently adjusted OHLCV series for features, labels, backtesting, and benchmark
+  calculations.
 - Never mix raw and adjusted fields within one calculation.
 - Record the adjustment policy in dataset and model metadata.
 - Use the NYSE trading calendar and treat `America/New_York` as the market timezone.
@@ -77,14 +116,22 @@ These instructions are permanent guardrails for future Codex tasks in this repos
 
 ## Data Lineage Rules
 
-- Record data lineage and model-run metadata when available, including provider, download timestamp, symbol, timeframe, adjustment policy, first and last trading session, row count, dataset checksum, feature-schema version, label definition, Git commit hash, Python version, and dependency versions.
+- Record data lineage and model-run metadata when available, including provider, download
+  timestamp, symbol, timeframe, adjustment policy, first and last trading session, row count,
+  dataset checksum, feature-schema version, label definition, Git commit hash, Python version,
+  and dependency versions.
+- Do not commit restricted market data, generated SQLite databases, credentials, private
+  screenshots, or generated coverage artifacts.
 
 ## Security Rules
 
 - Never hard-code API keys, account IDs, secrets, or credentials.
-- Never expose credentials in logs, test output, API responses, dashboard views, or committed files.
+- Never expose credentials in logs, test output, API responses, dashboard views, manifests,
+  fixtures, review files, or committed files.
 - Use environment variables or approved local secret-management mechanisms for credentials.
 - Commit only placeholder examples for environment configuration.
+- Redact authentication headers and account identifiers in errors and documentation.
+- Do not use unsafe pickle or arbitrary-code deserialization for market-data artifacts.
 
 ## Testing Rules
 
@@ -92,13 +139,22 @@ These instructions are permanent guardrails for future Codex tasks in this repos
 - Do not weaken assertions merely to obtain a passing build.
 - Add regression tests for safety-critical fixes.
 - Prefer deterministic fixtures for market-data, feature, model, backtest, and risk tests.
-- After implementation changes, run:
+- Normal automated tests must remain network independent unless a future approved phase
+  explicitly marks a network test separately.
+
+Canonical verification commands:
 
 ```bash
-pytest
+python -m pip install -e ".[dev]"
+pytest --cov-fail-under=85
+pytest tests/unit -q
+pytest tests/integration -q
+pytest -W error::FutureWarning
 ruff check .
 ruff format --check .
-mypy .
+mypy src tests
+git diff --check
+git status --short
 ```
 
 If a command cannot be run, document the reason clearly in the final response.
@@ -108,4 +164,7 @@ If a command cannot be run, document the reason clearly in the final response.
 - Keep assumptions and limitations visible in user-facing documentation.
 - Do not claim or imply profitability.
 - Do not present model outputs, backtests, or dashboard results as investment advice.
-- When adding or changing architecture, update `PROJECT_SPEC.md` after explicit approval.
+- When adding or changing architecture, update the active approved specification after
+  explicit approval.
+- Keep `PROJECT_SPEC.md` focused on the frozen Version 1 baseline unless explicitly approved.
+- Keep `FUTURE_ROADMAP.md` focused on planning and stage gates, not implementation claims.

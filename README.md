@@ -133,6 +133,7 @@ streamlit run src/spy_market_agent/dashboard/streamlit_app.py
 - [Demo Guide](docs/DEMO_GUIDE.md)
 - [Portfolio Overview](docs/PORTFOLIO_OVERVIEW.md)
 - [Future Roadmap](FUTURE_ROADMAP.md)
+- [Version 2 Phase 1 Real SPY Data Specification](docs/V2_PHASE_01_REAL_SPY_DATA_SPEC.md)
 - [Project Specification](PROJECT_SPEC.md)
 - [Changelog](CHANGELOG.md)
 - [Version 1.0.0 Release Notes](RELEASE_NOTES_V1.0.0.md)
