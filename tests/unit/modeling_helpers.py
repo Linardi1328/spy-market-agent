@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 from datetime import UTC, date, datetime
 
 import pandas as pd
@@ -20,6 +21,14 @@ from spy_market_agent.datasets.splits import (
 from spy_market_agent.features.models import FEATURE_COLUMNS, FEATURE_SCHEMA_VERSION
 from spy_market_agent.market_data.calendar import XNYSCalendar
 from spy_market_agent.market_data.models import SCHEMA_VERSION as MARKET_DATA_SCHEMA_VERSION
+from spy_market_agent.modeling import (
+    GRADIENT_BOOSTING_MODEL,
+    LOGISTIC_REGRESSION_MODEL,
+    FinalTestEvaluation,
+    LockedModelSelection,
+    ModelParameterSet,
+)
+from spy_market_agent.modeling.models import fixed_model_parameters
 
 CREATED_AT = datetime(2025, 1, 2, 12, 0, tzinfo=UTC)
 SOURCE_CHECKSUM = "1" * 64
@@ -99,3 +108,43 @@ def make_split_spec(sessions: list[date]) -> ChronologicalSplitSpec:
 def make_partitions() -> ChronologicalPartitions:
     sessions = make_sessions()
     return split_supervised_dataset(make_supervised_dataset(), make_split_spec(sessions))
+
+
+def pre_cleanup_logistic_parameter_snapshot(random_seed: int) -> ModelParameterSet:
+    return ModelParameterSet(
+        model_name=LOGISTIC_REGRESSION_MODEL,
+        parameters=(
+            ("estimator", "Pipeline"),
+            ("scaler", "StandardScaler"),
+            ("classifier", "LogisticRegression"),
+            ("classifier.penalty", "l2"),
+            ("classifier.C", 1.0),
+            ("classifier.solver", "liblinear"),
+            ("classifier.max_iter", 2000),
+            ("classifier.class_weight", None),
+            ("classifier.random_state", random_seed),
+        ),
+    )
+
+
+def locked_selection_with_pre_cleanup_parameter_snapshot(
+    selection: LockedModelSelection,
+) -> LockedModelSelection:
+    return replace(
+        selection,
+        candidate_parameters=(
+            pre_cleanup_logistic_parameter_snapshot(selection.random_seed),
+            fixed_model_parameters(GRADIENT_BOOSTING_MODEL, random_seed=selection.random_seed),
+        ),
+    )
+
+
+def final_test_evaluation_with_pre_cleanup_parameter_snapshot(
+    evaluation: FinalTestEvaluation,
+) -> FinalTestEvaluation:
+    return replace(
+        evaluation,
+        locked_selection=locked_selection_with_pre_cleanup_parameter_snapshot(
+            evaluation.locked_selection
+        ),
+    )

@@ -22,6 +22,10 @@ from spy_market_agent.persistence import (
     connect_database,
     initialize_database,
 )
+from unit.modeling_helpers import (
+    final_test_evaluation_with_pre_cleanup_parameter_snapshot,
+    pre_cleanup_logistic_parameter_snapshot,
+)
 from unit.phase7_helpers import (
     BACKTEST_RUN_ID,
     MARKET_RUN_ID,
@@ -115,6 +119,39 @@ def test_final_evaluation_and_backtest_round_trips_preserve_values_and_order(
     pd.testing.assert_frame_equal(
         loaded_backtest.execution_prices.data,
         artifacts.backtest.execution_prices.data,
+    )
+
+
+def test_phase8_model_run_with_pre_cleanup_parameter_snapshot_round_trips(
+    tmp_path: Path,
+) -> None:
+    artifacts = make_phase7_artifacts()
+    evaluation = final_test_evaluation_with_pre_cleanup_parameter_snapshot(artifacts.evaluation)
+    database_path = tmp_path / "phase8-model-lineage.sqlite3"
+    repository = initialized_repository(database_path)
+
+    repository.save_final_test_evaluation(MODEL_RUN_ID, evaluation)
+    loaded = repository.load_final_test_evaluation(MODEL_RUN_ID)
+
+    connection = connect_database(database_path)
+    try:
+        versions = connection.execute("SELECT version FROM schema_migrations").fetchall()
+        assert [row["version"] for row in versions] == [PERSISTENCE_SCHEMA_VERSION]
+    finally:
+        connection.close()
+    expected_logistic_parameters = pre_cleanup_logistic_parameter_snapshot(evaluation.random_seed)
+    assert loaded.model_schema_version == "spy-binary-models-v1"
+    assert loaded.locked_selection.candidate_parameters[0] == expected_logistic_parameters
+    assert ("classifier.penalty", "l2") in (
+        loaded.locked_selection.candidate_parameters[0].parameters
+    )
+    assert all(
+        name != "classifier.l1_ratio"
+        for name, _value in loaded.locked_selection.candidate_parameters[0].parameters
+    )
+    pd.testing.assert_frame_equal(
+        loaded.prediction_set.data,
+        evaluation.prediction_set.data,
     )
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import warnings
 from collections.abc import Callable
 from dataclasses import FrozenInstanceError, replace
 from datetime import timedelta
@@ -17,6 +18,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.tree import DecisionTreeRegressor
 
 import spy_market_agent.modeling.models as modeling_models
+import spy_market_agent.modeling.training as modeling_training
 from spy_market_agent.datasets.splits import DatasetPartition, DatasetPartitionMetadata
 from spy_market_agent.features.models import FEATURE_COLUMNS
 from spy_market_agent.modeling import (
@@ -46,7 +48,12 @@ from spy_market_agent.modeling.models import (
     fixed_model_parameters,
 )
 
-from .modeling_helpers import CREATED_AT, make_partitions
+from .modeling_helpers import (
+    CREATED_AT,
+    locked_selection_with_pre_cleanup_parameter_snapshot,
+    make_partitions,
+    pre_cleanup_logistic_parameter_snapshot,
+)
 
 
 def clone_partition(partition: DatasetPartition) -> DatasetPartition:
@@ -272,12 +279,101 @@ def test_logistic_candidate_estimator_has_fixed_pipeline_specification() -> None
     assert isinstance(estimator.named_steps["scaler"], StandardScaler)
     classifier = estimator.named_steps["classifier"]
     assert isinstance(classifier, LogisticRegression)
+    assert classifier.penalty == "deprecated"
     assert classifier.l1_ratio == 0.0
     assert classifier.C == 1.0
     assert classifier.solver == "liblinear"
     assert classifier.max_iter == 2000
     assert classifier.class_weight is None
     assert classifier.random_state == 7
+
+
+def test_logistic_candidate_constructor_omits_deprecated_penalty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_calls: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+
+    def constructor_spy(*args: Any, **kwargs: Any) -> LogisticRegression:
+        captured_calls.append((args, dict(kwargs)))
+        return LogisticRegression(*args, **kwargs)
+
+    monkeypatch.setattr(modeling_training, "LogisticRegression", constructor_spy)
+
+    estimator = build_candidate_estimator(LOGISTIC_REGRESSION_MODEL, random_seed=7)
+
+    assert isinstance(estimator, Pipeline)
+    assert len(captured_calls) == 1
+    args, kwargs = captured_calls[0]
+    assert args == ()
+    assert "penalty" not in kwargs
+    classifier = cast(LogisticRegression, estimator.named_steps["classifier"])
+    assert classifier.l1_ratio == 0.0
+
+
+def test_candidate_training_emits_no_future_warning() -> None:
+    partitions = make_partitions()
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", FutureWarning)
+        train_candidate_models(
+            partitions.train,
+            partitions.validation,
+            config=ModelTrainingConfig(random_seed=7),
+            created_at=CREATED_AT,
+        )
+
+
+def test_fitted_logistic_estimator_uses_l2_behavior_public_parameters() -> None:
+    partitions = make_partitions()
+
+    comparison = train_candidate_models(
+        partitions.train,
+        partitions.validation,
+        config=ModelTrainingConfig(random_seed=7),
+        created_at=CREATED_AT,
+    )
+
+    estimator = cast(Pipeline, comparison.logistic_regression.estimator)
+    classifier = cast(LogisticRegression, estimator.named_steps["classifier"])
+    parameters = classifier.get_params(deep=True)
+    assert parameters["penalty"] == "deprecated"
+    assert parameters["l1_ratio"] == 0.0
+    assert parameters["C"] == 1.0
+    assert parameters["solver"] == "liblinear"
+    assert classifier.coef_.shape == (1, len(FEATURE_COLUMNS))
+
+
+def test_fixed_logistic_parameter_snapshot_preserves_version1_l2_semantics() -> None:
+    parameters = fixed_model_parameters(LOGISTIC_REGRESSION_MODEL, random_seed=7)
+
+    assert parameters == pre_cleanup_logistic_parameter_snapshot(random_seed=7)
+    assert ("classifier.penalty", "l2") in parameters.parameters
+    assert all(name != "classifier.l1_ratio" for name, _value in parameters.parameters)
+
+
+def test_locked_selection_reconstructs_pre_cleanup_parameter_snapshot() -> None:
+    partitions = make_partitions()
+    comparison = train_candidate_models(
+        partitions.train,
+        partitions.validation,
+        config=ModelTrainingConfig(random_seed=7),
+        created_at=CREATED_AT,
+    )
+    locked = locked_selection_with_pre_cleanup_parameter_snapshot(comparison.locked_selection)
+
+    reconstructed = modeling_models.reconstruct_locked_model_selection(
+        locked,
+        error_type=LockedModelError,
+        code="invalid_locked_selection",
+    )
+
+    assert reconstructed.candidate_parameters[0] == (
+        pre_cleanup_logistic_parameter_snapshot(random_seed=7)
+    )
+
+
+def test_model_schema_version_remains_version1() -> None:
+    assert MODEL_SCHEMA_VERSION == "spy-binary-models-v1"
 
 
 def test_modeling_scalar_validation_helpers_reject_malformed_values() -> None:
@@ -1128,6 +1224,8 @@ def test_candidate_model_result_rejects_swapped_estimator_types() -> None:
 @pytest.mark.parametrize(
     ("field_name", "replacement"),
     [
+        ("penalty", "l2"),
+        ("l1_ratio", 1.0),
         ("C", 0.5),
         ("random_state", 999),
     ],

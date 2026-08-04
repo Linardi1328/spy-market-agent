@@ -9,8 +9,11 @@ This pass did not add Phase 9 functionality and did not change Phase 8 execution
 ## Branch
 
 - Starting main SHA: `846db31158723d43a2aa66004e2d31e0beb20378`
-- Branch: `review/pre-phase-09-quality-cleanup`
+- Original cleanup branch: `review/pre-phase-09-quality-cleanup`
+- Correction branch: `review/pre-phase-09-quality-corrections`
 - Confirmed merged Phase 8 concurrency commit: `ae3d390` is an ancestor of `origin/main`.
+- Cherry-picked cleanup SHA: `9a9ae2d3d2c81ca0235a40235d67a4fcfc3d34cd`
+- Cherry-picked cleanup commit on correction branch: `fa8650c`
 
 ## Baseline Verification
 
@@ -75,7 +78,7 @@ Warnings found:
   - Originating module: project modeling code constructing canonical logistic-regression estimators.
   - Triggering test: `tests/integration/test_phase5_modeling_flow.py`
   - Dependency: `scikit-learn 1.9.0`
-  - Resolution: removed explicit `penalty="l2"` and updated the deterministic fixed-parameter snapshot to record the equivalent default `classifier.l1_ratio=0.0`.
+  - Resolution: removed explicit `penalty="l2"` from estimator construction without changing the Version 1 semantic model-parameter snapshot.
 
 Pytest warning policy after cleanup:
 
@@ -114,11 +117,13 @@ Added focused regression and coverage tests for:
 - Persistence serialization readers and writers for required text, optional text, run IDs, dates, datetimes, decimals, booleans, finite floats, integer storage contracts, JSON string tuples, and checksum validation.
 - Backtest cost and accounting guardrails for configuration values, scalar validators, execution-price checksum inputs, fill accounting replay, and metrics identity replay.
 - Backtest metrics audit validation for invalid frames, malformed portfolio/fill/proposed-order/risk-decision rows, duplicate sequences, order-decision mismatches, and initial-cash mismatch.
+- Correction tests proving logistic regression construction omits the deprecated `penalty` argument, training emits no `FutureWarning`, actual fitted public parameters preserve L2 behavior, `fixed_model_parameters()` keeps `classifier.penalty="l2"` and omits `classifier.l1_ratio`, old locked-selection snapshots reconstruct, old Phase 8-style persisted final evaluations save/load/validate, actual parameter tampering is still rejected, and `MODEL_SCHEMA_VERSION` remains `spy-binary-models-v1`.
 
 ## Dependency Changes
 
 - No dependency was added, removed, or upgraded.
 - Project-owned warning fix avoided a dependency change by removing deprecated scikit-learn parameter usage.
+- The correction added no dependency and no persistence migration.
 
 ## Files Modified
 
@@ -126,19 +131,53 @@ Added focused regression and coverage tests for:
 - `pyproject.toml`
 - `reviews/PHASE_08_REVIEW.md`
 - `reviews/PRE_PHASE_09_QUALITY_REVIEW.md`
+- `src/spy_market_agent/execution/repository.py`
+- `src/spy_market_agent/modeling/__init__.py`
 - `src/spy_market_agent/modeling/models.py`
 - `src/spy_market_agent/modeling/training.py`
+- `tests/unit/modeling_helpers.py`
 - `tests/unit/test_backtest_costs.py`
 - `tests/unit/test_backtest_metrics.py`
 - `tests/unit/test_dashboard_phase7.py`
 - `tests/unit/test_feature_engineering.py`
 - `tests/unit/test_market_data_validation.py`
 - `tests/unit/test_model_training.py`
+- `tests/unit/test_persistence_repositories.py`
 - `tests/unit/test_persistence_serialization.py`
+- `tests/unit/test_public_phase5_api.py`
+
+## Correction Baseline
+
+Commands run on `review/pre-phase-09-quality-corrections` after cherry-picking cleanup commit `9a9ae2d3d2c81ca0235a40235d67a4fcfc3d34cd` and before correction edits:
+
+- `python -m pip install -e ".[dev]"`: passed; editable `spy-market-agent 0.1.0` installed and all dependencies were already present.
+- `pytest --cov-fail-under=85`: `878 passed in 82.12s`; required coverage reached with exact combined coverage `85.34%`.
+- `pytest tests/unit -q`: passed; combined coverage display remained `85%`; no warning summary was emitted.
+- `pytest tests/integration -q`: `23 passed`; integration-only coverage display was `71%`; no warning summary was emitted.
+- `ruff check .`: `All checks passed!`
+- `ruff format --check .`: `112 files already formatted`
+- `mypy src tests`: `Success: no issues found in 101 source files`
+- `git diff --check`: passed.
+
+## Correction Note
+
+`LogisticRegression(penalty="l2")` is no longer used because scikit-learn 1.9 deprecates the explicit `penalty` constructor argument and emits a `FutureWarning` when that explicit value is fit. The Version 1 persisted model lineage remains `("classifier.penalty", "l2")` because it is the stable Phase 5/7/8 semantic model specification recorded in model metadata, database rows, and review artifacts. The in-memory estimator is validated separately through its actual public scikit-learn parameters: omitted `penalty` remains the constructor default, `l1_ratio=0.0` maps to L2 behavior during fit, and tampering with actual public estimator parameters is still rejected.
+
+The final `FutureWarning` verification also exposed a pre-existing SQLite deferred write-upgrade race in `record_receipt()` under the Phase 8 concurrent submission test. The correction now acquires the receipt transaction with `BEGIN IMMEDIATE`, matching the repository's other attempt-update methods and preserving the existing Phase 8 state machine without adding execution capability.
 
 ## Final Verification
 
-To be completed after documentation updates.
+- Editable installation: `python -m pip install -e ".[dev]"` passed; editable `spy-market-agent 0.1.0` installed and all dependencies were already present.
+- Full pytest: `pytest --cov-fail-under=85` passed with `887 passed in 81.64s`; required coverage reached with exact combined coverage `85.34%`.
+- Unit tests: `pytest tests/unit -q` passed; the unit-only coverage display reported total coverage `85%`; no warning summary was emitted.
+- Integration tests: `pytest tests/integration -q` passed with 23 test dots completed; the integration-only coverage display reported total coverage `71%`; no warning summary was emitted.
+- Coverage: combined coverage remained above the branch-aware gate at `85.34%`, statement coverage display `85%`, and branch coverage remained enabled.
+- Warning policy: `filterwarnings = ["error", ...]` remains enabled with only exact documented upstream warning filters; `pytest -W error::FutureWarning` passed with `887 passed in 82.20s` and emitted no uncontrolled warning summary.
+- Ruff: `ruff check .` reported `All checks passed!`
+- Formatting: `ruff format --check .` reported `112 files already formatted`.
+- MyPy: `mypy src tests` reported `Success: no issues found in 101 source files`.
+- Import checks: `python -c "import spy_market_agent; print(spy_market_agent.__version__)"` printed `0.1.0`; `python -c "from spy_market_agent.modeling import fixed_model_parameters; print(fixed_model_parameters('logistic_regression', random_seed=42))"` printed `ModelParameterSet(model_name='logistic_regression', parameters=(('estimator', 'Pipeline'), ('scaler', 'StandardScaler'), ('classifier', 'LogisticRegression'), ('classifier.penalty', 'l2'), ('classifier.C', 1.0), ('classifier.solver', 'liblinear'), ('classifier.max_iter', 2000), ('classifier.class_weight', None), ('classifier.random_state', 42)))`.
+- `git diff --check`: passed.
 
 ## Confirmations
 

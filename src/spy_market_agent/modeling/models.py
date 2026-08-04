@@ -1549,7 +1549,7 @@ def fixed_model_parameters(model_name: object, *, random_seed: int) -> ModelPara
                 ("estimator", "Pipeline"),
                 ("scaler", "StandardScaler"),
                 ("classifier", "LogisticRegression"),
-                ("classifier.l1_ratio", 0.0),
+                ("classifier.penalty", "l2"),
                 ("classifier.C", 1.0),
                 ("classifier.solver", "liblinear"),
                 ("classifier.max_iter", 2000),
