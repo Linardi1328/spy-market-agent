@@ -18,8 +18,34 @@ source records, produce canonical validated records, and record enough lineage t
 or reject a dataset later.
 
 Phase 1 must not change models, strategies, paper execution, broker integration, risk
-limits, API submission behavior, dashboard submission behavior, package version, persisted
-schema versions, or Version 1 runtime behavior.
+limits, API submission behavior, dashboard submission behavior, persisted schema versions, or
+Version 1 behavior outside the authorized Phase 1 data scope.
+
+## Versioning Contract
+
+This planning and repository-alignment branch keeps package metadata and runtime
+`__version__` at `1.0.0`.
+
+Version 2 Phase 1 must not bump the package version at the beginning of implementation. Once
+all Phase 1 acceptance criteria pass, its final release-preparation commit on
+`review/v2-phase-01-real-spy-data` must set:
+
+- `pyproject.toml` package version to `2.0.0a1`
+- `spy_market_agent.__version__` to `2.0.0a1`
+
+`2.0.0a1` is the PEP 440 Python package version. `v2.0.0-alpha.1` is the corresponding Git
+tag and public release identifier.
+
+Persisted database schema versions and API route versions must not be changed merely because
+the package version changes.
+
+The tag must be created only after:
+
+1. Phase 1 is approved.
+2. The Phase 1 branch is merged.
+3. Main passes final verification.
+
+If Phase 1 is rejected or incomplete, no alpha tag is created.
 
 ## B. Scope
 
@@ -369,7 +395,9 @@ Expected future deliverables, after approval:
 - Unit and integration tests.
 - Phase review report.
 - Updated documentation.
-- Release metadata for `v2.0.0-alpha.1` after approval and merge.
+- Package and release metadata for `2.0.0a1` as the final release-preparation commit after
+  Phase 1 acceptance criteria pass and before merge.
+- Git tag `v2.0.0-alpha.1` only after merge and successful verification on `main`.
 
 These deliverables are listed for planning only and are not implemented by this document.
 
