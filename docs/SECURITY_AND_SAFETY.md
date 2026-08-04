@@ -15,6 +15,10 @@ stale signals, corrupted persisted artifacts, and user interfaces mutating execu
 - Display-safe settings expose only credential-presence booleans.
 - Full account IDs are fingerprinted before persistence.
 - Logs, API responses, dashboard views, tests, and review records must not expose secrets.
+- Version 2 Phase 1 market-data credentials are separate from paper-trading credentials:
+  `ALPACA_MARKET_DATA_API_KEY` and `ALPACA_MARKET_DATA_SECRET_KEY`.
+- The Phase 1 acquisition CLI never accepts credentials as command-line arguments and never
+  falls back to `ALPACA_API_KEY` or `ALPACA_SECRET_KEY`.
 
 ## Paper-Only Enforcement
 
@@ -123,6 +127,35 @@ fail safely with sanitized project errors.
 FastAPI exposes only GET application routes. Streamlit has no approve, submit, reconcile,
 retry, enable, disable, cancel, replace, liquidation, or kill-switch controls. API and
 dashboard paths do not construct Alpaca clients and do not initialize or migrate SQLite.
+
+The Version 2 Phase 1 acquisition path is CLI-only and explicit. FastAPI startup, Streamlit
+startup, dashboard rendering, package imports, and test collection do not acquire market
+data, construct a market-data client, or write raw/canonical/manifest artifacts.
+
+## Historical Market-Data Safety
+
+Phase 1 market-data acquisition safeguards:
+
+- SPY only.
+- Daily bars only.
+- Explicit provider, feed, adjustment mode, date range, and provider-terms acknowledgement.
+- Credentials read only from market-data environment variables.
+- No trading client, order method, paper endpoint, live endpoint, API write route, dashboard
+  control, model training, or backtest execution.
+- Bounded retries for transient provider failures only.
+- No retry for authentication, authorization, malformed data, invalid requests, checksum
+  mismatch, or session validation failure.
+- Safe repository-relative data root.
+- Protection against `..` traversal, absolute-path escape, source/doc/test/Git directories,
+  symlink artifact paths, and existing conflicting artifacts.
+- Atomic temporary-file writes followed by checksum verification and `Path.replace`.
+- Local-only ignored storage under `data/raw/`, `data/canonical/`, and `data/manifests/`.
+- Provider data is not redistributed and must not be committed.
+- Synthetic fixtures are visibly identified under `data/fixtures/`.
+
+If market data is missing, out of order, duplicated, outside XNYS sessions, future-dated,
+incomplete, non-finite, non-positive, negative-volume, or OHLC-inconsistent, acquisition
+fails closed.
 
 ## Dependency and Warning Policy
 

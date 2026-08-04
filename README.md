@@ -33,6 +33,35 @@ documentation and release-readiness work:
 - Explicitly invoked Alpaca paper-only execution service for SPY whole-share market DAY
   orders, with no API or dashboard submission controls.
 
+## Version 2 Phase 1 Review Status
+
+Version 2 Phase 1 is under review on the `review/v2-phase-01-real-spy-data` branch. The
+current released package remains Version 1.0.0; `v2.0.0-alpha.1` has not been released or
+tagged.
+
+The Phase 1 candidate adds an explicit historical SPY daily-data acquisition path:
+
+```bash
+python -m spy_market_agent.market_data.cli acquire \
+  --provider alpaca \
+  --symbol SPY \
+  --start 2016-01-04 \
+  --end 2016-01-08 \
+  --timeframe 1Day \
+  --feed sip \
+  --adjustment all \
+  --data-root ./data \
+  --acknowledge-provider-terms
+```
+
+Credentials are optional for normal tests. Real Alpaca market-data acquisition requires
+`ALPACA_MARKET_DATA_API_KEY` and `ALPACA_MARKET_DATA_SECRET_KEY`; these are separate from
+paper-trading credentials and are read only from the environment. Downloaded provider data is
+local and ignored under `data/raw/`, `data/canonical/`, and `data/manifests/`.
+
+Phase 1 does not train models, run benchmarks, test prediction accuracy, claim profitability,
+submit orders, or enable live trading.
+
 ## Safety Boundaries
 
 Live trading is not supported. `EXECUTION_MODE` may only be `paper`, and any attempt to
@@ -134,6 +163,7 @@ streamlit run src/spy_market_agent/dashboard/streamlit_app.py
 - [Portfolio Overview](docs/PORTFOLIO_OVERVIEW.md)
 - [Future Roadmap](FUTURE_ROADMAP.md)
 - [Version 2 Phase 1 Real SPY Data Specification](docs/V2_PHASE_01_REAL_SPY_DATA_SPEC.md)
+- [Version 2 Phase 1 Provider Decision](docs/V2_PHASE_01_PROVIDER_DECISION.md)
 - [Project Specification](PROJECT_SPEC.md)
 - [Changelog](CHANGELOG.md)
 - [Version 1.0.0 Release Notes](RELEASE_NOTES_V1.0.0.md)

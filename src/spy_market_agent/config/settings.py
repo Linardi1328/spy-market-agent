@@ -63,6 +63,12 @@ class Settings(BaseSettings):
     adjustment_policy: str = "adjusted"
     alpaca_api_key: SecretStr | None = Field(default=None, repr=False)
     alpaca_secret_key: SecretStr | None = Field(default=None, repr=False)
+    alpaca_market_data_api_key: SecretStr | None = Field(default=None, repr=False)
+    alpaca_market_data_secret_key: SecretStr | None = Field(default=None, repr=False)
+    alpaca_market_data_feed: str = "sip"
+    market_data_root: str = "./data"
+    market_data_max_retries: int = Field(default=3, ge=0, le=10)
+    market_data_timeout_seconds: float = Field(default=30.0, gt=0.0, le=300.0)
 
     @field_validator("execution_mode")
     @classmethod
@@ -106,6 +112,15 @@ class Settings(BaseSettings):
     def _validate_adjustment_policy(cls, value: str) -> str:
         return _require_value(value, expected="adjusted", field_name="adjustment_policy")
 
+    @field_validator("alpaca_market_data_feed")
+    @classmethod
+    def _validate_market_data_feed(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"sip", "iex"}:
+            msg = "alpaca_market_data_feed must be 'sip' or 'iex'."
+            raise ValueError(msg)
+        return normalized
+
     @field_validator("sqlite_database_path", "dashboard_api_base_url")
     @classmethod
     def _validate_non_empty_text(cls, value: str) -> str:
@@ -133,8 +148,16 @@ class Settings(BaseSettings):
         safe_values["database_url"] = _display_safe_database_url(self.database_url)
         safe_values["alpaca_api_key_present"] = _secret_present(self.alpaca_api_key)
         safe_values["alpaca_secret_key_present"] = _secret_present(self.alpaca_secret_key)
+        safe_values["alpaca_market_data_api_key_present"] = _secret_present(
+            self.alpaca_market_data_api_key
+        )
+        safe_values["alpaca_market_data_secret_key_present"] = _secret_present(
+            self.alpaca_market_data_secret_key
+        )
         safe_values.pop("alpaca_api_key", None)
         safe_values.pop("alpaca_secret_key", None)
+        safe_values.pop("alpaca_market_data_api_key", None)
+        safe_values.pop("alpaca_market_data_secret_key", None)
         return safe_values
 
 

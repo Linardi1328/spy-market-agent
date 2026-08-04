@@ -29,6 +29,7 @@ python -m pip install -e ".[dev]"
 pytest --cov-fail-under=85
 pytest tests/unit -q
 pytest tests/integration -q
+pytest -W error::FutureWarning
 ruff check .
 ruff format --check .
 mypy src tests
@@ -52,6 +53,97 @@ including `classifier.penalty="l2"`.
 No real SPY dataset is committed. Tests use deterministic synthetic or in-memory data.
 External data used by a developer must be validated, checksummed, and persisted locally before
 API or dashboard inspection.
+
+## Version 2 Phase 1 Data Foundation
+
+**Implementation in review:** Phase 1 adds explicit historical SPY daily-data acquisition.
+Normal verification remains offline and does not require market-data credentials.
+
+Example explicit acquisition command:
+
+```bash
+python -m spy_market_agent.market_data.cli acquire \
+  --provider alpaca \
+  --symbol SPY \
+  --start 2016-01-04 \
+  --end 2016-01-08 \
+  --timeframe 1Day \
+  --feed sip \
+  --adjustment all \
+  --data-root ./data \
+  --acknowledge-provider-terms
+```
+
+Required environment variables for real acquisition:
+
+```bash
+export ALPACA_MARKET_DATA_API_KEY=...
+export ALPACA_MARKET_DATA_SECRET_KEY=...
+export ALPACA_MARKET_DATA_FEED=sip
+export MARKET_DATA_ROOT=./data
+export MARKET_DATA_MAX_RETRIES=3
+export MARKET_DATA_TIMEOUT_SECONDS=30
+```
+
+Do not put credentials in shell history, committed files, manifests, or command-line
+arguments. The normal test suite uses synthetic data and does not contact Alpaca.
+
+Deterministic artifact rules:
+
+- Raw snapshots are UTF-8 JSON with sorted keys, compact separators, no NaN/Infinity, and a
+  trailing newline.
+- Canonical bars are UTF-8 CSV with fixed column order, LF line endings, ISO session dates,
+  deterministic decimal text, integer-compatible volume, and a trailing newline.
+- Manifests are UTF-8 JSON with sorted keys, compact separators, no credentials, and recorded
+  version and dependency lineage.
+
+Checksum definitions:
+
+- Source checksum: SHA-256 over stable sanitized raw provider content, request parameters,
+  provider identity, pagination metadata, and corporate-action evidence. Volatile retrieval
+  timestamp is excluded.
+- Canonical content checksum: SHA-256 over canonical rows, canonical schema version,
+  provider, feed, timeframe, adjustment mode, and corporate-action policy. Derived lineage
+  identifiers and local paths are excluded.
+- Artifact checksum: SHA-256 over the complete written raw or canonical artifact bytes.
+- Manifest self-checksum: SHA-256 over the manifest with its self-checksum field unset.
+
+Dataset identity:
+
+```text
+symbol
++ provider
++ feed
++ timeframe
++ adjustment mode
++ requested date range
++ canonical schema version
++ canonical content checksum
++ corporate-action policy identifier
+```
+
+The dataset ID is not derived from clock time, random UUIDs, local absolute paths, usernames,
+or the package version.
+
+Idempotent behavior:
+
+- Repeating acquisition with unchanged provider content produces the same canonical content
+  checksum and dataset ID.
+- Existing matching artifacts are reused without destructive rewrite.
+- Existing conflicting artifacts fail closed.
+- Changing provider content, provider, feed, date range, schema, or adjustment mode changes
+  the dataset identity or fails explicitly.
+
+Verify an existing local dataset without network access:
+
+```bash
+python -m spy_market_agent.market_data.cli verify \
+  --manifest data/manifests/alpaca/SPY/1Day/sip/all/DATASET_ID.manifest.json \
+  --data-root ./data
+```
+
+The manifest path is an example shape. Replace `DATASET_ID` with a real local ignored
+dataset ID.
 
 ## Checksums and Schema Versions
 
