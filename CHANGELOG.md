@@ -2,7 +2,18 @@
 
 ## [Unreleased]
 
-No unreleased changes.
+### Added
+
+- Added the long-term future development roadmap.
+- Added the Version 2 phase and pre-release version map.
+- Added ignore rules for local smoke-test artifacts.
+- Added the Version 2 Phase 1 real-SPY-data specification.
+
+### Planning
+
+- `v2.0.0-alpha.1` is the next planned development release.
+- Version 2 functionality has not yet been implemented.
+- Real-money trading remains outside Version 2.0.0.
 
 ## [1.0.0] - 2026-08-04
 
