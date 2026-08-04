@@ -51,9 +51,11 @@ addopts = [
   "--cov-report=term-missing",
 ]
 filterwarnings = [
-  "default",
-  "error::DeprecationWarning:spy_market_agent.*",
-  "error::PendingDeprecationWarning:spy_market_agent.*",
+  "error",
+  "ignore:The 'generic' unit for NumPy timedelta is deprecated, and will raise an error in the future\\. This includes implicit conversion of bare integers \\(e\\.g\\. `\\+ 1`\\)\\.Please use a specific unit instead\\.:DeprecationWarning:exchange_calendars\\.exchange_calendar",
+  "ignore:The 'generic' unit for NumPy timedelta is deprecated, and will raise an error in the future\\. This includes implicit conversion of bare integers \\(e\\.g\\. `\\+ 1`\\)\\.Please use a specific unit instead\\.:DeprecationWarning:exchange_calendars\\.utils\\.pandas_utils",
+  "ignore:Using `httpx` with `starlette\\.testclient` is deprecated; install `httpx2` instead\\.:starlette.exceptions.StarletteDeprecationWarning:fastapi\\.testclient",
+  "ignore:websockets\\.legacy is deprecated; see .* for upgrade instructions:DeprecationWarning:websockets\\.legacy",
 ]
 
 [tool.coverage.run]

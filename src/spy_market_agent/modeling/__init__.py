@@ -29,6 +29,7 @@ from spy_market_agent.modeling.models import (
     ModelTrainingConfig,
     ModelTrainingError,
     PredictionSet,
+    fixed_model_parameters,
 )
 from spy_market_agent.modeling.selection import (
     choose_model_by_validation_metrics,
@@ -71,6 +72,7 @@ __all__ = [
     "choose_model_by_validation_metrics",
     "evaluate_locked_model_on_test",
     "fit_locked_model_on_train_validation",
+    "fixed_model_parameters",
     "positive_class_probabilities",
     "select_locked_model",
     "train_candidate_models",

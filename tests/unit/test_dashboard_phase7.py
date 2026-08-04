@@ -463,6 +463,114 @@ def test_dashboard_client_validates_run_ids_before_requesting_paths() -> None:
     assert requests == ["/api/v1/model-runs/run.01_test-02"]
 
 
+def test_dashboard_api_client_rejects_blank_base_url() -> None:
+    with pytest.raises(ValueError, match="base_url"):
+        DashboardApiClient(base_url="   ")
+
+
+def test_dashboard_api_client_builds_read_only_paths_and_params() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={"ok": True})
+
+    client = DashboardApiClient(
+        base_url="http://read-api.local/",
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        assert client.health() == {"ok": True}
+        assert client.data_status() == {"ok": True}
+        assert client.model_runs() == {"ok": True}
+        assert client.model_predictions("model.run_1-2", limit=17, offset=3) == {"ok": True}
+        assert client.backtests() == {"ok": True}
+        assert client.backtest_detail("backtest.run_1-2") == {"ok": True}
+        assert client.equity("backtest.run_1-2", limit=19, offset=5) == {"ok": True}
+        assert client.orders("backtest.run_1-2", limit=23, offset=7) == {"ok": True}
+        assert client.risk_decisions("backtest.run_1-2", limit=29, offset=11) == {"ok": True}
+        assert client.fills("backtest.run_1-2", limit=31, offset=13) == {"ok": True}
+        assert client.paper_trading_status() == {"ok": True}
+        assert client.paper_orders(limit=37, offset=17) == {"ok": True}
+        assert client.paper_order_detail("client.order_1-2") == {"ok": True}
+    finally:
+        client.close()
+
+    assert [request.method for request in requests] == ["GET"] * len(requests)
+    assert [request.url.path for request in requests] == [
+        "/health",
+        "/api/v1/data/status",
+        "/api/v1/model-runs",
+        "/api/v1/model-runs/model.run_1-2/predictions",
+        "/api/v1/backtests",
+        "/api/v1/backtests/backtest.run_1-2",
+        "/api/v1/backtests/backtest.run_1-2/equity",
+        "/api/v1/backtests/backtest.run_1-2/orders",
+        "/api/v1/backtests/backtest.run_1-2/risk-decisions",
+        "/api/v1/backtests/backtest.run_1-2/fills",
+        "/api/v1/paper-trading/status",
+        "/api/v1/paper-orders",
+        "/api/v1/paper-orders/client.order_1-2",
+    ]
+    assert requests[3].url.params == httpx.QueryParams({"limit": "17", "offset": "3"})
+    assert requests[6].url.params == httpx.QueryParams({"limit": "19", "offset": "5"})
+    assert requests[7].url.params == httpx.QueryParams({"limit": "23", "offset": "7"})
+    assert requests[8].url.params == httpx.QueryParams({"limit": "29", "offset": "11"})
+    assert requests[9].url.params == httpx.QueryParams({"limit": "31", "offset": "13"})
+    assert requests[11].url.params == httpx.QueryParams({"limit": "37", "offset": "17"})
+
+
+@pytest.mark.parametrize(
+    ("method_name", "args"),
+    [
+        ("model_predictions", ("bad/run",)),
+        ("equity", ("bad/run",)),
+        ("orders", ("bad/run",)),
+        ("risk_decisions", ("bad/run",)),
+        ("fills", ("bad/run",)),
+        ("paper_order_detail", ("bad/run",)),
+    ],
+)
+def test_dashboard_api_client_rejects_invalid_paginated_path_ids(
+    method_name: str,
+    args: tuple[str],
+) -> None:
+    client = DashboardApiClient(
+        base_url="http://read-api.local",
+        transport=httpx.MockTransport(lambda _request: httpx.Response(200, json={"ok": True})),
+    )
+    try:
+        method = getattr(client, method_name)
+        with pytest.raises(ValueError, match="run_id"):
+            method(*args)
+    finally:
+        client.close()
+
+
+def test_dashboard_api_client_translates_http_errors() -> None:
+    client = DashboardApiClient(
+        base_url="http://read-api.local",
+        transport=httpx.MockTransport(lambda _request: httpx.Response(503, json={"error": "down"})),
+    )
+    try:
+        with pytest.raises(DashboardApiError, match="Read API is unavailable"):
+            client.health()
+    finally:
+        client.close()
+
+
+def test_dashboard_api_client_rejects_non_object_json_payload() -> None:
+    client = DashboardApiClient(
+        base_url="http://read-api.local",
+        transport=httpx.MockTransport(lambda _request: httpx.Response(200, json=["not", "object"])),
+    )
+    try:
+        with pytest.raises(DashboardApiError, match="invalid payload"):
+            client.health()
+    finally:
+        client.close()
+
+
 def test_dashboard_preserves_paginated_metadata_and_fetches_all_equity_pages() -> None:
     client = PaginatedFakeClient(equity_total=501)
     state = load_dashboard_state(client)

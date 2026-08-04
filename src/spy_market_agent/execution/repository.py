@@ -285,7 +285,7 @@ class SQLitePaperExecutionRepository:
             )
         connection = self._connect()
         try:
-            connection.execute("BEGIN")
+            connection.execute("BEGIN IMMEDIATE")
             try:
                 prior = _get_attempt_from_connection(connection, receipt.client_order_id)
             except PaperExecutionNotFoundError as exc:
