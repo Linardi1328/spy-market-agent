@@ -613,11 +613,11 @@ spy-market-agent/
 
 ### Phase 9: Documentation, Polish, and Portfolio Readiness
 
-- Improve documentation.
-- Add example workflows.
-- Add reproducibility notes.
-- Add screenshots or dashboard demo instructions.
-- Review security and safety invariants.
+- Rewrite README for the completed Version 1 implementation and limitations.
+- Add architecture, reproducibility, workflow, security/safety, demo, and portfolio overview documentation.
+- Add a Version 1 changelog section with Phase 9 work listed as unreleased until merged.
+- Add documentation consistency tests for repository links, routes, module paths, and safety claims.
+- Review security, execution, API, dashboard, warning, and coverage invariants without broadening Version 1 scope.
 
 ## Definition of Done
 

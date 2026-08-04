@@ -1,0 +1,79 @@
+# Changelog
+
+## [Unreleased]
+
+### Phase 9: Documentation, Polish, and Portfolio Readiness
+
+- Rewrote the README to describe the completed Version 1 system and its limitations.
+- Added architecture, reproducibility, workflow, safety, demo, and portfolio documentation.
+- Added documentation consistency tests for files, links, route inventory, module paths, and
+  paper-execution safety statements.
+- Updated the project specification to mark Phase 9 documentation deliverables.
+
+## Version 1 Development History
+
+### Phase 1: Specification and Agent Instructions
+
+- Created the project specification and permanent agent guardrails.
+- Established the educational purpose, SPY-only scope, no-live-trading rule, chronological
+  modeling rules, and phased development plan.
+
+### Phase 2: Project Scaffold and Tooling
+
+- Added the Python 3.12 `src` package layout, tests, placeholder data/artifact directories,
+  `pyproject.toml`, `.env.example`, and initial README.
+- Configured Pytest, pytest-cov, Ruff, and MyPy.
+
+### Phase 3: Configuration, Data Schema, and Validation
+
+- Added typed settings with safe execution defaults and secret-aware display values.
+- Added provider-independent SPY daily market-data contracts, XNYS calendar support,
+  deterministic checksums, and canonical OHLCV validation.
+- Hardened validation, checksum, settings redaction, and calendar-boundary behavior through
+  corrective passes recorded in `reviews/PHASE_03_REVIEW.md`.
+
+### Phase 4: Feature Engineering and Chronological Splits
+
+- Added leakage-safe trailing feature construction.
+- Added the Version 1 open `t + 1` to open `t + 6` label definition.
+- Added supervised dataset alignment and chronological split assignment.
+- Hardened label, target, checksum, metadata, and split validation.
+
+### Phase 5: Machine-Learning Baselines
+
+- Added deterministic logistic-regression and gradient-boosting candidates.
+- Added validation-only model selection, locked train-plus-validation refit, and final-test
+  evaluation.
+- Preserved fixed model lineage and hardened fitted-estimator validation.
+
+### Phase 6: Strategy and Backtesting
+
+- Added the fixed long-or-cash strategy policy and next-open execution mapping.
+- Added independent SPY-only long-only risk evaluation.
+- Added in-memory backtesting with transaction costs, slippage, portfolio accounting,
+  execution-price lineage, and metrics.
+- Hardened source-market provenance and replay validation.
+
+### Phase 7: Persistence, API, and Dashboard
+
+- Added explicit SQLite initialization and artifact repositories.
+- Added persistence for validated market data, final model evaluations, and backtest results.
+- Added read-only FastAPI routes and a read-only Streamlit dashboard.
+- Hardened run IDs, pagination, persistence read paths, and JSON validation.
+
+### Phase 8: Paper-Trading Preparation
+
+- Added broker-independent paper-execution models, approvals, fingerprints, service, and
+  durable SQLite ledger.
+- Added an isolated Alpaca paper-only adapter.
+- Added read-only API and dashboard paper-status views.
+- Added dual kill switches, market-hours enforcement, refreshed broker-clock checks,
+  unknown-submission handling, lookup-only reconciliation, and same-symbol/session
+  reservation protection.
+
+### Pre-Phase-9 Quality Correction
+
+- Raised full-suite coverage above the 85% gate.
+- Converted unexpected warnings into errors with exact documented upstream warning filters.
+- Preserved logistic-regression semantic lineage as `classifier.penalty="l2"` while avoiding
+  the scikit-learn explicit-penalty `FutureWarning`.
