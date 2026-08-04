@@ -1,0 +1,143 @@
+# Architecture
+
+## System Overview
+
+`spy-market-agent` is organized as a layered Version 1 research and paper-execution
+system. Market data, feature engineering, modeling, strategies, risk, backtesting,
+persistence, API presentation, dashboard rendering, and paper execution are separate
+packages.
+
+The central rule is that models produce diagnostics, not orders. Strategies convert locked
+final-test probabilities into proposed long-or-cash targets, and every proposed order must
+pass through independent risk checks before a backtest fill or an explicitly invoked paper
+submission can proceed.
+
+## Package Responsibilities
+
+- `spy_market_agent.config` (`src/spy_market_agent/config`): typed settings, safe defaults, live-mode rejection, secret-safe
+  display values, and explicit settings loading.
+- `spy_market_agent.market_data` (`src/spy_market_agent/market_data`): SPY daily data contracts, provider protocol, XNYS calendar,
+  and deterministic dataset checksums.
+- `spy_market_agent.validation` (`src/spy_market_agent/validation`): canonical SPY daily OHLCV validation.
+- `spy_market_agent.features` (`src/spy_market_agent/features`): leakage-safe trailing feature construction.
+- `spy_market_agent.datasets` (`src/spy_market_agent/datasets`): forward label construction, feature/label alignment, and
+  chronological train/validation/test partitions.
+- `spy_market_agent.modeling` (`src/spy_market_agent/modeling`): deterministic logistic-regression and gradient-boosting
+  candidates, validation-only selection, locked refit, and final-test diagnostics.
+- `spy_market_agent.strategies` (`src/spy_market_agent/strategies`): fixed long-or-cash signal policy and next-session execution
+  mapping.
+- `spy_market_agent.risk` (`src/spy_market_agent/risk`): independent SPY-only, long-only risk evaluation.
+- `spy_market_agent.backtesting` (`src/spy_market_agent/backtesting`): in-memory next-open backtest accounting, execution-price
+  lineage, and metrics.
+- `spy_market_agent.persistence` (`src/spy_market_agent/persistence`): explicit SQLite initialization, schema validation, and
+  artifact repositories.
+- `spy_market_agent.api` (`src/spy_market_agent/api`): read-only FastAPI application and response service.
+- `spy_market_agent.dashboard` (`src/spy_market_agent/dashboard`): read-only Streamlit dashboard and HTTP API client.
+- `spy_market_agent.execution` (`src/spy_market_agent/execution`): broker-independent paper-execution models, approvals,
+  fingerprinting, ledger repository, and service.
+- `spy_market_agent.execution.alpaca_paper` (`src/spy_market_agent/execution/alpaca_paper.py`): isolated Alpaca paper-only adapter.
+
+## Architecture Diagram
+
+```mermaid
+flowchart TD
+    Provider[MarketDataProvider protocol] --> Validation[SPY daily validation]
+    Validation --> Features[Trailing features]
+    Validation --> Labels[Open t+1 to open t+6 labels]
+    Features --> Dataset[Supervised dataset]
+    Labels --> Dataset
+    Dataset --> Splits[Chronological train validation test splits]
+    Splits --> Modeling[Logistic regression and gradient boosting]
+    Modeling --> Selection[Validation-only selection]
+    Selection --> FinalTest[Locked final-test evaluation]
+    FinalTest --> Strategy[Long-or-cash signal policy]
+    Strategy --> Risk[Independent risk engine]
+    Risk --> Backtest[Next-open backtest engine]
+    Backtest --> Persistence[SQLite artifact repository]
+    FinalTest --> Persistence
+    Validation --> Persistence
+    Persistence --> API[Read-only FastAPI]
+    API --> Dashboard[Read-only Streamlit]
+    Risk --> PaperInstruction[Paper order instruction]
+    PaperInstruction --> PaperService[Explicit paper-execution service]
+    PaperService --> Ledger[SQLite paper-execution ledger]
+    PaperService --> Alpaca[Alpaca paper adapter]
+```
+
+## Research Data Flow
+
+1. A provider implementation returns SPY daily OHLCV data through the provider protocol.
+2. Validation enforces canonical columns, XNYS sessions, chronological order, no duplicates,
+   complete sessions, finite positive prices, and valid volume.
+3. Feature engineering builds trailing features using only information available through
+   session `t`.
+4. Label construction uses entry at the open of `t + 1` and exit at the open of `t + 6`.
+5. Supervised datasets keep feature columns separate from label audit columns.
+6. Chronological partitions preserve order and keep labels inside each split boundary.
+7. Candidate models train on train data only and are compared on validation data only.
+8. The selected model is refit on train plus validation and evaluated once on the final test
+   partition.
+
+## Backtest Data Flow
+
+1. Locked final-test predictions produce fixed long-or-cash target positions.
+2. Signals map to the next validated market-data row, not calendar-day arithmetic.
+3. Proposed orders are generated only when the target changes.
+4. Independent risk evaluation approves or rejects each proposed order.
+5. Approved orders become fills with configured commission and slippage assumptions.
+6. Rejected orders do not create fills and do not change portfolio state.
+7. Backtest results retain source market data, execution prices, orders, decisions, fills,
+   portfolio rows, metrics, schema versions, checksums, and runtime lineage.
+
+## Paper-Execution Data Flow
+
+```mermaid
+sequenceDiagram
+    participant Caller
+    participant Service as PaperExecutionService
+    participant Ledger as SQLite ledger
+    participant Broker as AlpacaPaperBroker
+    participant Risk as Risk engine
+
+    Caller->>Service: explicit instruction plus approval
+    Service->>Service: check settings and configuration kill switch
+    Service->>Broker: verify paper endpoint and account state
+    Service->>Broker: read initial broker clock
+    Service->>Service: validate approval and staleness
+    Service->>Ledger: read durable kill switch
+    Service->>Broker: check SPY asset, positions, open orders
+    Service->>Risk: re-evaluate order at execution time
+    Service->>Ledger: reserve IDs and symbol/session
+    Service->>Broker: lookup by client_order_id
+    alt existing matching paper order
+        Service->>Ledger: record broker_existing_order_found
+    else no existing order
+        Service->>Broker: refresh broker clock
+        Service->>Ledger: final durable kill-switch read
+        Service->>Broker: submit SPY market DAY paper order
+        Service->>Ledger: record accepted or submission_unknown
+    end
+```
+
+Paper execution is not available through FastAPI or Streamlit. The service path is explicit,
+requires a matching human approval, and keeps uncertainty as local audit state.
+
+## Trust Boundaries
+
+- Raw market data is untrusted until validation returns a canonical `MarketDataBatch`.
+- Feature, label, model, strategy, backtest, and persistence objects revalidate lineage and
+  schema invariants at their public boundaries.
+- Models cannot access brokers. The modeling package imports no execution adapter, no
+  Alpaca SDK, and no broker protocol.
+- The Alpaca SDK is isolated to `execution/alpaca_paper.py`.
+- The API and dashboard are read-only. They inspect local persisted state and do not mutate
+  SQLite, change kill switches, approve orders, reconcile orders, or submit broker requests.
+- API and dashboard startup do not initialize or migrate databases.
+- Package imports do not load settings globally, create files, train models, contact brokers,
+  or submit orders.
+
+## Initialization and Side Effects
+
+SQLite setup is explicit through `initialize_database(...)`. Settings loading is explicit
+through `load_settings()` or direct `Settings(...)` construction. The package import surface is
+designed to be safe for tests, documentation tooling, API startup, and dashboard rendering.
