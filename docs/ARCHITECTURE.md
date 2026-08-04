@@ -17,7 +17,8 @@ submission can proceed.
 - `spy_market_agent.config` (`src/spy_market_agent/config`): typed settings, safe defaults, live-mode rejection, secret-safe
   display values, and explicit settings loading.
 - `spy_market_agent.market_data` (`src/spy_market_agent/market_data`): SPY daily data contracts, provider protocol, XNYS calendar,
-  and deterministic dataset checksums.
+  deterministic dataset checksums, and the Version 2 Phase 1 explicit historical acquisition
+  path for raw snapshots, canonical CSV, manifests, and local verification.
 - `spy_market_agent.validation` (`src/spy_market_agent/validation`): canonical SPY daily OHLCV validation.
 - `spy_market_agent.features` (`src/spy_market_agent/features`): leakage-safe trailing feature construction.
 - `spy_market_agent.datasets` (`src/spy_market_agent/datasets`): forward label construction, feature/label alignment, and
@@ -78,6 +79,33 @@ flowchart TD
 8. The selected model is refit on train plus validation and evaluated once on the final test
    partition.
 
+## Version 2 Phase 1 Acquisition Flow
+
+**Implementation in review:** Phase 1 adds a separate explicit acquisition path. It is not
+called by imports, tests, API startup, dashboard startup, model training, backtesting, or
+paper execution.
+
+```mermaid
+flowchart TD
+    CLI[Explicit CLI acquire command] --> Request[AcquisitionRequest validation]
+    Request --> Credentials[Market-data environment credentials]
+    Credentials --> Alpaca[Alpaca StockHistoricalDataClient]
+    Alpaca --> Raw[Immutable sanitized raw JSON snapshot]
+    Raw --> Canonicalize[Canonical SPY daily bars]
+    Canonicalize --> XNYS[XNYS session and OHLCV validation]
+    XNYS --> Manifest[Dataset manifest]
+    Manifest --> Checksums[SHA-256 source canonical and artifact checksums]
+    Checksums --> Storage[Ignored local data/raw data/canonical data/manifests]
+```
+
+The acquisition path uses `ALPACA_MARKET_DATA_API_KEY` and
+`ALPACA_MARKET_DATA_SECRET_KEY`, not paper-trading credentials. It stores restricted provider
+data only in ignored local directories. Synthetic fixtures under `data/fixtures/` are the
+only Phase 1 market-data artifacts intended for Git.
+
+Phase 1 still does not train a model, run a benchmark, contact the trading API, submit paper
+orders, add API write routes, add dashboard controls, or enable live trading.
+
 ## Backtest Data Flow
 
 1. Locked final-test predictions produce fixed long-or-cash target positions.
@@ -125,11 +153,15 @@ requires a matching human approval, and keeps uncertainty as local audit state.
 ## Trust Boundaries
 
 - Raw market data is untrusted until validation returns a canonical `MarketDataBatch`.
+- Phase 1 provider data is untrusted until raw snapshot schema checks, canonicalization,
+  XNYS validation, checksum construction, manifest validation, and safe storage all pass.
 - Feature, label, model, strategy, backtest, and persistence objects revalidate lineage and
   schema invariants at their public boundaries.
 - Models cannot access brokers. The modeling package imports no execution adapter, no
   Alpaca SDK, and no broker protocol.
-- The Alpaca SDK is isolated to `execution/alpaca_paper.py`.
+- Alpaca trading-client usage is isolated to `execution/alpaca_paper.py`.
+- Historical market-data SDK use is isolated to `market_data/alpaca_provider.py`, which uses
+  the data API client and not the trading client.
 - The API and dashboard are read-only. They inspect local persisted state and do not mutate
   SQLite, change kill switches, approve orders, reconcile orders, or submit broker requests.
 - API and dashboard startup do not initialize or migrate databases.

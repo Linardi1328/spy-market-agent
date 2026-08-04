@@ -1,6 +1,6 @@
 # Version 2 Phase 1 — Real SPY Data Foundation Specification
 
-Status: Planning / awaiting implementation approval
+Status: Implementation in review
 
 Target release: `v2.0.0-alpha.1`
 

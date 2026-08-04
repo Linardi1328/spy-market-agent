@@ -44,6 +44,10 @@ demo.sqlite3
 spy_market_agent.sqlite3
 data/raw/*
 !data/raw/.gitkeep
+data/canonical/*
+!data/canonical/.gitkeep
+data/manifests/*
+!data/manifests/.gitkeep
 data/processed/*
 !data/processed/.gitkeep
 artifacts/models/*

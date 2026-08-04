@@ -8,11 +8,18 @@
 - Added the Version 2 phase and pre-release version map.
 - Added ignore rules for local smoke-test artifacts.
 - Added the Version 2 Phase 1 real-SPY-data specification.
+- Added the Version 2 Phase 1 Alpaca historical SPY acquisition adapter.
+- Added local ignored raw snapshot, canonical CSV, and manifest storage for Phase 1 datasets.
+- Added XNYS session validation, deterministic manifests, SHA-256 checksums, and dataset
+  identity construction for acquired SPY daily bars.
+- Added small synthetic offline fixtures and Phase 1 unit/integration tests.
+- Added provider, licensing, and redistribution documentation for the provisional Alpaca
+  market-data provider.
 
 ### Planning
 
 - `v2.0.0-alpha.1` is the next planned development release.
-- Version 2 functionality has not yet been implemented.
+- Version 2 Phase 1 implementation is in review and has not been released.
 - Real-money trading remains outside Version 2.0.0.
 
 ## [1.0.0] - 2026-08-04

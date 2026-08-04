@@ -43,11 +43,14 @@ defaults to `http://127.0.0.1:8000`.
 
 ## Load Deterministic Test or Demo Data
 
-There is no committed real SPY dataset and no standalone market-data downloader. The existing
-supported deterministic data paths are automated tests that create synthetic artifacts in
-temporary directories:
+Version 1 has no committed real SPY dataset. Version 2 Phase 1 adds an explicit historical
+SPY acquisition path that is under review and stores downloaded provider data only in ignored
+local directories. The existing supported deterministic data paths are automated tests that
+create synthetic artifacts in temporary directories:
 
 ```bash
+pytest tests/unit/test_v2_phase1_market_data.py -q
+pytest tests/integration/test_v2_phase1_acquisition_flow.py -q
 pytest tests/integration/test_phase7_persistence_api_dashboard_flow.py -q
 pytest tests/integration/test_phase8_paper_execution_flow.py -q
 ```
@@ -55,6 +58,50 @@ pytest tests/integration/test_phase8_paper_execution_flow.py -q
 For a manual demo database, use the public repository APIs from your own local script with
 validated `MarketDataBatch`, `FinalTestEvaluation`, and `BacktestResult` objects. Do not commit
 the generated SQLite file or any external market data.
+
+## Acquire Historical SPY Daily Data Explicitly
+
+This command contacts the Alpaca Market Data API only when invoked directly. It does not
+initialize SQLite, train a model, run a backtest, contact the trading API, or submit an
+order.
+
+```bash
+ALPACA_MARKET_DATA_API_KEY=... \
+ALPACA_MARKET_DATA_SECRET_KEY=... \
+python -m spy_market_agent.market_data.cli acquire \
+  --provider alpaca \
+  --symbol SPY \
+  --start 2016-01-04 \
+  --end 2016-01-08 \
+  --timeframe 1Day \
+  --feed sip \
+  --adjustment all \
+  --data-root ./data \
+  --acknowledge-provider-terms
+```
+
+The dates above are a small example only. Alpaca account access, feed selection, subscription
+level, and provider history determine what data is actually available. Do not commit
+downloaded provider data. `MARKET_DATA_TIMEOUT_SECONDS` bounds each provider HTTP request;
+`MARKET_DATA_MAX_RETRIES` controls retry count separately.
+
+## Verify a Local Phase 1 Dataset
+
+```bash
+python -m spy_market_agent.market_data.cli verify \
+  --manifest data/manifests/alpaca/SPY/1Day/sip/all/DATASET_ID.manifest.json \
+  --data-root ./data
+```
+
+This performs deep offline verification. It validates the manifest model and self-checksum,
+verifies raw and canonical artifact hashes, parses the sanitized raw JSON and canonical CSV,
+recomputes source and canonical content checksums, recomputes the dataset ID, checks generated
+file paths and filenames, confirms row counts and session ranges, and reruns OHLCV and XNYS
+session validation from recorded acquisition metadata. It performs no network request.
+
+Acquisition writes raw, canonical, and manifest files as a multi-artifact operation. If a
+later write fails, files newly created by that attempt are cleaned up best-effort; matching
+files that existed before the attempt are preserved.
 
 ## Inspect Model Evaluations
 
