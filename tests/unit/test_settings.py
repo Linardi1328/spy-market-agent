@@ -282,5 +282,5 @@ def test_loading_settings_does_not_create_files_or_external_actions(
 
 
 def test_importing_package_does_not_load_settings_or_execute_side_effects() -> None:
-    assert spy_market_agent.__version__ == "0.1.0"
+    assert spy_market_agent.__version__ == "1.0.0"
     assert "settings" not in vars(spy_market_agent)

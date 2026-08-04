@@ -44,6 +44,15 @@ def test_package_version_matches_installed_metadata() -> None:
     assert spy_market_agent.__version__ == version("spy-market-agent")
 
 
+def test_version_1_release_version_matches_pyproject_and_metadata() -> None:
+    with (ROOT / "pyproject.toml").open("rb") as pyproject_file:
+        pyproject = tomllib.load(pyproject_file)
+
+    assert pyproject["project"]["version"] == "1.0.0"
+    assert version("spy-market-agent") == "1.0.0"
+    assert spy_market_agent.__version__ == "1.0.0"
+
+
 def test_required_top_level_documentation_files_exist() -> None:
     assert (ROOT / "PROJECT_SPEC.md").is_file()
     assert (ROOT / "AGENTS.md").is_file()
