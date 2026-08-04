@@ -2,25 +2,46 @@
 
 ## [Unreleased]
 
+No unreleased changes.
+
+## [2.0.0-alpha.1] - 2026-08-05
+
+Corresponding Python package version: `2.0.0a1`.
+
 ### Added
 
-- Added the long-term future development roadmap.
-- Added the Version 2 phase and pre-release version map.
+- Added the long-term future development roadmap and Version 2 phase/pre-release map.
 - Added ignore rules for local smoke-test artifacts.
 - Added the Version 2 Phase 1 real-SPY-data specification.
-- Added the Version 2 Phase 1 Alpaca historical SPY acquisition adapter.
-- Added local ignored raw snapshot, canonical CSV, and manifest storage for Phase 1 datasets.
-- Added XNYS session validation, deterministic manifests, SHA-256 checksums, and dataset
-  identity construction for acquired SPY daily bars.
-- Added small synthetic offline fixtures and Phase 1 unit/integration tests.
-- Added provider, licensing, and redistribution documentation for the provisional Alpaca
-  market-data provider.
+- Added explicit Alpaca historical SPY daily acquisition.
+- Added separate market-data credentials.
+- Added sanitized raw JSON storage.
+- Added canonical validated CSV storage.
+- Added XNYS session validation.
+- Added deterministic manifests, SHA-256 checksums, and dataset identity.
+- Added safe local storage and atomic multi-artifact rollback.
+- Added deep offline dataset verification.
+- Added synthetic offline fixtures and tests.
+- Added provider, licensing, security, and reproducibility documentation.
 
-### Planning
+### Verified
 
-- `v2.0.0-alpha.1` is the next planned development release.
-- Version 2 Phase 1 implementation is in review and has not been released.
-- Real-money trading remains outside Version 2.0.0.
+- 975 automated tests passed on the release-preparation branch.
+- Branch-aware coverage was 85.20%, above the 85% gate.
+- Owner-run Alpaca IEX smoke test acquired four SPY sessions for 2024-01-02 through
+  2024-01-05.
+- Deep verification passed for the owner-run smoke-test artifacts.
+- Generated provider data remained outside Git.
+
+### Limitations
+
+- No real SPY dataset is distributed with the repository.
+- Alpaca coverage is not proven back to SPY inception.
+- SIP availability may depend on subscription.
+- Corporate-action evidence remains limited to the documented provider adjustment policy.
+- No model benchmark, accuracy result, or profitability claim is included.
+- No real-time feed, shadow mode, or live-money execution is included.
+- Version 2 Phase 2 has not begun.
 
 ## [1.0.0] - 2026-08-04
 

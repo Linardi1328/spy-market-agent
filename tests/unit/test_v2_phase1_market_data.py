@@ -854,7 +854,7 @@ def test_manifest_checksums_and_dataset_identity_are_deterministic(tmp_path: Pat
     assert source_checksum(snapshot) == source_checksum(snapshot)
     assert manifest.dataset_id == dataset_id
     assert manifest.canonical_content_checksum == canonical_checksum
-    assert manifest.package_version == "1.0.0"
+    assert manifest.package_version == "2.0.0a1"
     changed_request = make_request(feed="iex")
     changed_id = dataset_identity(request=changed_request, canonical_checksum=canonical_checksum)
     assert changed_id != dataset_id

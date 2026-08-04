@@ -19,9 +19,12 @@ REQUIRED_DOCUMENTS = (
     "docs/PORTFOLIO_OVERVIEW.md",
     "CHANGELOG.md",
     "RELEASE_NOTES_V1.0.0.md",
+    "RELEASE_NOTES_V2.0.0_ALPHA_1.md",
     "VERSION_1_RELEASE_CHECKLIST.md",
+    "VERSION_2_PHASE_01_RELEASE_CHECKLIST.md",
     "reviews/PHASE_09_REVIEW.md",
     "reviews/VERSION_1_FINAL_REVIEW.md",
+    "reviews/V2_PHASE_01_REVIEW.md",
 )
 
 DOCUMENTED_MODULE_PATHS = (
@@ -118,6 +121,14 @@ def test_documented_fastapi_routes_match_application_inventory() -> None:
         assert f"GET {route}" in readme
 
 
+def test_api_route_versions_remain_v1() -> None:
+    routes = _application_get_routes()
+
+    assert "/health" in routes
+    assert all(route == "/health" or route.startswith("/api/v1/") for route in routes)
+    assert not any(route.startswith("/api/v2/") for route in routes)
+
+
 def test_documented_code_examples_do_not_submit_paper_orders() -> None:
     forbidden_executable_terms = (
         "submit_approved_order",
@@ -148,3 +159,36 @@ def test_version_1_safety_statements_remain_documented() -> None:
     assert "dual kill switches" in combined
     assert "lookup-only reconciliation" in combined
     assert "at most one spy paper-execution attempt" in combined
+
+
+def test_version_2_alpha_release_documents_are_consistent() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    roadmap = (ROOT / "FUTURE_ROADMAP.md").read_text(encoding="utf-8")
+    spec = (ROOT / "docs/V2_PHASE_01_REAL_SPY_DATA_SPEC.md").read_text(encoding="utf-8")
+    release_notes = (ROOT / "RELEASE_NOTES_V2.0.0_ALPHA_1.md").read_text(encoding="utf-8")
+    checklist = (ROOT / "VERSION_2_PHASE_01_RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
+    review = (ROOT / "reviews/V2_PHASE_01_REVIEW.md").read_text(encoding="utf-8")
+    combined = "\n".join((readme, changelog, roadmap, spec, release_notes, checklist, review))
+
+    assert "Package version: `2.0.0a1`" in readme
+    assert "Release identifier: `v2.0.0-alpha.1`" in readme
+    assert "V2 Phase 1: accepted and complete - Real SPY Data Foundation" in readme
+    assert "Version 2 Phase 2 has not begun" in readme
+    assert "## [2.0.0-alpha.1] - 2026-08-05" in changelog
+    assert "Corresponding Python package version: `2.0.0a1`" in changelog
+    assert "Status: Accepted for v2.0.0-alpha.1 release" in spec
+    assert "Accepted - Version 2 Real SPY Data Foundation" in roadmap
+    assert "Next planned phase - not started" in roadmap
+    assert "Implementation in review" not in spec
+    assert "Git release identifier: `v2.0.0-alpha.1`" in release_notes
+    assert "does not evaluate model accuracy" in release_notes
+    assert "does not claim profitability" in release_notes
+    assert "does not add live-money execution" in release_notes
+    assert "No Git tag created on the review branch" in checklist
+    assert "Create annotated `v2.0.0-alpha.1` tag" in checklist
+    assert "Phase 1 accepted; release metadata verified" in review
+    assert "preparing the tag" not in combined.lower()
+    assert "release preparation in review" not in combined.lower()
+    assert "Planned Git tag" not in combined
+    assert "tag already exists" not in combined.lower()

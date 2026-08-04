@@ -8,16 +8,30 @@ approved Alpaca paper orders behind fail-closed safety gates.
 It is experimental research software. It is not investment advice, does not claim
 profitability, and is not real-money trading infrastructure.
 
-## Version 1 Status
+## Release Status
+
+- Current stable historical baseline: `v1.0.0`.
+- Package version: `2.0.0a1`.
+- Release identifier: `v2.0.0-alpha.1`.
+- V2 Phase 1: accepted and complete - Real SPY Data Foundation.
+- V2 Phase 2: next planned phase - Real Historical Benchmark; not started.
+- Live-money readiness: not approved.
+
+Version 2 Phase 1 uses package version `2.0.0a1` and release identifier
+`v2.0.0-alpha.1`. The release tag must point only to a successfully verified `main` commit.
+Version 2 Phase 2 has not begun and requires a separate approved specification.
+
+## Version 1 Historical Baseline
 
 Version 1.0.0 covers the completed Phase 1 through Phase 8 implementation plus the Phase 9
-documentation and release-readiness work:
+documentation and release-readiness work. It remains the frozen historical baseline:
 
 - SPY ETF only.
 - Daily OHLCV data only.
 - Long-or-cash positions only.
 - No short selling, leverage, margin, fractional-share orders, or additional markets.
-- Provider-independent market-data contracts and validation, but no market-data downloader.
+- Provider-independent market-data contracts and validation, but no market-data downloader
+  in Version 1.0.0.
 - Leakage-safe trailing features and the approved open `t + 1` to open `t + 6` label.
 - Chronological train, validation, and final-test design with gap-aware split contracts.
 - Deterministic logistic-regression and gradient-boosting baselines.
@@ -33,13 +47,26 @@ documentation and release-readiness work:
 - Explicitly invoked Alpaca paper-only execution service for SPY whole-share market DAY
   orders, with no API or dashboard submission controls.
 
-## Version 2 Phase 1 Review Status
+## Version 2 Phase 1 Alpha
 
-Version 2 Phase 1 is under review on the `review/v2-phase-01-real-spy-data` branch. The
-current released package remains Version 1.0.0; `v2.0.0-alpha.1` has not been released or
-tagged.
+Version 2 Phase 1 adds an accepted historical SPY daily-data foundation. It uses package
+version `2.0.0a1` and release identifier `v2.0.0-alpha.1`. The release tag must point only
+to a successfully verified `main` commit.
 
-The Phase 1 candidate adds an explicit historical SPY daily-data acquisition path:
+Phase 1 provides:
+
+- Explicit user-triggered SPY historical-data acquisition.
+- An Alpaca Market Data API provider adapter.
+- Separate market-data credentials.
+- Sanitized raw JSON snapshots.
+- Canonical validated CSV bars.
+- Deterministic manifests, SHA-256 checksums, and dataset identity.
+- XNYS session validation and OHLCV validation.
+- Deep offline dataset verification.
+- Safe local ignored provider-data storage under `data/raw/`, `data/canonical/`, and
+  `data/manifests/`.
+
+Example explicit acquisition command:
 
 ```bash
 python -m spy_market_agent.market_data.cli acquire \
@@ -60,7 +87,7 @@ paper-trading credentials and are read only from the environment. Downloaded pro
 local and ignored under `data/raw/`, `data/canonical/`, and `data/manifests/`.
 
 Phase 1 does not train models, run benchmarks, test prediction accuracy, claim profitability,
-submit orders, or enable live trading.
+submit orders, add real-time operation, or enable live trading.
 
 ## Safety Boundaries
 
@@ -98,12 +125,12 @@ new order.
 
 ## Not Implemented
 
-Version 1 intentionally does not include:
+The current implemented system intentionally does not include:
 
-- market-data downloading
 - real-time data feeds
 - investment recommendations
 - profitability claims
+- completed historical benchmarking on real SPY data
 - probability calibration or threshold optimization
 - hyperparameter tuning or model binary persistence
 - API write routes
@@ -114,6 +141,9 @@ Version 1 intentionally does not include:
 - schedulers, workers, cron jobs, deployment files, or cloud infrastructure
 - live trading or live Alpaca endpoints
 - assets other than SPY
+
+Version 1.0.0 specifically did not include market-data downloading; the explicit SPY
+historical-data acquisition CLI begins in Version 2 Phase 1.
 
 ## Quick Start
 
@@ -164,6 +194,8 @@ streamlit run src/spy_market_agent/dashboard/streamlit_app.py
 - [Future Roadmap](FUTURE_ROADMAP.md)
 - [Version 2 Phase 1 Real SPY Data Specification](docs/V2_PHASE_01_REAL_SPY_DATA_SPEC.md)
 - [Version 2 Phase 1 Provider Decision](docs/V2_PHASE_01_PROVIDER_DECISION.md)
+- [Version 2.0.0 Alpha 1 Release Notes](RELEASE_NOTES_V2.0.0_ALPHA_1.md)
+- [Version 2 Phase 1 Release Checklist](VERSION_2_PHASE_01_RELEASE_CHECKLIST.md)
 - [Project Specification](PROJECT_SPEC.md)
 - [Changelog](CHANGELOG.md)
 - [Version 1.0.0 Release Notes](RELEASE_NOTES_V1.0.0.md)

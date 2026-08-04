@@ -107,7 +107,7 @@ Corporate actions:
 - This implementation records the provider adjustment policy and the limitation in the
   manifest. It does not acquire a separate corporate-action snapshot because the current
   Phase 1 acceptance path does not require mixing corporate actions into provider-adjusted
-  bars, and an account-specific access check still needs an owner-run smoke test.
+  bars.
 
 Pagination:
 
@@ -131,6 +131,29 @@ Cost and subscription implications:
 - SIP data can require a paid subscription depending on the requested data.
 - Optional real-provider smoke testing must be owner-run with explicit credentials and a
   narrow historical range.
+
+## Owner-Run Smoke-Test Evidence
+
+The repository owner reported a controlled Alpaca Market Data API smoke test on 2026-08-05.
+Codex did not execute the request and did not receive credentials, account identifiers,
+authorization headers, raw provider payloads, screenshots, or generated dataset files.
+
+Owner-reported evidence:
+
+- Provider: Alpaca Market Data API.
+- Symbol: SPY.
+- Timeframe: `1Day`.
+- Feed: `iex`.
+- Adjustment mode: `all`.
+- Requested range: 2024-01-02 through 2024-01-05.
+- Actual session range: 2024-01-02..2024-01-05.
+- Row count: 4.
+- Acquisition exit code: 0.
+- Deep offline verification: passed.
+- Git status after acquisition: clean.
+- Generated raw, canonical, and manifest artifacts remained in ignored local data
+  directories.
+- No trading request or order submission was performed.
 
 ## Licensing and Redistribution
 
@@ -158,8 +181,9 @@ project rule is therefore:
 
 ## Known Phase 2 Limitations
 
-- Real historical coverage, missing early bars, and subscription limits must be confirmed by
-  an owner-run smoke test before release preparation.
+- The owner-run smoke test confirmed only a narrow 2024-01-02 through 2024-01-05 IEX range.
+  Broader real historical coverage, missing early bars, and subscription limits remain Phase
+  2 research inputs.
 - The implementation does not prove that SPY data covers pre-2016 regimes.
 - The implementation does not run a historical benchmark, model retraining, or performance
   evaluation.

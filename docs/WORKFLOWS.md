@@ -43,10 +43,10 @@ defaults to `http://127.0.0.1:8000`.
 
 ## Load Deterministic Test or Demo Data
 
-Version 1 has no committed real SPY dataset. Version 2 Phase 1 adds an explicit historical
-SPY acquisition path that is under review and stores downloaded provider data only in ignored
-local directories. The existing supported deterministic data paths are automated tests that
-create synthetic artifacts in temporary directories:
+Version 1 has no committed real SPY dataset. Version 2 Phase 1 adds an accepted explicit
+historical SPY acquisition path and stores downloaded provider data only in ignored local
+directories. The existing supported deterministic data paths are automated tests that create
+synthetic artifacts in temporary directories:
 
 ```bash
 pytest tests/unit/test_v2_phase1_market_data.py -q
