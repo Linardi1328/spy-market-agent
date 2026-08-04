@@ -18,7 +18,10 @@ REQUIRED_DOCUMENTS = (
     "docs/DEMO_GUIDE.md",
     "docs/PORTFOLIO_OVERVIEW.md",
     "CHANGELOG.md",
+    "RELEASE_NOTES_V1.0.0.md",
+    "VERSION_1_RELEASE_CHECKLIST.md",
     "reviews/PHASE_09_REVIEW.md",
+    "reviews/VERSION_1_FINAL_REVIEW.md",
 )
 
 DOCUMENTED_MODULE_PATHS = (

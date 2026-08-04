@@ -615,7 +615,7 @@ spy-market-agent/
 
 - Rewrite README for the completed Version 1 implementation and limitations.
 - Add architecture, reproducibility, workflow, security/safety, demo, and portfolio overview documentation.
-- Add a Version 1 changelog section with Phase 9 work listed as unreleased until merged.
+- Add a Version 1 changelog section and release-readiness documentation.
 - Add documentation consistency tests for repository links, routes, module paths, and safety claims.
 - Review security, execution, API, dashboard, warning, and coverage invariants without broadening Version 1 scope.
 

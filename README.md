@@ -10,7 +10,8 @@ profitability, and is not real-money trading infrastructure.
 
 ## Version 1 Status
 
-Version 1 covers the completed Phase 1 through Phase 8 implementation:
+Version 1.0.0 covers the completed Phase 1 through Phase 8 implementation plus the Phase 9
+documentation and release-readiness work:
 
 - SPY ETF only.
 - Daily OHLCV data only.
@@ -133,6 +134,8 @@ streamlit run src/spy_market_agent/dashboard/streamlit_app.py
 - [Portfolio Overview](docs/PORTFOLIO_OVERVIEW.md)
 - [Project Specification](PROJECT_SPEC.md)
 - [Changelog](CHANGELOG.md)
+- [Version 1.0.0 Release Notes](RELEASE_NOTES_V1.0.0.md)
+- [Version 1 Release Checklist](VERSION_1_RELEASE_CHECKLIST.md)
 
 ## Read-Only API Routes
 

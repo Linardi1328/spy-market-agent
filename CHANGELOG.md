@@ -2,13 +2,51 @@
 
 ## [Unreleased]
 
-### Phase 9: Documentation, Polish, and Portfolio Readiness
+No unreleased changes.
 
-- Rewrote the README to describe the completed Version 1 system and its limitations.
-- Added architecture, reproducibility, workflow, safety, demo, and portfolio documentation.
-- Added documentation consistency tests for files, links, route inventory, module paths, and
-  paper-execution safety statements.
-- Updated the project specification to mark Phase 9 documentation deliverables.
+## [1.0.0] - 2026-08-04
+
+Version 1 is the completed educational and experimental SPY daily research,
+risk-controlled backtesting, persistence, read-only presentation, and explicit paper-only
+execution preparation release.
+
+### Implemented
+
+- Validated SPY-only daily OHLCV data contracts, XNYS session handling, deterministic
+  checksums, and provider-independent market-data interfaces.
+- Added leakage-safe trailing features and the Version 1 label: information through close
+  of `t`, entry no earlier than open of `t + 1`, exit at open of `t + 6`, and a positive
+  target only after estimated round-trip costs and slippage.
+- Added chronological train, validation, and final-test model evaluation with gap-aware
+  split contracts, deterministic logistic-regression and gradient-boosting candidates,
+  validation-only selection, locked refit, and final-test diagnostics.
+- Added a fixed long-or-cash strategy policy and risk-controlled backtesting with
+  transaction costs, slippage, cash accounting, whole-share fills, equity curves, orders,
+  risk decisions, metrics, and source-market lineage.
+- Added SQLite persistence and audit replay for validated market data, model evaluations,
+  backtest results, and local paper-execution ledger state.
+- Added read-only FastAPI routes and a read-only Streamlit dashboard for persisted data
+  status, model evaluations, backtests, risk state, and local paper-execution status.
+- Added explicit Alpaca paper-only execution safeguards: broker-independent instruction
+  and approval models, deterministic fingerprints, dual kill switches, paper endpoint
+  verification, live-mode rejection, market-hours checks, execution-time risk evaluation,
+  duplicate ID protection, same-symbol/session reservation, submission-unknown handling,
+  and lookup-only reconciliation.
+- Added quality and documentation work: full README rewrite, architecture,
+  reproducibility, workflow, security/safety, demo, and portfolio documentation, plus
+  documentation consistency tests.
+
+### Limitations
+
+- No committed real SPY dataset or market-data downloader exists.
+- No live trading, live endpoint support, automatic order submission, scheduler, worker,
+  deployment configuration, API write route, or dashboard execution control exists.
+- No assets other than SPY, intraday data, short selling, leverage, margin, fractional
+  shares, cancellation, replacement, stops, limits, brackets, OCO, or OTO are implemented.
+- Backtests and classification metrics are diagnostics only and are not profitability,
+  real-market accuracy, investment-advice, or real-money-readiness claims.
+- Exact reproducibility can differ when dependency versions differ because no lock file is
+  committed.
 
 ## Version 1 Development History
 
@@ -77,3 +115,11 @@
 - Converted unexpected warnings into errors with exact documented upstream warning filters.
 - Preserved logistic-regression semantic lineage as `classifier.penalty="l2"` while avoiding
   the scikit-learn explicit-penalty `FutureWarning`.
+
+### Phase 9: Documentation, Polish, and Portfolio Readiness
+
+- Rewrote the README to describe the completed Version 1 system and its limitations.
+- Added architecture, reproducibility, workflow, safety, demo, and portfolio documentation.
+- Added documentation consistency tests for files, links, route inventory, module paths, and
+  paper-execution safety statements.
+- Updated the project specification to mark Phase 9 documentation deliverables.
