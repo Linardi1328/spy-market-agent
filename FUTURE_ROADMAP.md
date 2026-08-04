@@ -15,6 +15,7 @@ owner approval before implementation.
 - [3. Long-Term End State](#3-long-term-end-state)
 - [4. Target Architecture](#4-target-architecture)
 - [5. Development Stages](#5-development-stages)
+- [Version 2 Phase and Release Map](#version-2-phase-and-release-map)
 - [6. Cross-Cutting Engineering Workstreams](#6-cross-cutting-engineering-workstreams)
 - [7. Model-Acceptance Framework](#7-model-acceptance-framework)
 - [8. Risk-Management Evolution](#8-risk-management-evolution)
@@ -188,17 +189,17 @@ Trust boundaries:
 The stages below are ordered intentionally. Later stages should not start until earlier
 evidence is reviewed. The estimates are planning ranges, not promises.
 
-| Stage | Label | Objectives | Entry Criteria | Exit Criteria | Duration | Primary Risks | Required Evidence |
+| Stage | Status / Label | Objective | Entry Criteria | Exit Criteria | Duration | Major Risks | Required Evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 0 | Implemented maintenance baseline | Preserve Version 1 release reproducibility, dependency and warning audits, security fixes, and no performance claims. | Version 1.0.0 merged and tagged. | Tests, lint, type checks, docs, and safety audits remain clean after maintenance changes. | Ongoing maintenance. | Dependency drift, accidental scope expansion, stale docs. | Passing verification, changelog or review notes, no runtime behavior changes unless explicitly approved. |
-| 1 | Planned real SPY research benchmark | Add approved historical provider workflow, frozen and checksummed real dataset, bull/bear/high-volatility/low-volatility periods, real train/validation/final-test evaluation, naive baselines, and cost/slippage sensitivity. No live execution. | Version 1 reproducibility preserved; provider and data-license review complete. | Benchmark report compares model results with majority-class, always-long, always-cash, and simple momentum baselines across regimes and costs. | 1-2 months. | Data licensing, overfitting, cost assumptions, benchmark leakage. | Dataset checksum, provider terms record, split specs, baseline metrics, sensitivity analysis, no broker submission path. |
-| 2 | Planned model research Version 2 | Add walk-forward evaluation, feature research and ablation, hyperparameter search inside training/validation only, probability calibration, conservative threshold research, regime and drift analysis, experiment and model registry, and untouched final test. | Stage 1 dataset and baselines accepted. | Candidate model package has reproducible lineage and final-test report frozen after selection. | 2-4 months. | Final-test contamination, unstable improvements, poor calibration, excessive turnover. | Walk-forward report, ablation evidence, calibration diagnostics, threshold rationale, registry records, leakage tests. |
-| 3 | Planned real-time shadow and production paper system | Add reliable ingestion, freshness controls, scheduled inference, shadow proposals with no submission capability, monitoring, alerts, production paper execution, reconciliation, and recovery runbooks. Require 3-6 months of observation. | Stage 2 model accepted for paper research; operations design approved. | Shadow and paper logs show stable operation, no uncontrolled warnings, no unexpected submissions, and reviewed reconciliation behavior. | 2-4 months development plus 3-6 months observation. | Data outages, scheduler defects, duplicate orders, alert fatigue, paper/live confusion. | Freshness logs, shadow proposal audit, paper runbook drills, reconciliation reports, monitoring evidence. |
-| 4 | Planned live-readiness engineering | Draft separate live specification and adapter; add managed secrets, environment isolation, capital/daily loss/weekly loss/exposure/drawdown limits, emergency shutdown, security review, broker agreement review, legal/regulatory review, and incident drills. | Stage 3 observation accepted by owner and reviewers. | Live-readiness package is reviewed, tested in non-live environments, and explicitly approved or rejected. | 2-3 months after shadow validation. | Credential exposure, legal gaps, broker mismatch, unsafe limits, incident unpreparedness. | Signed-off specification, security review, legal notes, incident drill records, fail-closed tests. |
-| 5 | Exploratory owner-approved live SPY pilot | SPY only, long-or-cash only, whole shares, no margin/leverage, one position, owner approval for every exact order, small approved risk budget, automatic stop on uncertainty, no unattended execution, observe for at least 3-6 months. | Stage 4 explicitly approved; live adapter exists only after approval. | Pilot either remains within limits with complete audit evidence or is stopped with documented lessons. | 3-6 months observation after approval. | Live slippage, approval fatigue, operational error, broker outage, tax implications. | Every order approval record, reconciliation, limit logs, incident reports, owner review. |
-| 6 | Exploratory mature single-market platform | Add retraining governance, champion/challenger models, rollback, drift monitoring, backup and disaster recovery, security and incident maturity. | Stage 5 results reviewed without unresolved safety issues. | Single-market operations have mature controls and documented rollback/DR evidence. | Additional 6-12 months. | Model drift, registry errors, rollback failure, database loss. | Retraining policy, champion/challenger review, DR tests, drift dashboards, audit replay. |
-| 7 | Exploratory limited ETF/equity universe | Add a small liquid approved universe, separate evidence per symbol, liquidity and spread controls, corporate actions, portfolio concentration/correlation, and cross-order concurrency. | Mature SPY process accepted; multi-symbol specification approved. | Each symbol has independent research evidence and portfolio controls pass shadow and paper validation. | 6-12 months. | Premature expansion, correlations, corporate actions, liquidity stress, concurrency bugs. | Per-symbol evidence, universe governance, correlation limits, liquidity reports, cross-order tests. |
-| 8 | Exploratory separate asset-class programs | Evaluate crypto, futures, foreign exchange, options, and international equities as separate programs with market-specific data, calendars, labels, models, backtesting, liquidity, leverage/margin, settlement, execution, risk, legal review, and paper/shadow validation. | Separate asset-class specification and approval. | Each asset-class program is approved or rejected independently; no SPY model generalization assumption. | Market-specific; likely multi-year. | Wrong market assumptions, leverage, settlement, regulation, liquidity, tax, broker support. | Separate specs, legal review, data licenses, market-specific tests, shadow/paper evidence. |
+| 0 | Implemented maintenance baseline | Preserve V1 reproducibility and safety. | v1.0.0 merged and tagged. | Checks and safety audits stay clean. | Ongoing. | Dependency drift; scope creep; stale docs. | Passing verification; maintenance notes; no unapproved behavior change. |
+| 1 | Planned real SPY benchmark | Build approved real SPY data and benchmark evidence. | V1 reproducible; provider and license reviewed. | Regime and naive-baseline report accepted. | 1-2 months. | Data licensing; leakage; weak baselines; cost assumptions. | Dataset checksum; provider record; split specs; baseline and sensitivity results. |
+| 2 | Planned model research V2 | Add walk-forward research, ablation, calibration, and registry. | Stage 1 evidence accepted. | Candidate lineage and locked final-test report accepted. | 2-4 months. | Final-test contamination; unstable gains; poor calibration; turnover. | Walk-forward report; ablations; calibration; threshold rationale; leakage tests. |
+| 3 | Planned shadow and production paper | Add reliable ingestion, scheduled shadow proposals, monitoring, and paper runbooks. | Stage 2 model accepted for paper research. | Shadow and paper observation records pass review. | 2-4 months plus 3-6 months observation. | Data outages; scheduler defects; duplicate orders; alert fatigue. | Freshness logs; shadow audit; paper drills; reconciliation reports. |
+| 4 | Planned live-readiness engineering | Design separate live spec, controls, reviews, and incident drills. | Stage 3 observation accepted. | Live-readiness package approved or rejected. | 2-3 months after shadow validation. | Credential exposure; legal gaps; broker mismatch; unsafe limits. | Signed spec; security review; legal notes; incident drill evidence. |
+| 5 | Exploratory live SPY pilot | Test small-capital owner-approved SPY-only live operation if separately approved. | Stage 4 explicitly approved. | Pilot evidence reviewed or pilot stopped with lessons. | At least 3-6 months observation. | Live slippage; approval fatigue; operational error; broker outage. | Exact approval records; reconciliation; limit logs; incident reports. |
+| 6 | Exploratory mature single-market platform | Add retraining governance, champion/challenger, rollback, drift, and DR. | Stage 5 results reviewed. | Mature single-market controls accepted. | Additional 6-12 months. | Model drift; registry errors; rollback failure; data loss. | Retraining policy; challenger reviews; DR tests; drift dashboards. |
+| 7 | Exploratory ETF/equity universe | Expand to a small liquid approved universe with per-symbol evidence. | Multi-symbol spec approved. | Each symbol and portfolio control passes review. | 6-12 months. | Premature expansion; correlation; corporate actions; concurrency. | Per-symbol evidence; universe governance; liquidity and correlation reports. |
+| 8 | Exploratory asset-class programs | Evaluate crypto, futures, FX, options, and international equities separately. | Asset-class spec approved. | Each program is independently accepted or rejected. | Market-specific; likely multi-year. | Wrong assumptions; leverage; settlement; regulation; liquidity. | Separate specs; legal review; data licenses; market-specific shadow and paper evidence. |
 
 ### Stage 0 - Preserve Version 1
 
@@ -291,6 +292,40 @@ Asset-specific notes:
   liquidity, complex margin, and path-dependent risk.
 - **International equities:** Local calendars, currencies, settlement cycles, withholding
   taxes, data rights, corporate actions, market structure, and broker availability.
+
+## Version 2 Phase and Release Map
+
+This map is planning-only release tracking. It does not implement Version 2, approve live
+trading, or change Version 1 runtime behavior.
+
+Release meanings:
+
+- `1.0.x` is reserved for Version 1 maintenance fixes.
+- Alpha releases are research foundations.
+- Beta begins with real-time shadow or production paper operation.
+- RC means feature-complete and undergoing final audit.
+- `v2.0.0` does not include real-money trading.
+- Live-readiness and any live pilot remain later, separately approved roadmap stages.
+
+| Track | Version | Name | Recommended Branch | Scope |
+| --- | --- | --- | --- | --- |
+| V1 baseline | `v1.0.0` | Frozen Version 1 baseline | Already tagged | Educational SPY daily research, backtesting, persistence, read-only API/dashboard, and explicit paper-only safeguards. |
+| V2 Phase 1 | `v2.0.0-alpha.1` | Real SPY Data Foundation | `review/v2-phase-01-real-spy-data` | Approved provider workflow, licensing record, validated real SPY dataset handling, checksums, and data lineage. |
+| V2 Phase 2 | `v2.0.0-alpha.2` | Real Historical Benchmark | `review/v2-phase-02-real-benchmark` | Real SPY benchmark with regimes, naive baselines, cost/slippage sensitivity, and no live execution. |
+| V2 Phase 3 | `v2.0.0-alpha.3` | Walk-Forward Model Research | `review/v2-phase-03-walk-forward-research` | Walk-forward evaluation, ablations, calibration, threshold research, drift analysis, and registry evidence. |
+| V2 Phase 4 | `v2.0.0-beta.1` | Real-Time Shadow Mode | `review/v2-phase-04-shadow-mode` | Reliable ingestion, freshness checks, scheduled inference, monitoring, alerts, and no submission capability. |
+| V2 Phase 5 | `v2.0.0-beta.2` | Production Paper Operation | `review/v2-phase-05-production-paper` | Production paper operation, reconciliation, recovery runbooks, and observation evidence. |
+| V2 Phase 6 | `v2.0.0-rc.1` | Version 2 Release Candidate | `review/v2-phase-06-release-candidate` | Feature-complete Version 2 audit for real-data, shadow, and production-paper scope. |
+| Final | `v2.0.0` | Approved Real-Data, Shadow, and Production-Paper Platform | Release from approved RC | Version 2 release after final audit; excludes real-money trading and live pilot approval. |
+
+Recommended branch sequence:
+
+- `review/v2-phase-01-real-spy-data`
+- `review/v2-phase-02-real-benchmark`
+- `review/v2-phase-03-walk-forward-research`
+- `review/v2-phase-04-shadow-mode`
+- `review/v2-phase-05-production-paper`
+- `review/v2-phase-06-release-candidate`
 
 ## 6. Cross-Cutting Engineering Workstreams
 
@@ -585,4 +620,5 @@ Change log:
 
 | Date | Main SHA | Change |
 | --- | --- | --- |
+| 2026-08-04 | `05c2e9c680b43174ed91cfbe198ba1842c291227` | Refined the development-stage summary table and added Version 2 phase and release tracking; documentation-only planning with no implementation approval. |
 | 2026-08-04 | `05c2e9c680b43174ed91cfbe198ba1842c291227` | Initial long-term future-development roadmap created as documentation-only planning after Version 1.0.0 was merged and tagged. |
