@@ -132,6 +132,7 @@ streamlit run src/spy_market_agent/dashboard/streamlit_app.py
 - [Security and Safety](docs/SECURITY_AND_SAFETY.md)
 - [Demo Guide](docs/DEMO_GUIDE.md)
 - [Portfolio Overview](docs/PORTFOLIO_OVERVIEW.md)
+- [Future Roadmap](FUTURE_ROADMAP.md)
 - [Project Specification](PROJECT_SPEC.md)
 - [Changelog](CHANGELOG.md)
 - [Version 1.0.0 Release Notes](RELEASE_NOTES_V1.0.0.md)
