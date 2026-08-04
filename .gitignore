@@ -5,6 +5,7 @@
 
 # Python virtual environments
 .venv/
+.venv-test/
 venv/
 
 # Python-generated files
@@ -39,6 +40,7 @@ __editable__.*
 Thumbs.db
 
 # Downloaded data and generated artifacts
+demo.sqlite3
 data/raw/*
 !data/raw/.gitkeep
 data/processed/*
