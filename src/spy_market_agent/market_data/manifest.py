@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import csv
 import hashlib
+import io
 import json
 from collections.abc import Iterable, Mapping
 from datetime import date, datetime
@@ -294,7 +296,98 @@ def finalized_manifest_with_checksum(manifest: DatasetManifest) -> DatasetManife
 
 def load_manifest_bytes(payload: bytes) -> DatasetManifest:
     try:
-        raw = json.loads(payload.decode("utf-8"))
+        raw = _load_json_object(payload, artifact_name="manifest")
+        _require_exact_keys(raw, DatasetManifest.model_fields.keys(), artifact_name="manifest")
         return DatasetManifest.model_validate(raw)
-    except (UnicodeDecodeError, json.JSONDecodeError, ValidationError) as exc:
+    except (UnicodeDecodeError, json.JSONDecodeError, ValidationError, TypeError) as exc:
         raise ManifestValidationFailure(f"manifest cannot be loaded: {exc}") from exc
+
+
+def load_raw_snapshot_bytes(payload: bytes) -> RawAcquisitionSnapshot:
+    try:
+        raw = _load_json_object(payload, artifact_name="raw snapshot")
+        _require_exact_keys(
+            raw,
+            RawAcquisitionSnapshot.model_fields.keys(),
+            artifact_name="raw snapshot",
+        )
+        return RawAcquisitionSnapshot.model_validate(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValidationError, TypeError) as exc:
+        raise ManifestValidationFailure(f"raw snapshot cannot be loaded: {exc}") from exc
+
+
+def canonical_bars_from_csv_bytes(payload: bytes) -> tuple[CanonicalDailyBar, ...]:
+    try:
+        text = payload.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ManifestValidationFailure(f"canonical CSV is not valid UTF-8: {exc}") from exc
+    if not text.endswith("\n"):
+        raise ManifestValidationFailure("canonical CSV must end with a newline.")
+
+    reader = csv.DictReader(io.StringIO(text), restkey="__extra__", restval=None)
+    fieldnames = tuple(reader.fieldnames or ())
+    expected_fieldnames = canonical_csv_header()
+    if fieldnames != expected_fieldnames:
+        raise ManifestValidationFailure("canonical CSV header does not match schema.")
+
+    bars: list[CanonicalDailyBar] = []
+    try:
+        for row_number, row in enumerate(reader, start=2):
+            extras = row.pop("__extra__", None)
+            if extras:
+                raise ManifestValidationFailure(
+                    f"canonical CSV row {row_number} has extra columns."
+                )
+            missing_fields = [field for field in expected_fieldnames if row.get(field) is None]
+            if missing_fields:
+                raise ManifestValidationFailure(
+                    f"canonical CSV row {row_number} is missing fields: {missing_fields}."
+                )
+            if row["symbol"] != "SPY":
+                raise ManifestValidationFailure(
+                    f"canonical CSV row {row_number} has unsupported symbol."
+                )
+            bars.append(
+                CanonicalDailyBar(
+                    symbol="SPY",
+                    session_date=date.fromisoformat(row["session_date"]),
+                    open=row["open"],
+                    high=row["high"],
+                    low=row["low"],
+                    close=row["close"],
+                    adjusted_close=row["adjusted_close"] or None,
+                    volume=int(row["volume"]),
+                    provider=row["provider"],
+                    feed=row["feed"],
+                    adjustment_mode=row["adjustment_mode"],
+                    source_timezone=row["source_timezone"],
+                    canonical_timezone=row["canonical_timezone"],
+                    lineage_identifier=row["lineage_identifier"],
+                )
+            )
+    except (KeyError, ValueError, ValidationError) as exc:
+        raise ManifestValidationFailure(f"canonical CSV cannot be loaded: {exc}") from exc
+    if not bars:
+        raise ManifestValidationFailure("canonical CSV must contain at least one row.")
+    return tuple(bars)
+
+
+def _load_json_object(payload: bytes, *, artifact_name: str) -> dict[str, object]:
+    raw = json.loads(payload.decode("utf-8"))
+    if not isinstance(raw, dict):
+        raise TypeError(f"{artifact_name} JSON must be an object.")
+    return raw
+
+
+def _require_exact_keys(
+    raw: Mapping[str, object],
+    expected_keys: Iterable[str],
+    *,
+    artifact_name: str,
+) -> None:
+    actual = set(raw)
+    expected = set(expected_keys)
+    if actual != expected:
+        missing = sorted(expected - actual)
+        extra = sorted(actual - expected)
+        raise TypeError(f"{artifact_name} keys mismatch; missing={missing}; extra={extra}.")

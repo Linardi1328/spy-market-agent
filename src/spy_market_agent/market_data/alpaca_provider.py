@@ -13,6 +13,7 @@ from alpaca.data.enums import Adjustment, DataFeed
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
+from requests import Response, Session
 
 from spy_market_agent.market_data.acquisition import (
     AcquisitionRequest,
@@ -45,7 +46,7 @@ class AlpacaPageClient(Protocol):
         """Return one raw Alpaca response page."""
 
 
-ClientFactory = Callable[[MarketDataCredentials], AlpacaPageClient]
+ClientFactory = Callable[[MarketDataCredentials, float], AlpacaPageClient]
 Sleep = Callable[[float], None]
 
 
@@ -78,7 +79,7 @@ class AlpacaMarketDataProvider:
         credentials: MarketDataCredentials,
         clock: Clock,
     ) -> RawAcquisitionSnapshot:
-        client = self._client_factory(credentials)
+        client = self._client_factory(credentials, self._timeout_seconds)
         params = _build_stock_bars_params(request)
         pages: list[dict[str, Any]] = []
         pagination: list[PaginationMetadata] = []
@@ -130,7 +131,10 @@ class AlpacaMarketDataProvider:
                 sdk_package_version=version("alpaca-py"),
                 feed=request.feed,
                 adjustment_mode=request.adjustment_mode,
-                access_method="alpaca-py StockHistoricalDataClient.get /v2/stocks/bars",
+                access_method=(
+                    "alpaca-py StockHistoricalDataClient low-level get /v2/stocks/bars "
+                    "with bounded requests session timeout"
+                ),
             ),
             retrieval_timestamp=clock().astimezone(UTC),
             source_timezone="UTC",
@@ -157,19 +161,51 @@ class AlpacaMarketDataProvider:
                 mapped = _map_transport_error(exc)
                 if not _is_retryable_exception(mapped) or attempt >= attempts_allowed:
                     raise mapped from exc
-            self._sleep(min(float(attempt), self._timeout_seconds))
+            self._sleep(float(attempt))
         raise ProviderUnavailableFailure("provider retry loop exhausted unexpectedly.")
 
 
-def _default_client_factory(credentials: MarketDataCredentials) -> AlpacaPageClient:
-    return cast(
-        AlpacaPageClient,
-        StockHistoricalDataClient(
-            api_key=credentials.api_key,
-            secret_key=credentials.secret_key,
-            raw_data=True,
-        ),
+class _TimeoutSession:
+    """Requests session that enforces the Phase 1 per-request timeout."""
+
+    def __init__(self, timeout_seconds: float) -> None:
+        self._session = Session()
+        self.timeout_seconds = timeout_seconds
+
+    def request(self, method: str, url: str | bytes, **kwargs: Any) -> Response:
+        kwargs.setdefault("timeout", self.timeout_seconds)
+        return self._session.request(method, url, **kwargs)
+
+
+class _AlpacaStockBarsPageAdapter:
+    """Small adapter around alpaca-py's raw page request boundary."""
+
+    def __init__(self, client: StockHistoricalDataClient) -> None:
+        self._client = client
+
+    def get(self, *, path: str, data: dict[str, Any]) -> dict[str, Any]:
+        return cast(dict[str, Any], self._client.get(path=path, data=data))
+
+
+def _default_client_factory(
+    credentials: MarketDataCredentials,
+    timeout_seconds: float,
+) -> AlpacaPageClient:
+    client = StockHistoricalDataClient(
+        api_key=credentials.api_key,
+        secret_key=credentials.secret_key,
+        raw_data=True,
     )
+    _install_timeout_session(client, timeout_seconds=timeout_seconds)
+    return _AlpacaStockBarsPageAdapter(client)
+
+
+def _install_timeout_session(
+    client: StockHistoricalDataClient,
+    *,
+    timeout_seconds: float,
+) -> None:
+    client._session = cast(Session, _TimeoutSession(timeout_seconds))
 
 
 def _build_stock_bars_params(request: AcquisitionRequest) -> dict[str, Any]:

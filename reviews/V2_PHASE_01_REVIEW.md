@@ -26,6 +26,32 @@ review candidate:
 - Local dataset verification command.
 - Synthetic offline fixtures and tests.
 
+## Hardening Update
+
+This branch was hardened before the controlled real-provider smoke test:
+
+- `MARKET_DATA_TIMEOUT_SECONDS` now reaches the actual Alpaca SDK HTTP request boundary
+  through a timeout-enforcing `requests.Session` wrapper installed on the explicit
+  market-data SDK client.
+- Retry count and request timeout remain separate settings; retry sleep no longer uses the
+  timeout value as its cap.
+- The provider access path remains a small isolated adapter around
+  `StockHistoricalDataClient.get(path="/stocks/bars", data=...)`.
+- The documented public SDK method,
+  `StockHistoricalDataClient.get_stock_bars(StockBarsRequest)`, was reviewed and tested
+  against installed `alpaca-py==0.43.5`; it is not used for durable raw-page storage because
+  it merges paginated pages and does not preserve page-level `next_page_token` metadata.
+- Alpaca's installed SDK docstring states that `raw_data` is not implemented, so Phase 1 does
+  not rely on that flag as a public guarantee.
+- Acquisition captures one timestamp at operation start and reuses it for snapshot
+  timestamping, incomplete-session validation, manifest reasoning, and lineage.
+- Multi-artifact writes now clean up every file newly created by the current attempt if a
+  later raw/canonical/manifest stage fails, while preserving valid matching artifacts that
+  existed before the attempt.
+- Offline verification now reconstructs manifest, raw snapshot, canonical bars, checksums,
+  dataset identity, filenames, generated paths, row counts, session ranges, lineage, and XNYS
+  validation before accepting a dataset.
+
 ## Provider Decision
 
 Selected provider: Alpaca Market Data API, provisionally for Phase 1.
@@ -36,6 +62,7 @@ SDK and access method:
 - `StockHistoricalDataClient`
 - `/v2/stocks/bars`
 - `feed`, `adjustment`, `sort=asc`, and pagination are explicit.
+- Per-request timeout enforced by a timeout-capable SDK session wrapper.
 
 Provider decision record: `docs/V2_PHASE_01_PROVIDER_DECISION.md`.
 
@@ -79,6 +106,8 @@ Provider decision record: `docs/V2_PHASE_01_PROVIDER_DECISION.md`.
 - `docs/SECURITY_AND_SAFETY.md`
 - `docs/V2_PHASE_01_REAL_SPY_DATA_SPEC.md`
 - `docs/WORKFLOWS.md`
+- `docs/V2_PHASE_01_PROVIDER_DECISION.md`
+- `reviews/V2_PHASE_01_REVIEW.md`
 - `src/spy_market_agent/config/settings.py`
 - `src/spy_market_agent/market_data/__init__.py`
 
@@ -159,6 +188,7 @@ package version.
 - Credential separation.
 - Settings redaction.
 - Provider parameter mapping.
+- SDK contract and timeout transport behavior.
 - Pagination.
 - Bounded retry behavior.
 - Error mapping and redaction.
@@ -172,10 +202,12 @@ package version.
 - Dataset identity.
 - Safe paths and symlink rejection.
 - Atomic write and idempotent existing-data behavior.
+- Multi-artifact rollback after later write failures.
 - Existing conflict rejection.
 - CLI help, invalid-input, missing-acknowledgement, and missing-credential behavior.
 - Fake-provider integration flow.
 - Corrupted artifact rejection.
+- Deep verification tamper rejection after manifest self-checksum recomputation.
 - Import/startup side-effect protection.
 
 ## Tests Deliberately Not Run
@@ -203,10 +235,10 @@ No real Alpaca request was executed.
 ## Verification Results
 
 - `python -m pip install -e ".[dev]"`: passed.
-- `pytest --cov-fail-under=85`: 945 passed, 85.21% coverage.
-- `pytest tests/unit -q`: passed; 915 unit tests collected.
-- `pytest tests/integration -q`: 30 passed.
-- `pytest -W error::FutureWarning`: 945 passed.
+- `pytest --cov-fail-under=85`: 972 passed, 85.20% coverage.
+- `pytest tests/unit -q`: passed; 926 unit tests collected.
+- `pytest tests/integration -q`: 46 passed.
+- `pytest -W error::FutureWarning`: 972 passed.
 - `ruff check .`: passed.
 - `ruff format --check .`: passed.
 - `mypy src tests`: passed.
@@ -215,13 +247,13 @@ No real Alpaca request was executed.
   `1.0.0 1.0.0`.
 
 - `pytest tests/unit/test_v2_phase1_market_data.py tests/integration/test_v2_phase1_acquisition_flow.py -q`:
-  51 passed.
+  78 passed.
 
 Collection count checks:
 
-- Unit tests: 915.
-- Integration tests: 30.
-- Targeted Phase 1 tests: 51.
+- Unit tests: 926.
+- Integration tests: 46.
+- Targeted Phase 1 tests: 78.
 
 ## Explicit Confirmations
 

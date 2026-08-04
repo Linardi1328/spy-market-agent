@@ -36,6 +36,25 @@ SDK and access method:
 - Endpoint path used by the adapter: `/v2/stocks/bars`.
 - Base service documented by Alpaca for historical data: `https://data.alpaca.markets/v2`.
 
+The documented public SDK method is
+`StockHistoricalDataClient.get_stock_bars(StockBarsRequest)`. The implementation inspects
+and tests the installed `alpaca-py==0.43.5` contract, but the public method delegates to the
+SDK's paginator and returns merged bar data rather than the exact raw response pages and
+`next_page_token` values needed for Phase 1 raw snapshot auditing. Alpaca's installed SDK
+docstring also states that `raw_data` is not implemented. For that reason, Phase 1 isolates a
+small page adapter around the SDK client's lower-level `get(path="/stocks/bars", data=...)`
+request boundary. This is not documented as a stable public Alpaca SDK guarantee; it is a
+small, tested compatibility layer for the pinned installed SDK version.
+
+Request timeout:
+
+- The adapter installs a timeout-enforcing `requests.Session` wrapper on the SDK client used
+  for this explicit acquisition path.
+- `MARKET_DATA_TIMEOUT_SECONDS` is passed to the actual SDK HTTP request as the per-request
+  timeout.
+- Retry count and request timeout remain separate settings.
+- Timeout exceptions are redacted and mapped to `ProviderTimeoutFailure`.
+
 Why Alpaca was selected:
 
 - The repository already depends on `alpaca-py`, so no new major dependency is required.
@@ -103,6 +122,8 @@ Rate limits and reliability:
 - The adapter applies bounded retries for timeouts, connection-like failures, 429 responses,
   and selected server-side failures. It does not retry authentication, authorization,
   malformed data, invalid requests, checksum mismatch, or validation failures.
+- Retry backoff does not use the request timeout value as sleep duration. A stalled provider
+  request is bounded at the request transport boundary before retry policy is considered.
 
 Cost and subscription implications:
 

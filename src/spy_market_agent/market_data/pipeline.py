@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 from spy_market_agent.market_data.acquisition import (
@@ -34,12 +35,24 @@ def acquire_historical_spy_data(
     """Run explicit Phase 1 acquisition and persist raw/canonical/manifest artifacts."""
 
     calendar = XNYSCalendar()
-    snapshot = provider.fetch_raw_snapshot(request, credentials=credentials, clock=clock)
+    captured_now = clock()
+    if captured_now.tzinfo is None or captured_now.utcoffset() is None:
+        raise ValueError("acquisition clock must return a timezone-aware timestamp.")
+    acquisition_timestamp = captured_now.astimezone(UTC)
+
+    def acquisition_clock() -> datetime:
+        return acquisition_timestamp
+
+    snapshot = provider.fetch_raw_snapshot(
+        request,
+        credentials=credentials,
+        clock=acquisition_clock,
+    )
     canonical_bars = canonicalize_snapshot(
         request=request,
         snapshot=snapshot,
         calendar=calendar,
-        as_of=clock(),
+        as_of=acquisition_timestamp,
     )
     canonical_checksum = canonical_content_checksum(
         bars=canonical_bars,

@@ -87,6 +87,8 @@ export MARKET_DATA_TIMEOUT_SECONDS=30
 
 Do not put credentials in shell history, committed files, manifests, or command-line
 arguments. The normal test suite uses synthetic data and does not contact Alpaca.
+`MARKET_DATA_TIMEOUT_SECONDS` is enforced at the actual Alpaca SDK HTTP request boundary; it
+is not merely retry sleep. `MARKET_DATA_MAX_RETRIES` controls retry count separately.
 
 Deterministic artifact rules:
 
@@ -133,6 +135,12 @@ Idempotent behavior:
 - Existing conflicting artifacts fail closed.
 - Changing provider content, provider, feed, date range, schema, or adjustment mode changes
   the dataset identity or fails explicitly.
+- Raw, canonical, and manifest writes are handled as one multi-artifact operation. If a
+  later artifact fails after an earlier artifact was newly created by the same attempt, the
+  newly created files are removed best-effort while preserving valid matching artifacts that
+  existed before the attempt.
+- Acquisition captures the current timestamp once and reuses it for provider snapshot
+  timestamping, incomplete-session validation, manifest reasoning, and lineage decisions.
 
 Verify an existing local dataset without network access:
 
@@ -144,6 +152,14 @@ python -m spy_market_agent.market_data.cli verify \
 
 The manifest path is an example shape. Replace `DATASET_ID` with a real local ignored
 dataset ID.
+
+Verification is a deep offline reconstruction, not only a byte-hash check. It loads and
+validates the manifest, verifies the manifest self-checksum, resolves paths under the
+approved data root, verifies raw and canonical artifact hashes, parses the sanitized raw JSON
+snapshot, parses canonical CSV into typed daily bars, recomputes source and canonical content
+checksums, recomputes the dataset ID, confirms filenames and recorded generated paths, checks
+row count and first/last sessions, reruns OHLCV and XNYS validation from the recorded
+retrieval timestamp, and fails closed on mismatches.
 
 ## Checksums and Schema Versions
 

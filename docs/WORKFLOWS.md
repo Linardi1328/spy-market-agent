@@ -82,7 +82,8 @@ python -m spy_market_agent.market_data.cli acquire \
 
 The dates above are a small example only. Alpaca account access, feed selection, subscription
 level, and provider history determine what data is actually available. Do not commit
-downloaded provider data.
+downloaded provider data. `MARKET_DATA_TIMEOUT_SECONDS` bounds each provider HTTP request;
+`MARKET_DATA_MAX_RETRIES` controls retry count separately.
 
 ## Verify a Local Phase 1 Dataset
 
@@ -92,7 +93,15 @@ python -m spy_market_agent.market_data.cli verify \
   --data-root ./data
 ```
 
-This verifies raw, canonical, and manifest checksums locally. It performs no network request.
+This performs deep offline verification. It validates the manifest model and self-checksum,
+verifies raw and canonical artifact hashes, parses the sanitized raw JSON and canonical CSV,
+recomputes source and canonical content checksums, recomputes the dataset ID, checks generated
+file paths and filenames, confirms row counts and session ranges, and reruns OHLCV and XNYS
+session validation from recorded acquisition metadata. It performs no network request.
+
+Acquisition writes raw, canonical, and manifest files as a multi-artifact operation. If a
+later write fails, files newly created by that attempt are cleaned up best-effort; matching
+files that existed before the attempt are preserved.
 
 ## Inspect Model Evaluations
 
