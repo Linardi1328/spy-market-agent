@@ -3,11 +3,11 @@
 Release identity:
 
 - Package: `2.0.0a1`
-- Planned Git tag: `v2.0.0-alpha.1`
+- Git release identifier: `v2.0.0-alpha.1`
 - Date: 2026-08-05
 
-The `v2.0.0-alpha.1` Git tag is not created by the release-preparation branch. It should be
-created only after the branch is approved, merged into `main`, and verified on `main`.
+Release policy: the `v2.0.0-alpha.1` tag must point only to a successfully verified `main`
+commit after review approval and merge.
 
 ## Purpose
 

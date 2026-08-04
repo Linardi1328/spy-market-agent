@@ -310,14 +310,13 @@ Release meanings:
 Current tracking:
 
 - `v1.0.0` remains the frozen stable baseline.
-- V2 Phase 1 / `v2.0.0-alpha.1` implementation is accepted; release preparation is in
-  review.
-- V2 Phase 2 / `v2.0.0-alpha.2` is the next planned phase and has not started.
+- V2 Phase 1 / `v2.0.0-alpha.1`: Accepted - Version 2 Real SPY Data Foundation.
+- V2 Phase 2 / `v2.0.0-alpha.2`: Next planned phase - not started.
 
 | Track | Version | Name | Recommended Branch | Scope |
 | --- | --- | --- | --- | --- |
 | V1 baseline | `v1.0.0` | Frozen Version 1 baseline | Already tagged | Educational SPY daily research, backtesting, persistence, read-only API/dashboard, and explicit paper-only safeguards. |
-| V2 Phase 1 | `v2.0.0-alpha.1` | Real SPY Data Foundation | `review/v2-phase-01-release-preparation` | Implementation accepted; release preparation in review for approved provider workflow, licensing record, validated real SPY dataset handling, checksums, and data lineage. |
+| V2 Phase 1 | `v2.0.0-alpha.1` | Real SPY Data Foundation | `review/v2-phase-01-release-preparation` | Accepted - Version 2 Real SPY Data Foundation with approved provider workflow, licensing record, validated SPY dataset handling, checksums, and data lineage. |
 | V2 Phase 2 | `v2.0.0-alpha.2` | Real Historical Benchmark | `review/v2-phase-02-real-benchmark` | Next planned phase; not started. Real SPY benchmark with regimes, naive baselines, cost/slippage sensitivity, and no live execution. |
 | V2 Phase 3 | `v2.0.0-alpha.3` | Walk-Forward Model Research | `review/v2-phase-03-walk-forward-research` | Walk-forward evaluation, ablations, calibration, threshold research, drift analysis, and registry evidence. |
 | V2 Phase 4 | `v2.0.0-beta.1` | Real-Time Shadow Mode | `review/v2-phase-04-shadow-mode` | Reliable ingestion, freshness checks, scheduled inference, monitoring, alerts, and no submission capability. |
@@ -327,7 +326,7 @@ Current tracking:
 
 The Phase 1 planning specification is
 [Version 2 Phase 1 - Real SPY Data Foundation Specification](docs/V2_PHASE_01_REAL_SPY_DATA_SPEC.md).
-It is accepted for alpha release preparation. Phase 2 still requires a separate approved
+It is accepted for `v2.0.0-alpha.1`. Phase 2 still requires a separate approved
 specification.
 
 Recommended branch sequence:
@@ -632,17 +631,17 @@ Related documents:
 
 - [Project Specification](PROJECT_SPEC.md): frozen Version 1 implementation baseline.
 - [Version 2 Phase 1 - Real SPY Data Foundation Specification](docs/V2_PHASE_01_REAL_SPY_DATA_SPEC.md):
-  accepted specification for `v2.0.0-alpha.1` release preparation.
+  accepted specification for `v2.0.0-alpha.1`.
 - [Version 2.0.0 Alpha 1 Release Notes](RELEASE_NOTES_V2.0.0_ALPHA_1.md): release notes
-  prepared for post-merge tag creation.
+  for the `v2.0.0-alpha.1` release identifier.
 - [Version 2 Phase 1 Release Checklist](VERSION_2_PHASE_01_RELEASE_CHECKLIST.md):
-  release-preparation checklist and post-merge actions.
+  release checklist and post-merge operator actions.
 
 Change log:
 
 | Date | Base Main SHA | Change |
 | --- | --- | --- |
-| 2026-08-05 | `c66d9e5ae7c99eeb7ab01e00a3c3494b2da1a7b0` | Recorded V2 Phase 1 implementation acceptance, owner-run smoke-test completion, and `v2.0.0-alpha.1` release-preparation status; Phase 2 remains not started and live-money trading remains outside Version 2.0.0. |
+| 2026-08-05 | `c66d9e5ae7c99eeb7ab01e00a3c3494b2da1a7b0` | Recorded V2 Phase 1 acceptance for `v2.0.0-alpha.1`, owner-run smoke-test completion, and stable release metadata; Phase 2 remains not started and live-money trading remains outside Version 2.0.0. |
 | 2026-08-04 | `0947c391b6c7646a27c1baeb7778cd229726bacb` | Added the Version 2 Phase 1 specification reference and clarified roadmap SHA metadata as base-main context; documentation-only planning with no Version 2 implementation. |
 | 2026-08-04 | `05c2e9c680b43174ed91cfbe198ba1842c291227` | Refined the development-stage summary table and added Version 2 phase and release tracking; documentation-only planning with no implementation approval. |
 | 2026-08-04 | `05c2e9c680b43174ed91cfbe198ba1842c291227` | Initial long-term future-development roadmap created as documentation-only planning after Version 1.0.0 was merged and tagged. |

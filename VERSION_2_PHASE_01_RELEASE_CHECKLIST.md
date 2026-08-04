@@ -1,8 +1,8 @@
 # Version 2 Phase 1 Release Checklist
 
-Package: `2.0.0a1`
+Package version: `2.0.0a1`
 
-Planned Git tag: `v2.0.0-alpha.1`
+Release identifier: `v2.0.0-alpha.1`
 
 Date: 2026-08-05
 
@@ -61,6 +61,9 @@ Date: 2026-08-05
 - [x] Markdown links and tables checked by documentation tests and final diff review.
 
 ## Post-Merge Steps
+
+These unchecked items are an operator procedure for creating the release tag after branch
+approval. They are not claims that the post-merge actions have already been performed.
 
 - [ ] Merge approved branch into `main`.
 - [ ] Pull merged `main`.

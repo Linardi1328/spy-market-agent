@@ -1,15 +1,14 @@
 # Version 2 Phase 1 — Real SPY Data Foundation Specification
 
-Status: Accepted - alpha release preparation in review
+Status: Accepted for v2.0.0-alpha.1 release
 
 Target release: `v2.0.0-alpha.1`
 
 Planned implementation branch: `review/v2-phase-01-real-spy-data`
 
-The Phase 1 implementation and owner-run real-provider smoke test have passed. This
-release-preparation branch is preparing package version `2.0.0a1`; the public Git tag
-`v2.0.0-alpha.1` must still not be created until this branch is approved, merged, and fully
-verified on `main`.
+The Phase 1 implementation and owner-run real-provider smoke test have passed. Phase 1 uses
+package version `2.0.0a1` and release identifier `v2.0.0-alpha.1`. The release tag must
+point only to a successfully verified `main` commit after branch approval and merge.
 
 This document does not authorize Version 2 Phase 2 implementation. Phase 2 requires its own
 approved specification.
@@ -409,9 +408,9 @@ branch after Phase 1 acceptance criteria and the owner-run smoke test passed. Th
 
 ## S. Approval Boundary
 
-Version 2 Phase 1 implementation is accepted for alpha release preparation. The
-`v2.0.0-alpha.1` tag must still not be created until release-preparation review, merge, and
-successful verification on `main` are complete.
+Version 2 Phase 1 implementation is accepted for the `v2.0.0-alpha.1` release. The release
+tag must point only to a successfully verified `main` commit after review approval and
+merge.
 
 This specification does not authorize Version 2 Phase 2. Phase 2 requires a separate
 approved specification and review branch.

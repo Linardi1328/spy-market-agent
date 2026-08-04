@@ -22,7 +22,7 @@ Public Git identifier:
 `v2.0.0-alpha.1`
 
 Phase status:
-accepted; release preparation in review.
+Phase 1 accepted; release metadata verified on the release-preparation branch.
 
 ## Scope Accepted
 
@@ -235,7 +235,7 @@ Completed:
   range.
 - Release-preparation branch sets package/runtime version to `2.0.0a1`.
 
-Remaining after this branch:
+Operator actions after branch approval:
 
 - Review and approval of the release-preparation branch.
 - Merge into `main`.

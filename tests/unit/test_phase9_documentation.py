@@ -164,20 +164,31 @@ def test_version_1_safety_statements_remain_documented() -> None:
 def test_version_2_alpha_release_documents_are_consistent() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    roadmap = (ROOT / "FUTURE_ROADMAP.md").read_text(encoding="utf-8")
     spec = (ROOT / "docs/V2_PHASE_01_REAL_SPY_DATA_SPEC.md").read_text(encoding="utf-8")
     release_notes = (ROOT / "RELEASE_NOTES_V2.0.0_ALPHA_1.md").read_text(encoding="utf-8")
     checklist = (ROOT / "VERSION_2_PHASE_01_RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
+    review = (ROOT / "reviews/V2_PHASE_01_REVIEW.md").read_text(encoding="utf-8")
+    combined = "\n".join((readme, changelog, roadmap, spec, release_notes, checklist, review))
 
-    assert "Current Version 2 alpha package: `2.0.0a1`" in readme
-    assert "Phase completed: V2 Phase 1 - Real SPY Data Foundation" in readme
+    assert "Package version: `2.0.0a1`" in readme
+    assert "Release identifier: `v2.0.0-alpha.1`" in readme
+    assert "V2 Phase 1: accepted and complete - Real SPY Data Foundation" in readme
     assert "Version 2 Phase 2 has not begun" in readme
     assert "## [2.0.0-alpha.1] - 2026-08-05" in changelog
     assert "Corresponding Python package version: `2.0.0a1`" in changelog
-    assert "Status: Accepted - alpha release preparation in review" in spec
+    assert "Status: Accepted for v2.0.0-alpha.1 release" in spec
+    assert "Accepted - Version 2 Real SPY Data Foundation" in roadmap
+    assert "Next planned phase - not started" in roadmap
     assert "Implementation in review" not in spec
-    assert "Planned Git tag: `v2.0.0-alpha.1`" in release_notes
+    assert "Git release identifier: `v2.0.0-alpha.1`" in release_notes
     assert "does not evaluate model accuracy" in release_notes
     assert "does not claim profitability" in release_notes
     assert "does not add live-money execution" in release_notes
     assert "No Git tag created on the review branch" in checklist
     assert "Create annotated `v2.0.0-alpha.1` tag" in checklist
+    assert "Phase 1 accepted; release metadata verified" in review
+    assert "preparing the tag" not in combined.lower()
+    assert "release preparation in review" not in combined.lower()
+    assert "Planned Git tag" not in combined
+    assert "tag already exists" not in combined.lower()

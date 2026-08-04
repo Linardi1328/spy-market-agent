@@ -11,14 +11,14 @@ profitability, and is not real-money trading infrastructure.
 ## Release Status
 
 - Current stable historical baseline: `v1.0.0`.
-- Current Version 2 alpha package: `2.0.0a1`.
-- Planned public Git tag: `v2.0.0-alpha.1`.
-- Phase completed: V2 Phase 1 - Real SPY Data Foundation.
-- Next planned phase: V2 Phase 2 - Real Historical Benchmark.
+- Package version: `2.0.0a1`.
+- Release identifier: `v2.0.0-alpha.1`.
+- V2 Phase 1: accepted and complete - Real SPY Data Foundation.
+- V2 Phase 2: next planned phase - Real Historical Benchmark; not started.
 - Live-money readiness: not approved.
 
-The repository is preparing the `v2.0.0-alpha.1` tag. The tag becomes official only after
-release-preparation merge and successful verification on `main`.
+Version 2 Phase 1 uses package version `2.0.0a1` and release identifier
+`v2.0.0-alpha.1`. The release tag must point only to a successfully verified `main` commit.
 Version 2 Phase 2 has not begun and requires a separate approved specification.
 
 ## Version 1 Historical Baseline
@@ -49,9 +49,9 @@ documentation and release-readiness work. It remains the frozen historical basel
 
 ## Version 2 Phase 1 Alpha
 
-Version 2 Phase 1 adds an accepted historical SPY daily-data foundation. The package version
-for release preparation is `2.0.0a1`; the public Git identifier `v2.0.0-alpha.1` must still
-be created only after this release-preparation branch is merged and verified on `main`.
+Version 2 Phase 1 adds an accepted historical SPY daily-data foundation. It uses package
+version `2.0.0a1` and release identifier `v2.0.0-alpha.1`. The release tag must point only
+to a successfully verified `main` commit.
 
 Phase 1 provides:
 
