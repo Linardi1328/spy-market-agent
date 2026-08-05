@@ -17,6 +17,7 @@ REQUIRED_DOCUMENTS = (
     "docs/SECURITY_AND_SAFETY.md",
     "docs/DEMO_GUIDE.md",
     "docs/PORTFOLIO_OVERVIEW.md",
+    "docs/V2_PHASE_02_REAL_HISTORICAL_BENCHMARK_SPEC.md",
     "CHANGELOG.md",
     "RELEASE_NOTES_V1.0.0.md",
     "RELEASE_NOTES_V2.0.0_ALPHA_1.md",
@@ -179,7 +180,7 @@ def test_version_2_alpha_release_documents_are_consistent() -> None:
     assert "Corresponding Python package version: `2.0.0a1`" in changelog
     assert "Status: Accepted for v2.0.0-alpha.1 release" in spec
     assert "Accepted - Version 2 Real SPY Data Foundation" in roadmap
-    assert "Next planned phase - not started" in roadmap
+    assert "Specification in review; implementation not started" in roadmap
     assert "Implementation in review" not in spec
     assert "Git release identifier: `v2.0.0-alpha.1`" in release_notes
     assert "does not evaluate model accuracy" in release_notes
@@ -192,3 +193,30 @@ def test_version_2_alpha_release_documents_are_consistent() -> None:
     assert "release preparation in review" not in combined.lower()
     assert "Planned Git tag" not in combined
     assert "tag already exists" not in combined.lower()
+
+
+def test_version_2_phase2_specification_is_planning_only() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    roadmap = (ROOT / "FUTURE_ROADMAP.md").read_text(encoding="utf-8")
+    spec = (ROOT / "docs/V2_PHASE_02_REAL_HISTORICAL_BENCHMARK_SPEC.md").read_text(encoding="utf-8")
+    combined = "\n".join((readme, changelog, roadmap, spec)).lower()
+
+    assert "Package version: `2.0.0a1`" in readme
+    assert "v2.0.0-alpha.2" in spec
+    assert "2.0.0a2" in spec
+    assert "Status: Planning" in spec
+    assert "awaiting review and implementation approval" in spec
+    assert "This specification does not authorize implementation" in spec
+    assert "Phase 2 implementation remains unstarted" in changelog
+    assert "Package/runtime version remains `2.0.0a1`" in changelog
+    assert "No benchmark or profitability result has been produced" in changelog
+    assert "Specification in review; implementation not started" in roadmap
+    assert "Version 2 Phase 2 has not begun" in readme
+    assert "no benchmark or profitability result has been produced" in combined
+    assert "does not authorize new model research, live execution, shadow" in combined
+    assert "phase 2 implementation must not begin" in combined
+    assert "phase 2 benchmark passed" not in combined
+    assert "phase 2 is implemented" not in combined
+    assert "profitability is guaranteed" not in combined
+    assert "live-money readiness: approved" not in combined

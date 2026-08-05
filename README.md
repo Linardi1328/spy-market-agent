@@ -194,6 +194,7 @@ streamlit run src/spy_market_agent/dashboard/streamlit_app.py
 - [Future Roadmap](FUTURE_ROADMAP.md)
 - [Version 2 Phase 1 Real SPY Data Specification](docs/V2_PHASE_01_REAL_SPY_DATA_SPEC.md)
 - [Version 2 Phase 1 Provider Decision](docs/V2_PHASE_01_PROVIDER_DECISION.md)
+- [Version 2 Phase 2 Real Historical Benchmark Specification](docs/V2_PHASE_02_REAL_HISTORICAL_BENCHMARK_SPEC.md)
 - [Version 2.0.0 Alpha 1 Release Notes](RELEASE_NOTES_V2.0.0_ALPHA_1.md)
 - [Version 2 Phase 1 Release Checklist](VERSION_2_PHASE_01_RELEASE_CHECKLIST.md)
 - [Project Specification](PROJECT_SPEC.md)
