@@ -201,6 +201,7 @@ def test_version_2_phase2_specification_is_planning_only() -> None:
     roadmap = (ROOT / "FUTURE_ROADMAP.md").read_text(encoding="utf-8")
     spec = (ROOT / "docs/V2_PHASE_02_REAL_HISTORICAL_BENCHMARK_SPEC.md").read_text(encoding="utf-8")
     combined = "\n".join((readme, changelog, roadmap, spec)).lower()
+    normalized_spec = " ".join(spec.split())
 
     assert "Package version: `2.0.0a1`" in readme
     assert "v2.0.0-alpha.2" in spec
@@ -211,6 +212,9 @@ def test_version_2_phase2_specification_is_planning_only() -> None:
     assert "Phase 2 implementation remains unstarted" in changelog
     assert "Package/runtime version remains `2.0.0a1`" in changelog
     assert "No benchmark or profitability result has been produced" in changelog
+    assert "Current package/runtime version for this specification branch: `2.0.0a1`" in spec
+    assert "Version 2 Phase 2 implementation has not started" in spec
+    assert "no real Phase 2 benchmark has been run" in normalized_spec
     assert "Specification in review; implementation not started" in roadmap
     assert "Version 2 Phase 2 has not begun" in readme
     assert "no benchmark or profitability result has been produced" in combined
@@ -220,3 +224,56 @@ def test_version_2_phase2_specification_is_planning_only() -> None:
     assert "phase 2 is implemented" not in combined
     assert "profitability is guaranteed" not in combined
     assert "live-money readiness: approved" not in combined
+
+
+def test_version_2_phase2_benchmark_integrity_governance_is_documented() -> None:
+    spec = (ROOT / "docs/V2_PHASE_02_REAL_HISTORICAL_BENCHMARK_SPEC.md").read_text(encoding="utf-8")
+    lower_spec = spec.lower()
+    normalized_spec = " ".join(spec.split())
+
+    assert "adjustment mode `all`" in spec
+    assert "Raw, split-only, dividend-only" in spec
+    assert "SIP is the preferred primary benchmark feed" in spec
+    assert "IEX is a single-exchange feed" in spec
+    assert "must not silently substitute IEX for SIP" in spec
+    assert "Changing the feed creates a new dataset ID and a new benchmark ID" in spec
+    assert "whether the dataset qualifies as the primary benchmark" in spec
+
+    expected_cost_rows = (
+        "| `idealized` | `0` | `0` | `0` | `0` |",
+        "| `base` | `0.125` | `0.25` | `0.375` | `0.75` |",
+        "| `adverse` | `1` | `2` | `3` | `6` |",
+        "| `severe` | `10` | `20` | `30` | `60` |",
+    )
+    for row in expected_cost_rows:
+        assert row in spec
+    assert "Risk-free-rate assumption: `0.0%` annualized" in spec
+    assert "Whole-share constraints apply" in spec
+    assert 'Initial cash: `Decimal("10000")`' in spec
+    assert "Cost rounding policy: use the existing `Decimal` arithmetic" in spec
+    assert "meaningfully higher" not in spec
+    assert "conservative stress value" not in spec
+
+    assert "`BOUNDARY_EXCLUSION_SESSIONS = 6`" in spec
+    assert "train_rows = floor(assignable_rows * 70 / 100)" in spec
+    assert "validation_rows = floor(assignable_rows * 15 / 100)" in spec
+    assert "final-test partition receives every remainder" in lower_spec
+    assert "| Training | 756 | 120 | 120 |" in spec
+    assert "| Validation | 252 | 40 | 40 |" in spec
+    assert "| Final test | 252 | 40 | 40 |" in spec
+    assert "Boundaries must not be moved after inspecting model metrics" in spec
+    assert "prohibition on outcome-driven boundary adjustment" in spec
+
+    assert "train candidate models on the training partition only" in spec
+    assert "freshly refit the selected model on the combined training and validation" in spec
+    assert "exclude gap observations and final-test observations from fitting" in spec
+    assert "Before the final-test lock and explicit owner acknowledgement" in spec
+    assert "selected-model final-test metrics" in spec
+    assert "final-test cost-sensitivity results" in spec
+    assert "Stage B must calculate all final-test model, baseline, regime, strategy" in spec
+    assert "not a separate independent classification baseline" in spec
+
+    assert "Version 2 Phase 2 implementation has not started" in spec
+    assert "no real Phase 2 benchmark has been run" in normalized_spec
+    assert "phase 2 benchmark passed" not in lower_spec
+    assert "phase 2 implementation complete" not in lower_spec

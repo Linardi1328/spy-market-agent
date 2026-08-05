@@ -2,9 +2,11 @@
 
 Status: Planning — awaiting review and implementation approval
 
-Target future release: `v2.0.0-alpha.2`
+Target future release identifier: `v2.0.0-alpha.2`
 
-Future Python package version: `2.0.0a2`
+Current package/runtime version for this specification branch: `2.0.0a1`
+
+Target future package version: `2.0.0a2`
 
 Planned implementation branch: `review/v2-phase-02-real-benchmark`
 
@@ -13,6 +15,9 @@ approved. Phase 2 evaluates the existing approved research pipeline using frozen
 historical SPY data. It does not authorize new model research, live execution, shadow
 operation, additional paper-execution behavior, profitability claims, or investment
 suitability claims.
+
+Version 2 Phase 1 is accepted. Version 2 Phase 2 implementation has not started, no real
+Phase 2 benchmark has been run, and no benchmark result is claimed by this planning branch.
 
 ## Table of Contents
 
@@ -147,9 +152,51 @@ The benchmark dataset must be accepted only when all of the following hold:
 - numeric and OHLCV validation passes;
 - the dataset meets the minimum historical-depth requirement.
 
+Primary acceptance benchmark eligibility is narrower than general Phase 1 dataset
+eligibility:
+
+- The primary Phase 2 acceptance benchmark must use symbol `SPY`, timeframe `1Day`, and
+  adjustment mode `all`.
+- Raw, split-only, dividend-only, partially adjusted, or mixed adjustment datasets are not
+  eligible for the primary acceptance benchmark.
+- The benchmark must use one feed consistently for the entire dataset. A dataset that mixes
+  feeds across sessions, fields, retries, refreshes, or provider responses is ineligible.
+- SIP is the preferred primary benchmark feed because it represents consolidated
+  US-market activity.
+- IEX is a single-exchange feed and must be labelled as limited-coverage data in every
+  manifest, eligibility report, benchmark lock, and human-readable report that uses it.
+
+An owner-run feed-availability probe is required before dataset and benchmark identities are
+locked. The probe must be credentialed and run by the owner in the approved local
+environment; normal automated tests remain offline and must not perform the probe. The probe
+must record the requested range, provider, requested feed, timeframe, adjustment mode,
+success or failure, response limitation, subscription or entitlement limitation, timestamp,
+and non-sensitive error summary when applicable.
+
+If SIP historical access is available for the approved benchmark range, SIP must be used for
+the primary acceptance benchmark. If SIP historical access is unavailable:
+
+- Phase 2 must not silently substitute IEX for SIP.
+- The owner must create an explicit feed-limitation decision before any validation command
+  runs.
+- The decision must record that IEX price observations and especially IEX volume
+  observations are not equivalent to consolidated-market data.
+- IEX is permitted only as a limited diagnostic benchmark, or as the primary benchmark after
+  explicit owner approval and a specification amendment.
+- SIP and IEX datasets must never be compared or described as if they were identical.
+- Changing the feed creates a new dataset ID and a new benchmark ID.
+
 The benchmark must consume the canonical dataset through the Phase 1 manifest and deep
 verification flow. It must not accept an arbitrary CSV path that bypasses the manifest,
 checksum, session, lineage, and schema checks.
+
+The dataset eligibility report must include:
+
+- feed selected;
+- feed availability result;
+- subscription or access limitation;
+- adjustment mode;
+- whether the dataset qualifies as the primary benchmark or only as a diagnostic benchmark.
 
 ## 6. Historical-Depth and Regime Requirements
 
@@ -173,6 +220,11 @@ implementation must create a dataset eligibility report containing:
 - requested range;
 - actual range;
 - number of sessions;
+- feed selected;
+- feed availability result;
+- subscription or access limitation;
+- adjustment mode;
+- primary benchmark or diagnostic benchmark eligibility decision;
 - included regimes;
 - important regimes not covered;
 - provider/feed limitations;
@@ -194,12 +246,16 @@ artifacts/benchmarks/<benchmark_id>/benchmark_lock.json
 The lock must contain:
 
 - benchmark ID;
+- benchmark role: primary acceptance benchmark or limited diagnostic benchmark;
 - dataset ID;
 - dataset manifest path reference;
 - canonical checksum;
 - provider;
 - feed;
+- feed availability probe result;
+- subscription or access limitation record;
 - adjustment mode;
+- primary dataset eligibility decision;
 - dataset range;
 - feature-set identifier;
 - label identifier;
@@ -213,8 +269,14 @@ The lock must contain:
 - random seeds;
 - signal-policy configuration;
 - risk configuration;
-- cost assumptions;
-- slippage assumptions;
+- complete cost/slippage scenario matrix;
+- primary label-cost scenario;
+- commission basis points per side for each scenario;
+- slippage basis points per side for each scenario;
+- risk-free-rate assumption;
+- whole-share constraint policy;
+- initial cash;
+- cost rounding policy;
 - baseline definitions;
 - metric definitions;
 - code commit SHA;
@@ -226,9 +288,10 @@ The lock must contain:
 - final-test lock status.
 
 The benchmark ID must be deterministic from stable configuration and lineage inputs. It must
-not be a random UUID alone. Any material change to dataset, schema, split dates, candidates,
-costs, slippage, baseline definitions, metric definitions, or code lineage must create a new
-benchmark identity.
+not be a random UUID alone. Any material change to dataset, schema, provider, feed,
+adjustment mode, split dates, candidates, costs, slippage, risk-free rate, whole-share
+policy, initial cash, cost rounding, baseline definitions, metric definitions, or code
+lineage must create a new benchmark identity.
 
 ## 8. Chronological Split Policy
 
@@ -245,19 +308,115 @@ Phase 2 must preserve all repository guardrails:
 - keep future-return and target columns out of model features.
 
 Exact split dates must be generated and recorded only after dataset eligibility is confirmed.
-The deterministic default split policy is:
-
-- training: earliest eligible sessions through approximately 70% of usable observations;
-- validation: the next approximately 15%;
-- final test: the final approximately 15%;
-- mandatory gap sessions excluded between partitions;
-- boundaries adjusted only to valid XNYS sessions;
-- each partition must meet documented minimum positive and negative target counts;
-- the final test must include at least one meaningful recent market regime where the
-  eligible dataset permits it.
-
 The Phase 2 implementation must not hard-code exact calendar dates before the owner-run
-dataset availability probe. It must print and persist the exact resulting session dates.
+dataset availability probe.
+
+The deterministic default split policy uses these constants:
+
+- `FEATURE_WARMUP_ROWS = 20`, matching the existing trailing feature schema.
+- `ENTRY_OFFSET_SESSIONS = 1`.
+- `EXIT_OFFSET_SESSIONS = 6`.
+- `MANDATORY_GAP_SESSIONS = 5`.
+- `BOUNDARY_EXCLUSION_SESSIONS = 6`, which reserves the five mandatory gap sessions after
+  a partition's last included prediction session plus the `t + 6` label-horizon exit session.
+- Train allocation: `70%` of assignable rows.
+- Validation allocation: `15%` of assignable rows.
+- Final-test allocation: all remaining assignable rows after train and validation integer
+  floors.
+
+Usable rows must be calculated mechanically:
+
+1. Start from the eligible canonical Phase 1 daily SPY dataset ordered by XNYS session.
+2. Build the existing trailing feature set and exclude the first `20` source sessions as
+   feature warm-up. These excluded sessions must be persisted.
+3. Build the existing `t + 1` entry to `t + 6` exit label set and exclude the last `6`
+   source sessions because labels are unavailable. These excluded sessions must be persisted.
+4. Build the supervised dataset by exact session alignment between features and labels.
+   Any missing, duplicated, non-finite, unordered, or mismatched feature/label row fails
+   closed.
+5. Define `U` as the ordered supervised rows after those exclusions and validations.
+   `U[0]` is the earliest eligible supervised row and `U[N - 1]` is the latest eligible
+   supervised row.
+
+Split counts must be calculated with integer arithmetic only:
+
+```text
+N = len(U)
+boundary_exclusions_total = 2 * BOUNDARY_EXCLUSION_SESSIONS
+assignable_rows = N - boundary_exclusions_total
+train_rows = floor(assignable_rows * 70 / 100)
+validation_rows = floor(assignable_rows * 15 / 100)
+final_test_rows = assignable_rows - train_rows - validation_rows
+```
+
+The final-test partition receives every remainder created by integer flooring. No calendar
+date approximation, month/year boundary adjustment, randomized assignment, or class-balance
+adjustment is permitted.
+
+Split sessions are selected by zero-based row position in `U`:
+
+```text
+train_included = U[0 : train_rows]
+train_validation_boundary_excluded =
+  U[train_rows : train_rows + BOUNDARY_EXCLUSION_SESSIONS]
+validation_included =
+  U[train_rows + BOUNDARY_EXCLUSION_SESSIONS :
+    train_rows + BOUNDARY_EXCLUSION_SESSIONS + validation_rows]
+validation_test_boundary_excluded =
+  U[train_rows + BOUNDARY_EXCLUSION_SESSIONS + validation_rows :
+    train_rows + BOUNDARY_EXCLUSION_SESSIONS + validation_rows
+    + BOUNDARY_EXCLUSION_SESSIONS]
+final_test_included =
+  U[train_rows + BOUNDARY_EXCLUSION_SESSIONS + validation_rows
+    + BOUNDARY_EXCLUSION_SESSIONS : N]
+```
+
+The first five sessions in each excluded boundary block satisfy the mandatory five-session
+gap. The sixth session in each excluded boundary block preserves the `t + 6` label-horizon
+purge so the last included row of the preceding partition does not use the first row of the
+following partition as its exit observation. Boundary blocks are not fitting samples,
+selection samples, final-test samples, or strategy evaluation samples.
+
+The future implementation must produce the `ChronologicalSplitSpec` boundaries from these
+included rows:
+
+- `train_start_session` is the session of the first row in `train_included`.
+- `train_end_session` is the `exit_session` of the last row in `train_included`.
+- `validation_start_session` is the session of the first row in `validation_included`.
+- `validation_end_session` is the `exit_session` of the last row in
+  `validation_included`.
+- `test_start_session` is the session of the first row in `final_test_included`.
+- `test_end_session` is the `exit_session` of the last row in `final_test_included`.
+
+All boundary sessions must already be valid XNYS sessions from the eligible ordered dataset
+or from its validated label exit sessions. The implementation must not roll a boundary
+forward or backward to a nearby valid session; a non-XNYS boundary is an eligibility failure.
+
+Minimum included-row requirements after deterministic construction:
+
+| Partition | Minimum total rows | Minimum positive targets | Minimum negative targets |
+| --- | ---: | ---: | ---: |
+| Training | 756 | 120 | 120 |
+| Validation | 252 | 40 | 40 |
+| Final test | 252 | 40 | 40 |
+
+Class-count eligibility may be calculated only after the mechanical split is constructed.
+If any total-row, positive-class, or negative-class minimum fails, Phase 2 must fail closed.
+Boundaries must not be moved after inspecting model metrics, and boundaries must not be moved
+merely to improve class balance. Any alternative split algorithm, allocation percentage,
+rounding rule, remainder rule, gap length, purge rule, or minimum-count policy requires a
+specification amendment and a new benchmark identity.
+
+The split manifest and CLI output must persist and print the exact session lists for:
+
+- source sessions excluded for feature warm-up;
+- source sessions excluded for label availability;
+- train included sessions;
+- train/validation boundary-excluded sessions;
+- validation included sessions;
+- validation/final-test boundary-excluded sessions;
+- final-test included sessions;
+- first and last label exit sessions for every partition.
 
 ## 9. Final-Test Protection
 
@@ -266,28 +425,60 @@ Phase 2 must use a two-stage benchmark workflow.
 Stage A — development evaluation:
 
 - load and verify the dataset;
-- build features and labels;
+- build features and labels needed for training and validation;
 - establish train, validation, and gap partitions;
+- keep final-test labels unloaded by Stage A model-training, model-selection, baseline,
+  strategy, regime, and reporting components where practical;
+- train candidate models on the training partition only;
 - evaluate model candidates on validation only;
-- compare validation metrics and naive baselines;
+- compare validation metrics and naive baselines using validation only;
 - lock the selected model and all configurations;
 - generate a final-test readiness report;
-- do not expose final-test model metrics.
+- do not expose final-test model metrics or final-period comparator results.
 
 Stage B — locked final evaluation:
 
 - require an explicit owner acknowledgement flag;
 - verify the benchmark lock has not changed;
 - verify Git SHA, dataset checksum, and configurations;
-- refit only using the approved locked process;
+- freshly refit the selected model on the combined training and validation partitions only;
+- exclude gap observations and final-test observations from fitting;
 - evaluate the final test exactly once per benchmark identity;
 - persist an immutable final-test access record;
 - refuse accidental repeated final evaluation unless an explicit audit/replay mode proves no
   configuration changed;
 - never tune based on final-test results.
 
+Before the final-test lock and explicit owner acknowledgement, Phase 2 must not expose:
+
+- selected-model final-test metrics;
+- classification-baseline final-test metrics;
+- strategy-baseline final-test metrics;
+- buy-and-hold final-period results;
+- momentum-comparator final-period results;
+- final-test regime metrics;
+- final-test cost-sensitivity results.
+
+Stage B must calculate all final-test model, baseline, regime, strategy, and cost-sensitivity
+results from the unchanged benchmark lock. No final-test result may be calculated from
+configuration supplied outside the lock.
+
 Rerunning deterministic final evaluation for verification is allowed only as an audit replay.
-Audit replay must not alter the model, configuration, split, or benchmark identity.
+Audit replay must not alter the model, configuration, split, or benchmark identity. It may
+reproduce final-test results only when all of the following match the original locked final
+evaluation:
+
+- dataset checksum;
+- benchmark ID;
+- Git/code lineage;
+- dependency versions;
+- every model configuration;
+- every classification baseline configuration;
+- every strategy baseline configuration;
+- every regime configuration;
+- every cost and slippage configuration;
+- no new selection, tuning, calibration, threshold change, feature change, or comparator
+  inclusion occurs.
 
 ## 10. Existing Model Candidates
 
@@ -324,6 +515,12 @@ match the snapshots returned by `fixed_model_parameters(...)`.
 Model selection must use validation evidence only. The current locked-selection tie-break
 uses validation ROC AUC first, then lower validation log loss, then lower validation Brier
 score, then `logistic_regression` as the simpler-baseline tie-break.
+
+The selected model strategy uses the existing fixed long-or-cash signal policy as its
+execution policy. It applies the current `STRATEGY_LONG_PROBABILITY_THRESHOLD` value of
+`0.5` to the selected model's probabilities after model selection is locked. This policy is
+not a separate independent classification baseline, not a separate strategy comparator, and
+not a tunable threshold research surface in Phase 2.
 
 Phase 2 does not authorize new hyperparameters, grid search, random search, Bayesian
 optimization, new estimators, probability calibration, or threshold research.
@@ -362,7 +559,7 @@ predictions.
 
 Phase 2 must define strategy comparators clearly and avoid misleading comparisons.
 
-Required comparators:
+Required and pre-lock optional comparators:
 
 - Always-cash baseline:
   - no market exposure;
@@ -376,11 +573,6 @@ Required comparators:
   - include documented entry and exit costs;
   - use the same canonical adjusted series.
 
-- Fixed existing signal-policy baseline:
-  - apply the existing approved long-or-cash policy without model research;
-  - use the current `STRATEGY_LONG_PROBABILITY_THRESHOLD` value of `0.5`;
-  - keep model probabilities and risk checks aligned with existing Version 1 semantics.
-
 - Optional simple trailing-momentum comparator:
   - use the canonical adjusted close series only;
   - compute `close_t / close_t_minus_20_sessions - 1.0` from trailing observations available
@@ -392,6 +584,10 @@ Required comparators:
   - must not become a tunable research model;
   - must not use validation or final-test results to choose lookback lengths, thresholds,
     exits, or inclusion.
+
+The optional momentum comparator may be included only if its inclusion is recorded in the
+benchmark lock before `run-validation`. If it is not locked before validation begins, it must
+not be added later to explain or contextualize final-test results.
 
 Buy-and-hold must not be called equivalent to the model's overlapping five-day trade logic.
 Reports must explain differences in exposure, holding periods, turnover, and cost treatment.
@@ -456,23 +652,14 @@ risk decisions must remain visible in reports and machine-readable artifacts.
 Phase 2 must define a fixed cost/slippage scenario matrix before final-test evaluation.
 Scenarios must apply to the selected model strategy and relevant strategy baselines.
 
-Minimum scenario matrix:
+The exact Phase 2 scenario matrix is:
 
-- Idealized diagnostic:
-  - zero commissions;
-  - zero slippage;
-  - clearly labelled unrealistic.
-
-- Base scenario:
-  - current approved Version 1 assumptions where a run configuration defines them;
-  - if the repository has no single global numeric default, exact base values must be
-    defined during Phase 2 implementation review before any benchmark execution.
-
-- Adverse scenario:
-  - meaningfully higher cost and slippage than the base scenario.
-
-- Severe sensitivity scenario:
-  - a clearly conservative stress value.
+| Scenario | Commission bps per side | Slippage bps per side | Total side cost bps | Round-trip cost bps | Use |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `idealized` | `0` | `0` | `0` | `0` | Diagnostic only; unrealistic zero-cost comparison. |
+| `base` | `0.125` | `0.25` | `0.375` | `0.75` | Primary label-cost scenario and primary strategy-cost scenario. |
+| `adverse` | `1` | `2` | `3` | `6` | Cost-sensitivity scenario. |
+| `severe` | `10` | `20` | `30` | `60` | Stress sensitivity scenario. |
 
 Existing repository facts:
 
@@ -483,11 +670,34 @@ Existing repository facts:
 - Existing tests exercise zero-cost diagnostics and nonzero examples, but those examples do
   not constitute a globally approved real-data benchmark scenario matrix.
 
-The future implementation must persist the exact numeric commission and slippage basis-point
-values for every non-idealized scenario in `benchmark_lock.json` before any validation or
-final-test benchmark run. If exact values are absent, Phase 2 must fail closed.
+Additional locked assumptions:
 
-Cost and slippage assumptions must not be chosen after seeing final-test results.
+- Risk-free-rate assumption: `0.0%` annualized, with no cash yield unless a future
+  specification amendment creates a new benchmark identity.
+- Whole-share constraints apply: entries use the existing deterministic maximum-affordable
+  whole-share sizing policy; exits sell the full current whole-share position.
+- Initial cash: `Decimal("10000")`, equal to USD 10,000 simulated starting cash.
+- Cost rounding policy: use the existing `Decimal` arithmetic without order-level cents
+  quantization; do not round commission, slippage, execution notional, cash changes, or
+  intermediate portfolio accounting before persistence. Human-readable reports may display
+  rounded values only when machine-readable artifacts retain exact serialized values.
+
+The `base` scenario is the primary label-cost scenario for the Version 1 target. The
+selected model and selection decision must be trained and selected once against the locked
+base labels. The `idealized`, `adverse`, and `severe` scenarios are strategy
+cost-sensitivity scenarios using the unchanged selected model, unchanged signal policy, and
+unchanged baseline definitions unless a future amendment explicitly creates a separate
+benchmark identity.
+
+The future implementation must persist every exact numeric commission, slippage,
+risk-free-rate, whole-share, initial-cash, and rounding value in `benchmark_lock.json` before
+`run-validation`. The owner must approve those values before `run-validation`, and the values
+are immutable after validation begins. If any exact value or owner approval is absent, Phase
+2 must fail closed.
+
+Cost and slippage assumptions must not be chosen or modified after viewing validation
+results or final-test results. Changing any value creates a new benchmark identity and
+requires a fresh benchmark lock before validation can run.
 
 ## 16. Regime Diagnostics
 
@@ -518,6 +728,8 @@ Every result must capture:
 
 - dataset ID and checksum;
 - benchmark ID;
+- benchmark role;
+- provider, feed, feed availability result, and adjustment mode;
 - feature-set identifier;
 - label identifier;
 - split dates;
@@ -527,6 +739,8 @@ Every result must capture:
 - signal configuration;
 - risk configuration;
 - cost scenario;
+- risk-free-rate assumption;
+- whole-share, initial-cash, and rounding policies;
 - code SHA;
 - package/runtime version;
 - Python version;
@@ -627,6 +841,10 @@ Required command behavior for a future implementation:
 - no broker client;
 - no automatic acquisition;
 - no automatic paper execution;
+- `run-validation` refuses to run until dataset eligibility, split construction, comparator
+  inclusion, and exact cost assumptions are locked and owner-approved;
+- `run-final-test` refuses to run until the final-test lock and explicit owner
+  acknowledgement are recorded;
 - non-zero exit codes on controlled failures;
 - concise output without leaking raw provider data.
 
@@ -635,10 +853,14 @@ Required command behavior for a future implementation:
 Phase 2 must define explicit failures for:
 
 - missing dataset manifest;
+- missing feed-availability probe result;
+- SIP unavailable without explicit feed-limitation decision;
+- primary benchmark attempted with unsupported adjustment mode or mixed feeds;
 - dataset verification failure;
 - unsupported dataset schema;
 - dataset too short;
 - missing required regime;
+- insufficient positive or negative class counts after deterministic split construction;
 - split overlap;
 - insufficient gap;
 - label leakage;
@@ -649,7 +871,9 @@ Phase 2 must define explicit failures for:
 - benchmark-lock mismatch;
 - dataset checksum mismatch;
 - code/configuration mismatch;
+- missing owner approval for locked cost and split assumptions;
 - final-test access before lock;
+- final-test result exposure before owner acknowledgement;
 - duplicate incompatible final-test access;
 - result checksum mismatch;
 - invalid metric;
@@ -681,17 +905,27 @@ Phase 2 must require:
 Required unit tests:
 
 - dataset eligibility;
+- primary adjustment mode `all` eligibility;
+- SIP/IEX feed limitation eligibility and reporting;
 - manifest verification integration;
 - benchmark identity;
 - split construction;
+- split rounding behavior;
+- split remainder allocation to the final-test partition;
+- deterministic repeated split construction from identical eligible input;
+- insufficient split class counts failing closed;
+- prohibition on outcome-driven boundary adjustment;
 - gap enforcement;
 - no overlap;
 - label-boundary safety;
 - final-test lock behavior;
+- final-test result suppression before lock and owner acknowledgement;
 - baseline calculations;
 - metric calculations;
 - undefined metrics;
 - cost scenario definitions;
+- exact cost/slippage, risk-free-rate, whole-share, initial-cash, and rounding values in the
+  benchmark lock;
 - regime labels;
 - artifact serialization;
 - atomic writes;
@@ -720,19 +954,24 @@ Normal tests must remain offline and deterministic.
 
 The owner-run real benchmark acceptance sequence is:
 
-1. Acquire or reuse an eligible local Phase 1 SPY dataset.
-2. Deep-verify the Phase 1 dataset.
-3. Prepare the benchmark and dataset eligibility report.
-4. Review and approve exact dataset and split dates.
-5. Run training and validation only.
-6. Review validation results and baseline definitions.
-7. Freeze the benchmark lock.
-8. Explicitly authorize final-test access.
-9. Run the final test.
-10. Verify all generated artifacts.
-11. Confirm Git remains clean.
-12. Record only non-sensitive summary evidence.
-13. Decide whether Phase 2 passed, failed, or requires redesign.
+1. Run the owner feed-availability probe for the approved range.
+2. Record the SIP availability result or explicit feed-limitation decision.
+3. Acquire or reuse an eligible local Phase 1 SPY dataset.
+4. Deep-verify the Phase 1 dataset.
+5. Prepare the benchmark and dataset eligibility report.
+6. Review primary-versus-diagnostic eligibility.
+7. Review and approve exact cost, slippage, risk-free-rate, whole-share, initial-cash, and
+   rounding assumptions.
+8. Review and approve exact dataset and split dates.
+9. Run training and validation only.
+10. Review validation results and baseline definitions.
+11. Freeze the benchmark lock.
+12. Explicitly authorize final-test access.
+13. Run the final test.
+14. Verify all generated artifacts.
+15. Confirm Git remains clean.
+16. Record only non-sensitive summary evidence.
+17. Decide whether Phase 2 passed, failed, or requires redesign.
 
 Codex must never claim this owner-run benchmark passed unless it was actually executed.
 
@@ -742,16 +981,25 @@ Phase 2 implementation may be approved only when:
 
 - a verified real SPY dataset is used;
 - dataset eligibility passes;
+- the primary benchmark uses `SPY`, `1Day`, adjustment mode `all`, and one consistent feed;
+- SIP is used for the primary benchmark when available for the approved range;
+- any IEX usage is labelled as limited-coverage data and approved only for the permitted
+  diagnostic or amended-primary role;
 - dataset and benchmark IDs are deterministic;
 - exact split dates are frozen;
 - required gaps are enforced;
+- deterministic split allocation, rounding, remainder, and class-count checks pass without
+  outcome-driven boundary movement;
 - no leakage is detected;
 - existing Version 1 models are used without unapproved tuning;
 - naive classification baselines are implemented;
 - naive strategy baselines are implemented;
 - validation-only selection is enforced;
 - final-test access is explicit and recorded;
-- cost/slippage scenarios are predefined;
+- final-test results are suppressed until lock finalization and explicit owner
+  acknowledgement;
+- cost/slippage scenarios and related risk-free-rate, whole-share, initial-cash, and
+  rounding assumptions are exact, owner-approved before `run-validation`, and immutable;
 - regime diagnostics are reproducible;
 - classification and strategy reports are complete;
 - results are reproducible offline from the local canonical dataset;
@@ -768,11 +1016,16 @@ Phase 2 implementation may be approved only when:
 
 Phase 2 must be rejected or held when:
 
+- SIP historical access is available but a non-SIP primary benchmark is used without an
+  approved amendment;
+- IEX limitations are not labelled when IEX data is used;
 - historical coverage is insufficient;
 - dataset verification fails;
 - split leakage is found;
 - final test was accessed before lock;
 - configurations were changed after final-test review;
+- cost, slippage, risk-free-rate, whole-share, initial-cash, or rounding assumptions changed
+  after validation began;
 - baselines are missing or incorrectly constructed;
 - results cannot be reproduced;
 - metrics are non-finite or misleadingly substituted;
