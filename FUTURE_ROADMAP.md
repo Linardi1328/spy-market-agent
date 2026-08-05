@@ -2,7 +2,7 @@
 
 This roadmap describes how the educational Version 1 SPY system could evolve over time.
 It is planning and release-tracking documentation. It does not approve live trading, does not
-begin Phase 2, and does not change the frozen Version 1.0.0 baseline.
+authorize Phase 2 implementation, and does not change the frozen Version 1.0.0 baseline.
 
 Profitability is never guaranteed. Classification accuracy alone does not establish trading
 safety. Any live-trading work requires a separate specification, separate review, and explicit
@@ -311,14 +311,15 @@ Current tracking:
 
 - `v1.0.0` remains the frozen stable baseline.
 - V2 Phase 1 / `v2.0.0-alpha.1`: Accepted - Version 2 Real SPY Data Foundation.
-- V2 Phase 2 / `v2.0.0-alpha.2`: Next planned phase - not started.
+- V2 Phase 2 / `v2.0.0-alpha.2`: Specification in review; implementation not started.
+- V2 Phase 3 / `v2.0.0-alpha.3`: Planned and not started.
 
 | Track | Version | Name | Recommended Branch | Scope |
 | --- | --- | --- | --- | --- |
 | V1 baseline | `v1.0.0` | Frozen Version 1 baseline | Already tagged | Educational SPY daily research, backtesting, persistence, read-only API/dashboard, and explicit paper-only safeguards. |
 | V2 Phase 1 | `v2.0.0-alpha.1` | Real SPY Data Foundation | `review/v2-phase-01-release-preparation` | Accepted - Version 2 Real SPY Data Foundation with approved provider workflow, licensing record, validated SPY dataset handling, checksums, and data lineage. |
-| V2 Phase 2 | `v2.0.0-alpha.2` | Real Historical Benchmark | `review/v2-phase-02-real-benchmark` | Next planned phase; not started. Real SPY benchmark with regimes, naive baselines, cost/slippage sensitivity, and no live execution. |
-| V2 Phase 3 | `v2.0.0-alpha.3` | Walk-Forward Model Research | `review/v2-phase-03-walk-forward-research` | Walk-forward evaluation, ablations, calibration, threshold research, drift analysis, and registry evidence. |
+| V2 Phase 2 | `v2.0.0-alpha.2` | Real Historical Benchmark | `review/v2-phase-02-real-benchmark` | Specification in review; implementation not started. Real SPY benchmark with regimes, naive baselines, cost/slippage sensitivity, and no live execution. |
+| V2 Phase 3 | `v2.0.0-alpha.3` | Walk-Forward Model Research | `review/v2-phase-03-walk-forward-research` | Planned and not started. Walk-forward evaluation, ablations, calibration, threshold research, drift analysis, and registry evidence. |
 | V2 Phase 4 | `v2.0.0-beta.1` | Real-Time Shadow Mode | `review/v2-phase-04-shadow-mode` | Reliable ingestion, freshness checks, scheduled inference, monitoring, alerts, and no submission capability. |
 | V2 Phase 5 | `v2.0.0-beta.2` | Production Paper Operation | `review/v2-phase-05-production-paper` | Production paper operation, reconciliation, recovery runbooks, and observation evidence. |
 | V2 Phase 6 | `v2.0.0-rc.1` | Version 2 Release Candidate | `review/v2-phase-06-release-candidate` | Feature-complete Version 2 audit for real-data, shadow, and production-paper scope. |
@@ -326,8 +327,10 @@ Current tracking:
 
 The Phase 1 planning specification is
 [Version 2 Phase 1 - Real SPY Data Foundation Specification](docs/V2_PHASE_01_REAL_SPY_DATA_SPEC.md).
-It is accepted for `v2.0.0-alpha.1`. Phase 2 still requires a separate approved
-specification.
+It is accepted for `v2.0.0-alpha.1`. The Phase 2 planning specification is
+[Version 2 Phase 2 - Real Historical Benchmark Specification](docs/V2_PHASE_02_REAL_HISTORICAL_BENCHMARK_SPEC.md).
+Phase 2 implementation must not begin until that specification is reviewed and explicitly
+approved.
 
 Recommended branch sequence:
 
@@ -632,6 +635,8 @@ Related documents:
 - [Project Specification](PROJECT_SPEC.md): frozen Version 1 implementation baseline.
 - [Version 2 Phase 1 - Real SPY Data Foundation Specification](docs/V2_PHASE_01_REAL_SPY_DATA_SPEC.md):
   accepted specification for `v2.0.0-alpha.1`.
+- [Version 2 Phase 2 - Real Historical Benchmark Specification](docs/V2_PHASE_02_REAL_HISTORICAL_BENCHMARK_SPEC.md):
+  planning specification in review; implementation is not authorized until approval.
 - [Version 2.0.0 Alpha 1 Release Notes](RELEASE_NOTES_V2.0.0_ALPHA_1.md): release notes
   for the `v2.0.0-alpha.1` release identifier.
 - [Version 2 Phase 1 Release Checklist](VERSION_2_PHASE_01_RELEASE_CHECKLIST.md):
@@ -641,6 +646,7 @@ Change log:
 
 | Date | Base Main SHA | Change |
 | --- | --- | --- |
+| 2026-08-05 | `8074ec1dbe738b67d288bf648b5cfc2126f4e76c` | Added the V2 Phase 2 Real Historical Benchmark specification for review; implementation remains unstarted, and no benchmark, profitability claim, or live-money capability was added. |
 | 2026-08-05 | `c66d9e5ae7c99eeb7ab01e00a3c3494b2da1a7b0` | Recorded V2 Phase 1 acceptance for `v2.0.0-alpha.1`, owner-run smoke-test completion, and stable release metadata; Phase 2 remains not started and live-money trading remains outside Version 2.0.0. |
 | 2026-08-04 | `0947c391b6c7646a27c1baeb7778cd229726bacb` | Added the Version 2 Phase 1 specification reference and clarified roadmap SHA metadata as base-main context; documentation-only planning with no Version 2 implementation. |
 | 2026-08-04 | `05c2e9c680b43174ed91cfbe198ba1842c291227` | Refined the development-stage summary table and added Version 2 phase and release tracking; documentation-only planning with no implementation approval. |

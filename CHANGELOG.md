@@ -2,7 +2,15 @@
 
 ## [Unreleased]
 
-No unreleased changes.
+### Added
+
+- Added the Version 2 Phase 2 Real Historical Benchmark specification.
+
+### Planning
+
+- Phase 2 implementation remains unstarted pending specification approval.
+- Package/runtime version remains `2.0.0a1`.
+- No benchmark or profitability result has been produced.
 
 ## [2.0.0-alpha.1] - 2026-08-05
 

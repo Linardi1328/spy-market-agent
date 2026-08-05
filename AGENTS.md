@@ -18,9 +18,11 @@ documentation; it is not automatic permission to implement every stage. Each fut
 development phase requires an approved phase specification, and Codex must implement only the
 currently authorized phase.
 
-Version 2 Phase 1 is governed by `docs/V2_PHASE_01_REAL_SPY_DATA_SPEC.md` after that
-specification is reviewed and explicitly approved. Real-data-provider selection belongs to
-Version 2 Phase 1, not to an old Version 1 phase.
+Version 2 Phase 1 is accepted under `docs/V2_PHASE_01_REAL_SPY_DATA_SPEC.md`.
+Version 2 Phase 2 will be governed by
+`docs/V2_PHASE_02_REAL_HISTORICAL_BENCHMARK_SPEC.md` only after that specification is
+reviewed and explicitly approved. Until then, no Phase 2 implementation is authorized.
+Real-data-provider selection belongs to Version 2 Phase 1, not to an old Version 1 phase.
 
 If a user request conflicts with `PROJECT_SPEC.md`, `FUTURE_ROADMAP.md`, or the active phase
 specification, explain the conflict and ask for explicit approval before changing the
