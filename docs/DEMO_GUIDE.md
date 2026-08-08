@@ -16,6 +16,7 @@ configuration kill switch engaged.
 ```bash
 python -m pip install -e ".[dev]"
 python -c "from spy_market_agent.persistence import initialize_database; initialize_database('./spy_market_agent.sqlite3')"
+test -f spy_market_agent.sqlite3 && echo "Database initialized"
 ```
 
 Do not commit `spy_market_agent.sqlite3`.
@@ -49,6 +50,7 @@ opening Streamlit.
 ### Terminal A - FastAPI
 
 ```bash
+SQLITE_DATABASE_PATH=./spy_market_agent.sqlite3 \
 python -m uvicorn "spy_market_agent.api.main:create_app" \
   --factory \
   --host 127.0.0.1 \
@@ -57,22 +59,26 @@ python -m uvicorn "spy_market_agent.api.main:create_app" \
 
 The default API address is `http://127.0.0.1:8000`.
 
+Verify health before starting Streamlit:
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
 ### Terminal B - Streamlit
 
 ```bash
-streamlit run src/spy_market_agent/dashboard/streamlit_app.py
-```
-
-The dashboard normally becomes available at `http://127.0.0.1:8501` and reads from the API
-address configured by `DASHBOARD_API_BASE_URL`.
-
-For non-interactive smoke testing, avoid the first-run Streamlit prompt with headless mode:
-
-```bash
+DASHBOARD_API_BASE_URL=http://127.0.0.1:8000 \
 streamlit run src/spy_market_agent/dashboard/streamlit_app.py \
+  --server.address 127.0.0.1 \
+  --server.port 8501 \
   --server.headless true \
   --browser.gatherUsageStats false
 ```
+
+The dashboard normally becomes available at `http://127.0.0.1:8501` and reads from the API
+address configured by `DASHBOARD_API_BASE_URL`. Headless mode avoids Streamlit's first-run
+email prompt.
 
 An empty initialized database may correctly show no persisted model runs or backtests. This
 is normal unless you have populated the database through supported repository APIs. The API

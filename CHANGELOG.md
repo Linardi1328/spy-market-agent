@@ -5,12 +5,21 @@
 ### Added
 
 - Added the Version 2 Phase 2 Real Historical Benchmark specification.
+- Implemented the Version 2 Phase 2 benchmark infrastructure for review, including
+  file-based benchmark artifacts, feed-decision records, dataset eligibility checks,
+  deterministic split locks, validation-only model selection, final-test access controls,
+  baseline comparators, cost sensitivity, regime diagnostics, CLI commands, and synthetic
+  offline tests.
+- Rewrote the README local dashboard Quick Start with repository-root checks, Python 3.12
+  setup, explicit SQLite initialization, FastAPI and Streamlit startup order, health
+  verification, expected empty-state behavior, and troubleshooting.
 
 ### Planning
 
-- Phase 2 implementation remains unstarted pending specification approval.
+- Phase 2 implementation is under review pending owner-run acceptance gates.
 - Package/runtime version remains `2.0.0a1`.
-- No benchmark or profitability result has been produced.
+- No real Phase 2 benchmark result or profitability result has been produced.
+- No `v2.0.0-alpha.2` release section has been created.
 
 ## [2.0.0-alpha.1] - 2026-08-05
 

@@ -18,6 +18,7 @@ mypy src tests
 
 ```bash
 python -c "from spy_market_agent.persistence import initialize_database; initialize_database('./spy_market_agent.sqlite3')"
+test -f spy_market_agent.sqlite3 && echo "Database initialized"
 ```
 
 This creates or migrates only the named local SQLite file. It does not download data, run a
@@ -26,20 +27,37 @@ backtest, create a broker client, or submit an order.
 ## Start the Read-Only FastAPI Application
 
 ```bash
-python -m uvicorn "spy_market_agent.api.main:create_app" --factory --host 127.0.0.1 --port 8000
+SQLITE_DATABASE_PATH=./spy_market_agent.sqlite3 \
+python -m uvicorn "spy_market_agent.api.main:create_app" \
+  --factory \
+  --host 127.0.0.1 \
+  --port 8000
 ```
 
-The app reads from `./spy_market_agent.sqlite3` by default. Empty or unavailable databases
-return read-safe empty responses or sanitized service errors.
+Keep this terminal open. The app reads from `./spy_market_agent.sqlite3`. Empty or
+unavailable databases return read-safe empty responses or sanitized service errors.
+
+Verify before starting Streamlit:
+
+```bash
+curl http://127.0.0.1:8000/health
+```
 
 ## Start the Streamlit Dashboard
 
 ```bash
-streamlit run src/spy_market_agent/dashboard/streamlit_app.py
+DASHBOARD_API_BASE_URL=http://127.0.0.1:8000 \
+streamlit run src/spy_market_agent/dashboard/streamlit_app.py \
+  --server.address 127.0.0.1 \
+  --server.port 8501 \
+  --server.headless true \
+  --browser.gatherUsageStats false
 ```
 
 The dashboard reads from the FastAPI API configured by `DASHBOARD_API_BASE_URL`, which
-defaults to `http://127.0.0.1:8000`.
+points to `http://127.0.0.1:8000` in this workflow. Use a separate terminal from FastAPI.
+Headless mode avoids Streamlit's first-run email prompt. Open
+`http://127.0.0.1:8501` after the Streamlit endpoint responds.
 
 ## Load Deterministic Test or Demo Data
 
@@ -102,6 +120,45 @@ session validation from recorded acquisition metadata. It performs no network re
 Acquisition writes raw, canonical, and manifest files as a multi-artifact operation. If a
 later write fails, files newly created by that attempt are cleaned up best-effort; matching
 files that existed before the attempt are preserved.
+
+## Prepare a Phase 2 Benchmark Lock
+
+Phase 2 benchmark commands are manually invoked, offline, and file-based. They do not contact
+Alpaca, construct a broker client, initialize SQLite, submit orders, or run a real final test
+without explicit final-test acknowledgement.
+
+Record owner-provided feed evidence:
+
+```bash
+python -m spy_market_agent.benchmark.cli record-feed-decision \
+  --provider alpaca \
+  --feed sip \
+  --symbol SPY \
+  --timeframe 1Day \
+  --adjustment all \
+  --start 2016-01-04 \
+  --end 2025-12-31 \
+  --available \
+  --owner-acknowledge \
+  --evidence-source "owner offline probe summary" \
+  --output artifacts/benchmarks/local-feed-decision.json
+```
+
+Prepare the immutable benchmark lock from a verified Phase 1 manifest:
+
+```bash
+python -m spy_market_agent.benchmark.cli prepare \
+  --manifest data/manifests/alpaca/SPY/1Day/sip/all/DATASET_ID.manifest.json \
+  --feed-record artifacts/benchmarks/local-feed-decision.json \
+  --benchmark-role primary \
+  --latest-complete-research-year 2025 \
+  --artifact-root ./artifacts/benchmarks \
+  --owner-approve-assumptions
+```
+
+Generated benchmark outputs remain ignored under `artifacts/benchmarks/<benchmark_id>/`.
+Codex verification uses synthetic manifests only. Owner-run real benchmark execution remains
+a later acceptance gate.
 
 ## Inspect Model Evaluations
 

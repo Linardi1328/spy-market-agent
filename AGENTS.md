@@ -19,9 +19,10 @@ development phase requires an approved phase specification, and Codex must imple
 currently authorized phase.
 
 Version 2 Phase 1 is accepted under `docs/V2_PHASE_01_REAL_SPY_DATA_SPEC.md`.
-Version 2 Phase 2 will be governed by
-`docs/V2_PHASE_02_REAL_HISTORICAL_BENCHMARK_SPEC.md` only after that specification is
-reviewed and explicitly approved. Until then, no Phase 2 implementation is authorized.
+Version 2 Phase 2 is authorized for implementation review under
+`docs/V2_PHASE_02_REAL_HISTORICAL_BENCHMARK_SPEC.md` on
+`review/v2-phase-02-real-benchmark`. It is not accepted, complete, or released until owner
+acceptance gates are complete. Version 2 Phase 3 is not authorized.
 Real-data-provider selection belongs to Version 2 Phase 1, not to an old Version 1 phase.
 
 If a user request conflicts with `PROJECT_SPEC.md`, `FUTURE_ROADMAP.md`, or the active phase

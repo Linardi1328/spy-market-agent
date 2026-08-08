@@ -30,6 +30,9 @@ submission can proceed.
 - `spy_market_agent.risk` (`src/spy_market_agent/risk`): independent SPY-only, long-only risk evaluation.
 - `spy_market_agent.backtesting` (`src/spy_market_agent/backtesting`): in-memory next-open backtest accounting, execution-price
   lineage, and metrics.
+- `spy_market_agent.benchmark` (`src/spy_market_agent/benchmark`): Version 2 Phase 2
+  file-based real historical benchmark workflow, immutable locks, final-test access
+  controls, baseline/regime diagnostics, and artifact verification.
 - `spy_market_agent.persistence` (`src/spy_market_agent/persistence`): explicit SQLite initialization, schema validation, and
   artifact repositories.
 - `spy_market_agent.api` (`src/spy_market_agent/api`): read-only FastAPI application and response service.
@@ -54,6 +57,9 @@ flowchart TD
     FinalTest --> Strategy[Long-or-cash signal policy]
     Strategy --> Risk[Independent risk engine]
     Risk --> Backtest[Next-open backtest engine]
+    Manifest[Phase 1 dataset manifest] --> Benchmark[Phase 2 file-based benchmark locks]
+    Benchmark --> Modeling
+    Benchmark --> Backtest
     Backtest --> Persistence[SQLite artifact repository]
     FinalTest --> Persistence
     Validation --> Persistence
@@ -106,6 +112,33 @@ only Phase 1 market-data artifacts intended for Git.
 Phase 1 still does not train a model, run a benchmark, contact the trading API, submit paper
 orders, add API write routes, add dashboard controls, or enable live trading.
 
+## Version 2 Phase 2 Benchmark Flow
+
+**Implementation in review:** Phase 2 adds a dedicated `spy_market_agent.benchmark` package
+that accepts a verified Phase 1 manifest, not an arbitrary CSV. It deep-verifies the raw,
+canonical, and manifest artifacts, reuses the existing feature, label, model, signal, risk,
+and backtest logic, and writes ignored immutable files under
+`artifacts/benchmarks/<benchmark_id>/`.
+
+The benchmark workflow is split into locked stages:
+
+1. `record-feed-decision` records owner-provided offline feed evidence without contacting
+   Alpaca.
+2. `prepare` verifies the Phase 1 dataset, checks eligibility, constructs features/labels,
+   builds the deterministic chronological split, freezes cost/regime/model/baseline policy,
+   and writes `benchmark_lock.json`.
+3. `run-validation` trains only on training rows, evaluates only on validation rows, selects
+   a model using the approved validation rule, and keeps final-test row-level labels guarded.
+4. `finalize-lock` creates `final_test_lock.json` after validation artifacts are verified.
+5. `run-final-test` requires explicit acknowledgement, writes `final_test_access.json`
+   before loading final-test labels, refits on train plus validation only, and evaluates the
+   locked final test once.
+6. `verify` and audit replay perform offline checksum and lineage verification.
+
+Phase 2 does not use SQLite for benchmark persistence, does not persist model binaries, does
+not add model families, features, threshold tuning, API write routes, dashboard execution
+controls, paper-execution behavior, real-time data, or live trading.
+
 ## Backtest Data Flow
 
 1. Locked final-test predictions produce fixed long-or-cash target positions.
@@ -157,6 +190,10 @@ requires a matching human approval, and keeps uncertainty as local audit state.
   XNYS validation, checksum construction, manifest validation, and safe storage all pass.
 - Feature, label, model, strategy, backtest, and persistence objects revalidate lineage and
   schema invariants at their public boundaries.
+- Phase 2 benchmark artifacts are untrusted until deterministic checksums, benchmark IDs,
+  dataset IDs, schema versions, split lineage, and lock references are verified.
+- Stage A benchmark services receive only training and validation row-level labels plus
+  non-sensitive final-test boundary and aggregate eligibility counts.
 - Models cannot access brokers. The modeling package imports no execution adapter, no
   Alpaca SDK, and no broker protocol.
 - Alpaca trading-client usage is isolated to `execution/alpaca_paper.py`.
@@ -173,3 +210,5 @@ requires a matching human approval, and keeps uncertainty as local audit state.
 SQLite setup is explicit through `initialize_database(...)`. Settings loading is explicit
 through `load_settings()` or direct `Settings(...)` construction. The package import surface is
 designed to be safe for tests, documentation tooling, API startup, and dashboard rendering.
+Phase 2 benchmark commands are manually invoked CLI workflows; imports, API startup, and
+dashboard startup do not read ignored benchmark artifacts or access final-test data.

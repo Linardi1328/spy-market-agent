@@ -18,6 +18,8 @@ REQUIRED_DOCUMENTS = (
     "docs/DEMO_GUIDE.md",
     "docs/PORTFOLIO_OVERVIEW.md",
     "docs/V2_PHASE_02_REAL_HISTORICAL_BENCHMARK_SPEC.md",
+    "docs/V2_PHASE_02_BENCHMARK_POLICY.md",
+    "docs/V2_PHASE_02_DATA_CARD_TEMPLATE.md",
     "CHANGELOG.md",
     "RELEASE_NOTES_V1.0.0.md",
     "RELEASE_NOTES_V2.0.0_ALPHA_1.md",
@@ -26,6 +28,7 @@ REQUIRED_DOCUMENTS = (
     "reviews/PHASE_09_REVIEW.md",
     "reviews/VERSION_1_FINAL_REVIEW.md",
     "reviews/V2_PHASE_01_REVIEW.md",
+    "reviews/V2_PHASE_02_REVIEW.md",
 )
 
 DOCUMENTED_MODULE_PATHS = (
@@ -38,6 +41,7 @@ DOCUMENTED_MODULE_PATHS = (
     "src/spy_market_agent/strategies",
     "src/spy_market_agent/risk",
     "src/spy_market_agent/backtesting",
+    "src/spy_market_agent/benchmark",
     "src/spy_market_agent/persistence",
     "src/spy_market_agent/api",
     "src/spy_market_agent/dashboard",
@@ -122,6 +126,52 @@ def test_documented_fastapi_routes_match_application_inventory() -> None:
         assert f"GET {route}" in readme
 
 
+def test_readme_local_dashboard_quick_start_is_complete_and_safe() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    lower = readme.lower()
+
+    required_snippets = (
+        "## Quick Start — Open the Local Dashboard",
+        "git clone https://github.com/Linardi1328/spy-market-agent.git",
+        "git rev-parse --show-toplevel",
+        'test -f pyproject.toml && echo "Repository root confirmed"',
+        "python3.12 -m venv .venv",
+        'python -m pip install -e ".[dev]"',
+        "initialize_database('./spy_market_agent.sqlite3')",
+        "SQLITE_DATABASE_PATH=./spy_market_agent.sqlite3",
+        'python -m uvicorn "spy_market_agent.api.main:create_app"',
+        "curl http://127.0.0.1:8000/health",
+        "DASHBOARD_API_BASE_URL=http://127.0.0.1:8000",
+        "streamlit run src/spy_market_agent/dashboard/streamlit_app.py",
+        "--server.headless true",
+        "--browser.gatherUsageStats false",
+        "separate terminal",
+        "http://127.0.0.1:8501",
+        "http://127.0.0.1:8000/health",
+        "http://127.0.0.1:8000/docs",
+        "No Alpaca credentials are required",
+        "no order is submitted",
+        "empty dashboard is expected",
+        "neither setup.py nor pyproject.toml found",
+        "docs/DEMO_GUIDE.md",
+        "docs/WORKFLOWS.md",
+        "docs/REPRODUCIBILITY.md",
+        "docs/SECURITY_AND_SAFETY.md",
+    )
+
+    for snippet in required_snippets:
+        assert snippet in readme
+
+    forbidden = (
+        "historical market-data acquisition is unimplemented",
+        "phase 2 real benchmark results already exist",
+        "dashboard submits orders",
+        "local startup constitutes internet deployment",
+    )
+    for phrase in forbidden:
+        assert phrase not in lower
+
+
 def test_api_route_versions_remain_v1() -> None:
     routes = _application_get_routes()
 
@@ -172,15 +222,17 @@ def test_version_2_alpha_release_documents_are_consistent() -> None:
     review = (ROOT / "reviews/V2_PHASE_01_REVIEW.md").read_text(encoding="utf-8")
     combined = "\n".join((readme, changelog, roadmap, spec, release_notes, checklist, review))
 
-    assert "Package version: `2.0.0a1`" in readme
-    assert "Release identifier: `v2.0.0-alpha.1`" in readme
+    assert "Current package/runtime version remains `2.0.0a1`" in readme
+    assert "Current released identifier remains `v2.0.0-alpha.1`" in readme
     assert "V2 Phase 1: accepted and complete - Real SPY Data Foundation" in readme
-    assert "Version 2 Phase 2 has not begun" in readme
+    assert "V2 Phase 2: Real Historical Benchmark implementation is under review" in readme
+    assert "No real Phase 2 benchmark result exists yet" in readme
+    assert "No Phase 3 implementation has begun" in readme
     assert "## [2.0.0-alpha.1] - 2026-08-05" in changelog
     assert "Corresponding Python package version: `2.0.0a1`" in changelog
     assert "Status: Accepted for v2.0.0-alpha.1 release" in spec
     assert "Accepted - Version 2 Real SPY Data Foundation" in roadmap
-    assert "Specification in review; implementation not started" in roadmap
+    assert "Implementation in review; real benchmark not run" in roadmap
     assert "Implementation in review" not in spec
     assert "Git release identifier: `v2.0.0-alpha.1`" in release_notes
     assert "does not evaluate model accuracy" in release_notes
@@ -195,33 +247,36 @@ def test_version_2_alpha_release_documents_are_consistent() -> None:
     assert "tag already exists" not in combined.lower()
 
 
-def test_version_2_phase2_specification_is_planning_only() -> None:
+def test_version_2_phase2_specification_is_implementation_in_review() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     roadmap = (ROOT / "FUTURE_ROADMAP.md").read_text(encoding="utf-8")
     spec = (ROOT / "docs/V2_PHASE_02_REAL_HISTORICAL_BENCHMARK_SPEC.md").read_text(encoding="utf-8")
     combined = "\n".join((readme, changelog, roadmap, spec)).lower()
+    normalized_combined = " ".join(combined.split())
     normalized_spec = " ".join(spec.split())
 
-    assert "Package version: `2.0.0a1`" in readme
+    assert "Current package/runtime version remains `2.0.0a1`" in readme
     assert "v2.0.0-alpha.2" in spec
     assert "2.0.0a2" in spec
-    assert "Status: Planning" in spec
-    assert "awaiting review and implementation approval" in spec
-    assert "This specification does not authorize implementation" in spec
-    assert "Phase 2 implementation remains unstarted" in changelog
+    assert "Status: Implementation in review" in spec
+    assert "governs the Phase 2 implementation review branch" in spec
+    assert "Phase 2 implementation is under review" in changelog
     assert "Package/runtime version remains `2.0.0a1`" in changelog
-    assert "No benchmark or profitability result has been produced" in changelog
+    assert "No real Phase 2 benchmark result or profitability result has been produced" in changelog
     assert "Current package/runtime version for this specification branch: `2.0.0a1`" in spec
-    assert "Version 2 Phase 2 implementation has not started" in spec
-    assert "no real Phase 2 benchmark has been run" in normalized_spec
-    assert "Specification in review; implementation not started" in roadmap
-    assert "Version 2 Phase 2 has not begun" in readme
-    assert "no benchmark or profitability result has been produced" in combined
-    assert "does not authorize new model research, live execution, shadow" in combined
-    assert "phase 2 implementation must not begin" in combined
+    assert "infrastructure is in implementation review" in spec
+    assert "no owner-run real Phase 2 benchmark has been run by Codex" in normalized_spec
+    assert "Implementation in review; real benchmark not run" in roadmap
+    assert "No real Phase 2 benchmark result exists yet" in readme
+    assert "no real phase 2 benchmark result or profitability result has been produced" in combined
+    assert "does not authorize new model research, live execution, shadow" in normalized_combined
+    assert (
+        "version 2 phase 3 is not authorized"
+        in (ROOT / "AGENTS.md").read_text(encoding="utf-8").lower()
+    )
     assert "phase 2 benchmark passed" not in combined
-    assert "phase 2 is implemented" not in combined
+    assert "phase 2 is accepted" not in combined
     assert "profitability is guaranteed" not in combined
     assert "live-money readiness: approved" not in combined
 
@@ -273,7 +328,7 @@ def test_version_2_phase2_benchmark_integrity_governance_is_documented() -> None
     assert "Stage B must calculate all final-test model, baseline, regime, strategy" in spec
     assert "not a separate independent classification baseline" in spec
 
-    assert "Version 2 Phase 2 implementation has not started" in spec
-    assert "no real Phase 2 benchmark has been run" in normalized_spec
+    assert "Version 2 Phase 2 infrastructure is in implementation review" in spec
+    assert "no owner-run real Phase 2 benchmark has been run by Codex" in normalized_spec
     assert "phase 2 benchmark passed" not in lower_spec
     assert "phase 2 implementation complete" not in lower_spec

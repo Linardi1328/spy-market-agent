@@ -54,3 +54,5 @@ artifacts/models/*
 !artifacts/models/.gitkeep
 artifacts/reports/*
 !artifacts/reports/.gitkeep
+artifacts/benchmarks/*
+!artifacts/benchmarks/.gitkeep

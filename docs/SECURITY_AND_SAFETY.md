@@ -132,6 +132,13 @@ The Version 2 Phase 1 acquisition path is CLI-only and explicit. FastAPI startup
 startup, dashboard rendering, package imports, and test collection do not acquire market
 data, construct a market-data client, or write raw/canonical/manifest artifacts.
 
+The Version 2 Phase 2 benchmark path is also CLI-only and explicit. Benchmark commands use a
+Phase 1 manifest and owner-provided feed-decision records; they do not make network
+requests, require credentials, construct an Alpaca market-data client, construct a
+`TradingClient`, initialize SQLite, submit orders, or expose final-test row-level labels
+before explicit final-test access acknowledgement. Generated benchmark artifacts are ignored
+under `artifacts/benchmarks/`.
+
 ## Historical Market-Data Safety
 
 Phase 1 market-data acquisition safeguards:

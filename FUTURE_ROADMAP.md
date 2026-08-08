@@ -311,14 +311,14 @@ Current tracking:
 
 - `v1.0.0` remains the frozen stable baseline.
 - V2 Phase 1 / `v2.0.0-alpha.1`: Accepted - Version 2 Real SPY Data Foundation.
-- V2 Phase 2 / `v2.0.0-alpha.2`: Specification in review; implementation not started.
+- V2 Phase 2 / `v2.0.0-alpha.2`: Implementation in review; real benchmark not run.
 - V2 Phase 3 / `v2.0.0-alpha.3`: Planned and not started.
 
 | Track | Version | Name | Recommended Branch | Scope |
 | --- | --- | --- | --- | --- |
 | V1 baseline | `v1.0.0` | Frozen Version 1 baseline | Already tagged | Educational SPY daily research, backtesting, persistence, read-only API/dashboard, and explicit paper-only safeguards. |
 | V2 Phase 1 | `v2.0.0-alpha.1` | Real SPY Data Foundation | `review/v2-phase-01-release-preparation` | Accepted - Version 2 Real SPY Data Foundation with approved provider workflow, licensing record, validated SPY dataset handling, checksums, and data lineage. |
-| V2 Phase 2 | `v2.0.0-alpha.2` | Real Historical Benchmark | `review/v2-phase-02-real-benchmark` | Specification in review; implementation not started. Real SPY benchmark with regimes, naive baselines, cost/slippage sensitivity, and no live execution. |
+| V2 Phase 2 | `v2.0.0-alpha.2` | Real Historical Benchmark | `review/v2-phase-02-real-benchmark` | Implementation in review. Real SPY benchmark infrastructure with regimes, baselines, cost/slippage sensitivity, and no live execution; no owner-run real benchmark result yet. |
 | V2 Phase 3 | `v2.0.0-alpha.3` | Walk-Forward Model Research | `review/v2-phase-03-walk-forward-research` | Planned and not started. Walk-forward evaluation, ablations, calibration, threshold research, drift analysis, and registry evidence. |
 | V2 Phase 4 | `v2.0.0-beta.1` | Real-Time Shadow Mode | `review/v2-phase-04-shadow-mode` | Reliable ingestion, freshness checks, scheduled inference, monitoring, alerts, and no submission capability. |
 | V2 Phase 5 | `v2.0.0-beta.2` | Production Paper Operation | `review/v2-phase-05-production-paper` | Production paper operation, reconciliation, recovery runbooks, and observation evidence. |
@@ -327,10 +327,11 @@ Current tracking:
 
 The Phase 1 planning specification is
 [Version 2 Phase 1 - Real SPY Data Foundation Specification](docs/V2_PHASE_01_REAL_SPY_DATA_SPEC.md).
-It is accepted for `v2.0.0-alpha.1`. The Phase 2 planning specification is
+It is accepted for `v2.0.0-alpha.1`. The Phase 2 governing specification is
 [Version 2 Phase 2 - Real Historical Benchmark Specification](docs/V2_PHASE_02_REAL_HISTORICAL_BENCHMARK_SPEC.md).
-Phase 2 implementation must not begin until that specification is reviewed and explicitly
-approved.
+Phase 2 implementation is under code review and still requires owner-run feed, dataset,
+validation, final-test, artifact-verification, and release-preparation gates before any
+`v2.0.0-alpha.2` release work.
 
 Recommended branch sequence:
 
@@ -646,8 +647,8 @@ Change log:
 
 | Date | Base Main SHA | Change |
 | --- | --- | --- |
-| 2026-08-05 | `8074ec1dbe738b67d288bf648b5cfc2126f4e76c` | Added the V2 Phase 2 Real Historical Benchmark specification for review; implementation remains unstarted, and no benchmark, profitability claim, or live-money capability was added. |
-| 2026-08-05 | `c66d9e5ae7c99eeb7ab01e00a3c3494b2da1a7b0` | Recorded V2 Phase 1 acceptance for `v2.0.0-alpha.1`, owner-run smoke-test completion, and stable release metadata; Phase 2 remains not started and live-money trading remains outside Version 2.0.0. |
+| 2026-08-05 | `8074ec1dbe738b67d288bf648b5cfc2126f4e76c` | Added the V2 Phase 2 Real Historical Benchmark specification for review; at that time implementation had not started, and no benchmark, profitability claim, or live-money capability was added. |
+| 2026-08-05 | `c66d9e5ae7c99eeb7ab01e00a3c3494b2da1a7b0` | Recorded V2 Phase 1 acceptance for `v2.0.0-alpha.1`, owner-run smoke-test completion, and stable release metadata; at that time Phase 2 had not started and live-money trading remained outside Version 2.0.0. |
 | 2026-08-04 | `0947c391b6c7646a27c1baeb7778cd229726bacb` | Added the Version 2 Phase 1 specification reference and clarified roadmap SHA metadata as base-main context; documentation-only planning with no Version 2 implementation. |
 | 2026-08-04 | `05c2e9c680b43174ed91cfbe198ba1842c291227` | Refined the development-stage summary table and added Version 2 phase and release tracking; documentation-only planning with no implementation approval. |
 | 2026-08-04 | `05c2e9c680b43174ed91cfbe198ba1842c291227` | Initial long-term future-development roadmap created as documentation-only planning after Version 1.0.0 was merged and tagged. |
