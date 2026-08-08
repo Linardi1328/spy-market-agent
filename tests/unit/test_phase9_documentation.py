@@ -23,10 +23,8 @@ REQUIRED_DOCUMENTS = (
     "CHANGELOG.md",
     "RELEASE_NOTES_V1.0.0.md",
     "RELEASE_NOTES_V2.0.0_ALPHA_1.md",
-    "RELEASE_NOTES_V2.0.0_ALPHA_2.md",
     "VERSION_1_RELEASE_CHECKLIST.md",
     "VERSION_2_PHASE_01_RELEASE_CHECKLIST.md",
-    "VERSION_2_PHASE_02_RELEASE_CHECKLIST.md",
     "reviews/PHASE_09_REVIEW.md",
     "reviews/VERSION_1_FINAL_REVIEW.md",
     "reviews/V2_PHASE_01_REVIEW.md",
@@ -218,120 +216,66 @@ def test_version_2_alpha_release_documents_are_consistent() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     roadmap = (ROOT / "FUTURE_ROADMAP.md").read_text(encoding="utf-8")
-    phase1_spec = (ROOT / "docs/V2_PHASE_01_REAL_SPY_DATA_SPEC.md").read_text(encoding="utf-8")
-    phase2_spec = (ROOT / "docs/V2_PHASE_02_REAL_HISTORICAL_BENCHMARK_SPEC.md").read_text(
-        encoding="utf-8"
-    )
-    phase1_release_notes = (ROOT / "RELEASE_NOTES_V2.0.0_ALPHA_1.md").read_text(encoding="utf-8")
-    phase2_release_notes = (ROOT / "RELEASE_NOTES_V2.0.0_ALPHA_2.md").read_text(encoding="utf-8")
-    phase1_checklist = (ROOT / "VERSION_2_PHASE_01_RELEASE_CHECKLIST.md").read_text(
-        encoding="utf-8"
-    )
-    phase2_checklist = (ROOT / "VERSION_2_PHASE_02_RELEASE_CHECKLIST.md").read_text(
-        encoding="utf-8"
-    )
-    phase1_review = (ROOT / "reviews/V2_PHASE_01_REVIEW.md").read_text(encoding="utf-8")
-    phase2_review = (ROOT / "reviews/V2_PHASE_02_REVIEW.md").read_text(encoding="utf-8")
-    combined = "\n".join(
-        (
-            readme,
-            changelog,
-            roadmap,
-            phase1_spec,
-            phase2_spec,
-            phase1_release_notes,
-            phase2_release_notes,
-            phase1_checklist,
-            phase2_checklist,
-            phase1_review,
-            phase2_review,
-        )
-    )
-    combined_lower = combined.lower()
-    phase2_completion = (
-        "Owner-run real SIP benchmark and one controlled final-test execution completed"
-    )
+    spec = (ROOT / "docs/V2_PHASE_01_REAL_SPY_DATA_SPEC.md").read_text(encoding="utf-8")
+    release_notes = (ROOT / "RELEASE_NOTES_V2.0.0_ALPHA_1.md").read_text(encoding="utf-8")
+    checklist = (ROOT / "VERSION_2_PHASE_01_RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
+    review = (ROOT / "reviews/V2_PHASE_01_REVIEW.md").read_text(encoding="utf-8")
+    combined = "\n".join((readme, changelog, roadmap, spec, release_notes, checklist, review))
 
-    assert "Current package/runtime version: `2.0.0a2`" in readme
+    assert "Current package/runtime version remains `2.0.0a1`" in readme
     assert "Current released identifier remains `v2.0.0-alpha.1`" in readme
-    assert "Release-preparation target: `v2.0.0-alpha.2`" in readme
     assert "V2 Phase 1: accepted and complete - Real SPY Data Foundation" in readme
-    assert "V2 Phase 2: engineering acceptance complete - Real Historical Benchmark" in readme
-    assert phase2_completion in readme
+    assert "V2 Phase 2: Real Historical Benchmark implementation is under review" in readme
+    assert "No real Phase 2 benchmark result exists yet" in readme
     assert "No Phase 3 implementation has begun" in readme
     assert "## [2.0.0-alpha.1] - 2026-08-05" in changelog
-    assert "## [2.0.0-alpha.2] - 2026-08-09" in changelog
     assert "Corresponding Python package version: `2.0.0a1`" in changelog
-    assert "Corresponding Python package version: `2.0.0a2`" in changelog
-    assert "Status: Accepted for v2.0.0-alpha.1 release" in phase1_spec
-    assert "Status: Engineering acceptance complete; release preparation in review" in phase2_spec
+    assert "Status: Accepted for v2.0.0-alpha.1 release" in spec
     assert "Accepted - Version 2 Real SPY Data Foundation" in roadmap
-    assert "Engineering acceptance complete after owner-run real SIP benchmark" in roadmap
-    assert "Git release identifier: `v2.0.0-alpha.1`" in phase1_release_notes
-    assert "Git release identifier: `v2.0.0-alpha.2`" in phase2_release_notes
-    assert "does not evaluate model accuracy" in phase1_release_notes
-    assert "does not claim profitability" in phase1_release_notes
-    assert "does not add live-money execution" in phase1_release_notes
-    assert "does not claim profitability" in phase2_release_notes
-    assert "model superiority" in phase2_release_notes
-    assert "No Git tag created on the review branch" in phase1_checklist
-    assert "No Git tag created on the review branch" in phase2_checklist
-    assert "Create annotated `v2.0.0-alpha.1` tag" in phase1_checklist
-    assert "Create annotated `v2.0.0-alpha.2` tag" in phase2_checklist
-    assert "Phase 1 accepted; release metadata verified" in phase1_review
-    assert (
-        "Phase 2 benchmark infrastructure and controlled evaluation workflow passed"
-    ) in phase2_review
-    assert "preparing the tag" not in combined_lower
+    assert "Implementation in review; real benchmark not run" in roadmap
+    assert "Implementation in review" not in spec
+    assert "Git release identifier: `v2.0.0-alpha.1`" in release_notes
+    assert "does not evaluate model accuracy" in release_notes
+    assert "does not claim profitability" in release_notes
+    assert "does not add live-money execution" in release_notes
+    assert "No Git tag created on the review branch" in checklist
+    assert "Create annotated `v2.0.0-alpha.1` tag" in checklist
+    assert "Phase 1 accepted; release metadata verified" in review
+    assert "preparing the tag" not in combined.lower()
+    assert "release preparation in review" not in combined.lower()
     assert "Planned Git tag" not in combined
     assert "tag already exists" not in combined.lower()
 
 
-def test_version_2_phase2_release_preparation_status_is_documented() -> None:
+def test_version_2_phase2_specification_is_implementation_in_review() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     roadmap = (ROOT / "FUTURE_ROADMAP.md").read_text(encoding="utf-8")
     spec = (ROOT / "docs/V2_PHASE_02_REAL_HISTORICAL_BENCHMARK_SPEC.md").read_text(encoding="utf-8")
-    policy = (ROOT / "docs/V2_PHASE_02_BENCHMARK_POLICY.md").read_text(encoding="utf-8")
-    release_notes = (ROOT / "RELEASE_NOTES_V2.0.0_ALPHA_2.md").read_text(encoding="utf-8")
-    checklist = (ROOT / "VERSION_2_PHASE_02_RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
-    review = (ROOT / "reviews/V2_PHASE_02_REVIEW.md").read_text(encoding="utf-8")
     combined = "\n".join((readme, changelog, roadmap, spec)).lower()
-    release_combined = "\n".join(
-        (readme, changelog, roadmap, spec, policy, release_notes, checklist, review)
-    )
-    release_lower = release_combined.lower()
     normalized_combined = " ".join(combined.split())
     normalized_spec = " ".join(spec.split())
-    phase2_completion = (
-        "Owner-run real SIP benchmark and one controlled final-test execution completed"
-    )
 
-    assert "Current package/runtime version: `2.0.0a2`" in readme
+    assert "Current package/runtime version remains `2.0.0a1`" in readme
     assert "v2.0.0-alpha.2" in spec
     assert "2.0.0a2" in spec
-    assert "Status: Engineering acceptance complete; release preparation in review" in spec
-    assert (
-        "Phase 2 benchmark infrastructure and controlled evaluation workflow passed acceptance"
-    ) in normalized_spec
-    assert "Implementation PR #20 was merged at main commit `1155c3c`" in changelog
-    assert "Corresponding Python package version: `2.0.0a2`" in changelog
-    assert "Owner-run real SIP Phase 2 benchmark acceptance completed" in changelog
-    assert "Release-preparation package/runtime version: `2.0.0a2`" in spec
-    assert "owner-run real SIP benchmark acceptance gates completed" in spec
-    assert "did not run or reopen the real Phase 2 benchmark or final test" in spec
-    assert "Engineering acceptance complete after owner-run real SIP benchmark" in roadmap
-    assert phase2_completion in readme
-    assert "weak predictive discrimination" in release_lower
-    assert "did not establish a reliable predictive edge" in release_lower
-    assert "do not tune against the already-opened phase 2 final test" in release_lower
-    assert "Package version: `2.0.0a2`" in checklist
-    assert "Package/runtime version is prepared as `2.0.0a2`" in review
+    assert "Status: Implementation in review" in spec
+    assert "governs the Phase 2 implementation review branch" in spec
+    assert "Phase 2 implementation is under review" in changelog
+    assert "Package/runtime version remains `2.0.0a1`" in changelog
+    assert "No real Phase 2 benchmark result or profitability result has been produced" in changelog
+    assert "Current package/runtime version for this specification branch: `2.0.0a1`" in spec
+    assert "infrastructure is in implementation review" in spec
+    assert "no owner-run real Phase 2 benchmark has been run by Codex" in normalized_spec
+    assert "Implementation in review; real benchmark not run" in roadmap
+    assert "No real Phase 2 benchmark result exists yet" in readme
+    assert "no real phase 2 benchmark result or profitability result has been produced" in combined
     assert "does not authorize new model research, live execution, shadow" in normalized_combined
     assert (
         "version 2 phase 3 is not authorized"
         in (ROOT / "AGENTS.md").read_text(encoding="utf-8").lower()
     )
+    assert "phase 2 benchmark passed" not in combined
     assert "phase 2 is accepted" not in combined
     assert "profitability is guaranteed" not in combined
     assert "live-money readiness: approved" not in combined
@@ -384,10 +328,7 @@ def test_version_2_phase2_benchmark_integrity_governance_is_documented() -> None
     assert "Stage B must calculate all final-test model, baseline, regime, strategy" in spec
     assert "not a separate independent classification baseline" in spec
 
-    assert (
-        "Phase 2 benchmark infrastructure and controlled evaluation workflow passed acceptance"
-    ) in normalized_spec
-    assert "owner-run real SIP benchmark acceptance gates completed" in normalized_spec
-    assert "did not establish strong directional predictive discrimination" in normalized_spec
+    assert "Version 2 Phase 2 infrastructure is in implementation review" in spec
+    assert "no owner-run real Phase 2 benchmark has been run by Codex" in normalized_spec
     assert "phase 2 benchmark passed" not in lower_spec
     assert "phase 2 implementation complete" not in lower_spec
