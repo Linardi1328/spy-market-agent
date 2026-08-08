@@ -139,6 +139,20 @@ requests, require credentials, construct an Alpaca market-data client, construct
 before explicit final-test access acknowledgement. Generated benchmark artifacts are ignored
 under `artifacts/benchmarks/`.
 
+Phase 2 benchmark verification is a deep offline semantic check. It validates artifact
+schemas, recomputes benchmark identity, re-verifies the referenced Phase 1 dataset,
+reconstructs features, labels, splits, eligibility, validation artifacts, final locks, and
+completed final-test relationships, and rejects tampering even when `artifact_index.json`
+hashes were recomputed. Critical stages fail closed when current Git, Python, package, or
+dependency lineage differs from `benchmark_lock.json`.
+
+`final_test_access.json` is immutable evidence that final-test access began and is written
+before row-level final-test labels are loaded. It is not overwritten with completion status.
+Successful Stage B completion is recorded separately in `final_test_completion.json`. A
+failed first access preserves the started record and requires explicit operator review before
+any non-audit re-attempt; audit replay never creates a new access record or overwrites
+accepted final artifacts.
+
 ## Historical Market-Data Safety
 
 Phase 1 market-data acquisition safeguards:

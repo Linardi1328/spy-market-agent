@@ -177,16 +177,26 @@ Benchmark identity is SHA-256 over canonical JSON containing stable values: data
 canonical checksum, provider/feed/adjustment mode, feature and label schema IDs, forecast
 horizon, deterministic split boundaries, candidate model configurations, random seed,
 selection rule, signal and risk policy, baseline definitions, strategy comparator
-definitions, full cost matrix, exact regime definitions, frozen training volatility
-threshold, code commit, package version, dependency versions, and artifact schema versions.
-It excludes clock time, usernames, hostnames, local absolute paths, credentials, and random
-UUIDs.
+definitions, full cost matrix, exact regime definitions and attribution rule, frozen
+training volatility threshold, code commit, Python version, package version, dependency
+versions, and artifact schema versions. It excludes clock time, usernames, hostnames, local
+absolute paths, credentials, and random UUIDs.
 
 Phase 2 generated JSON uses sorted keys, compact separators, no NaN/Infinity, deterministic
 Decimal strings, LF line endings, and a terminal newline. Every artifact is covered by
-checksums and `artifact_index.json`. Verification rejects missing artifacts, checksum
-mismatches, benchmark-ID mismatches, dataset-ID mismatches, schema mismatches, unsafe paths,
-non-finite values, stale locks, and incompatible lineage.
+checksums and `artifact_index.json`. `benchmark verify` performs deep offline semantic
+verification rather than trusting hashes alone: it validates artifact schemas, verifies the
+Phase 1 dataset, reconstructs features, labels, split sessions, eligibility, benchmark
+identity, policies, validation artifacts, final-test locks, and completed final-test
+relationships for the declared workflow stage. It rejects semantic tampering even when
+`artifact_index.json` was recomputed.
+
+Critical benchmark stages enforce frozen runtime lineage against the lock: Git commit SHA,
+Python version, package/runtime version, pandas, pydantic, scikit-learn,
+exchange-calendars, alpaca-py, and all dependencies included in the benchmark identity.
+`run-validation`, `finalize-lock`, `run-final-test`, audit replay, and `benchmark verify
+--require-runtime-lineage` fail closed on mismatches and never update the lock
+automatically.
 
 The deterministic split is positional: six supervised rows are excluded at each boundary,
 assignable rows are split 70% train, 15% validation, and all rounding remainder goes to the
@@ -195,7 +205,16 @@ class-count minimums.
 
 Stage A validation receives row-level training and validation labels only. Final-test
 row-level labels are guarded until `final_test_lock.json` exists and
-`run-final-test --acknowledge-final-test-access` writes `final_test_access.json`.
+`run-final-test --acknowledge-final-test-access` writes immutable started-access evidence to
+`final_test_access.json`. Successful completion is recorded separately in
+`final_test_completion.json`; audit replay never creates a new access record or overwrites
+accepted artifacts.
+
+Phase 2 strategy diagnostics reuse the approved Version 1 risk/backtest path for selected
+model and executable long/cash comparator transitions. Generated strategy artifacts retain
+proposed orders, risk decisions, fills, costs, slippage, portfolio states, ending cash, and
+ending shares. Regime diagnostics are descriptive, use validation only during Stage A, and
+report explicit undefined reasons for metrics that are not mathematically meaningful.
 
 Normal automated tests use synthetic Phase 1 manifests and make no network request. Owner-run
 real benchmark execution remains an acceptance gate outside Codex verification.

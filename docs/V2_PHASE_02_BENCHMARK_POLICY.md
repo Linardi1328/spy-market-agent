@@ -88,6 +88,12 @@ Strategy comparators:
 
 Momentum is `adjusted_close_t / adjusted_close_t_minus_20_sessions - 1`; it is long when
 momentum is greater than zero and cash otherwise. Lookback and threshold are not tunable.
+The selected-model strategy and fixed momentum comparator are executed through the approved
+Version 1 long/cash signal, risk, and backtest path: target probabilities or deterministic
+targets become next-open signals, proposed orders, independent `RiskConfig` evaluation,
+approved fills, cost/slippage accounting, and established backtest metrics. Always-cash and
+buy-and-hold remain simple locked comparators but still preserve explicit audit records in
+Phase 2 artifacts.
 
 ## Cost Matrix
 
@@ -121,6 +127,36 @@ Regimes are descriptive diagnostics only and are locked before validation.
 Regime cells with fewer than 40 observations are labelled `small_sample` and are not
 interpreted.
 
+Strategy diagnostics inside regime cells use a locked attribution rule: proposed orders,
+risk decisions, fills, and portfolio states are attributed by the signal session that caused
+them. Regime subsets can be non-contiguous, so they report attributed counts, costs,
+slippage, turnover, exposure, ending cash, and ending shares where meaningful, and explicit
+undefined reasons for standalone annualized return, drawdown, or Sharpe-style portfolio
+interpretation. Regime diagnostics are descriptive only and are not used for model
+selection, threshold changes, or tuning. Validation regime diagnostics use validation rows
+only; final-test regime diagnostics remain unavailable until Stage B.
+
+## Runtime Lineage
+
+`benchmark_lock.json` freezes Git commit SHA, Python version, package/runtime version, and
+dependency versions for pandas, pydantic, scikit-learn, exchange-calendars, alpaca-py, and
+any dependency included in the benchmark identity. `run-validation`, `finalize-lock`,
+`run-final-test`, audit replay, and verification with `--require-runtime-lineage` fail closed
+when current runtime lineage differs. Commands never update the lock automatically; a code,
+package, Python, or dependency change requires a new benchmark identity unless a future
+approved specification defines a compatible audit mechanism.
+
+## Deep Verification
+
+`benchmark verify` is a deep offline semantic verifier. It validates every known JSON
+artifact against its exact domain model where one exists, verifies `benchmark_lock.sha256`,
+checks `artifact_index.json`, recomputes the deterministic benchmark identity from locked
+stable inputs, deep-verifies the referenced Phase 1 dataset, reconstructs the supervised
+dataset and chronological split, verifies eligibility/feed/policy/cost/model/baseline/regime
+definitions, and cross-checks validation, final-lock, and completed final-test artifacts for
+the declared workflow stage. Verification does not trust `artifact_index.json` alone; a
+tampered artifact is rejected even if its index checksum was recomputed.
+
 ## Artifact Schemas
 
 Benchmark artifact schema version: `spy-v2-phase2-benchmark-artifacts-v1`.
@@ -129,9 +165,9 @@ Expected generated artifacts include `benchmark_lock.json`, `benchmark_lock.sha2
 `feed_availability.json`, `dataset_eligibility.json`, `split_manifest.json`,
 `validation_results.json`, `classification_baselines.json`, `strategy_baselines.json`,
 `selected_model_manifest.json`, `final_test_readiness.json`, `final_test_lock.json`,
-`final_test_access.json`, `final_test_results.json`, `cost_sensitivity.json`,
-`regime_results.json`, `backtest_results.json`, `artifact_index.json`, and
-`benchmark_report.md`. Not every artifact exists at every stage.
+`final_test_access.json`, `final_test_completion.json`, `final_test_results.json`,
+`cost_sensitivity.json`, `regime_results.json`, `backtest_results.json`,
+`artifact_index.json`, and `benchmark_report.md`. Not every artifact exists at every stage.
 
 JSON artifacts are deterministic UTF-8 with sorted keys, compact separators, no
 NaN/Infinity, LF newline, terminal newline, ISO dates/timestamps, deterministic Decimal
@@ -141,8 +177,15 @@ serialization, benchmark ID, dataset ID, schema version, and checksum coverage.
 
 Before final-test acknowledgement, final metrics, final strategy results, final cost
 sensitivity, and final regime diagnostics are unavailable. `run-final-test` writes
-`final_test_access.json` before loading final-test labels. A completed non-audit final run is
-not silently repeated; audit replay can only verify an existing completed result.
+`final_test_access.json` before loading final-test labels. That access record is immutable
+started-access evidence and is never overwritten. After all final-test artifacts are written,
+`final_test_completion.json` records the final-test lock checksum, access-record checksum,
+final results checksum, cost-sensitivity checksum, regime-results checksum, backtest-results
+checksum, completion timestamp, code/package/dependency lineage, and completed state. A
+failed first access preserves the started access record and requires explicit operator
+review before any non-audit re-attempt. A completed non-audit final run is not silently
+repeated; audit replay can only verify an existing completed result and never creates or
+overwrites access/completion artifacts.
 
 ## Limitations
 

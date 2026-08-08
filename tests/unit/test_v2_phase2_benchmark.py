@@ -7,6 +7,12 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from spy_market_agent.backtesting import (
+    BacktestConfig,
+    BacktestCostAssumptions,
+    run_long_or_cash_backtest,
+    run_strategy_signal_backtest,
+)
 from spy_market_agent.benchmark.artifacts import BenchmarkArtifactStore, canonical_json_bytes
 from spy_market_agent.benchmark.baselines import classification_baseline_metrics
 from spy_market_agent.benchmark.dataset import (
@@ -19,13 +25,26 @@ from spy_market_agent.benchmark.errors import (
     BenchmarkEligibilityError,
     BenchmarkFinalTestAccessError,
     BenchmarkInputError,
+    BenchmarkLockError,
 )
-from spy_market_agent.benchmark.locks import BenchmarkRole, exact_phase2_cost_scenarios
+from spy_market_agent.benchmark.locks import (
+    BenchmarkRole,
+    StrategyMetricSet,
+    exact_phase2_cost_scenarios,
+)
 from spy_market_agent.benchmark.metrics import classification_metric_set
 from spy_market_agent.benchmark.pipeline import _reconstruct, prepare_benchmark
-from spy_market_agent.benchmark.regimes import regime_frame, training_volatility_threshold
+from spy_market_agent.benchmark.regimes import (
+    regime_diagnostics,
+    regime_frame,
+    training_volatility_threshold,
+)
+from spy_market_agent.benchmark.runtime import RuntimeLineage, require_runtime_lineage
 from spy_market_agent.benchmark.splits import BOUNDARY_EXCLUSION_SESSIONS, stage_a_bundle
 from spy_market_agent.market_data.calendar import XNYSCalendar
+from spy_market_agent.risk import RiskConfig
+from spy_market_agent.strategies import build_long_cash_strategy_signals
+from unit.phase6_helpers import CREATED_AT, make_phase6_inputs
 from unit.v2_phase2_helpers import SYNTHETIC_NOW, write_synthetic_phase1_dataset
 
 
@@ -227,6 +246,183 @@ def test_stage_a_final_labels_are_guarded(tmp_path: Path, monkeypatch: pytest.Mo
     assert split_payload["final_test"]["positive_count"] >= 40
     with pytest.raises(BenchmarkFinalTestAccessError):
         _ = bundle.final_test_labels
+
+
+def test_runtime_lineage_rejects_git_package_and_dependency_mismatches(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest_path = write_synthetic_phase1_dataset(tmp_path)
+    feed_record = _feed_record(tmp_path, monkeypatch)
+    lock = prepare_benchmark(
+        manifest_path=manifest_path,
+        feed_record_path=feed_record,
+        benchmark_role=BenchmarkRole.PRIMARY,
+        latest_complete_research_year=2025,
+        artifact_root=Path("artifacts/benchmarks"),
+        owner_approve_assumptions=True,
+        repository_root=tmp_path,
+    )
+    matching = RuntimeLineage(
+        git_commit_sha=lock.code_commit_sha,
+        python_version=lock.python_version,
+        package_version=lock.package_version,
+        dependency_versions=dict(lock.dependency_versions),
+    )
+    require_runtime_lineage(lock, repository_root=tmp_path, current=matching)
+
+    with pytest.raises(BenchmarkLockError):
+        require_runtime_lineage(
+            lock,
+            repository_root=tmp_path,
+            current=RuntimeLineage(
+                git_commit_sha="different",
+                python_version=lock.python_version,
+                package_version=lock.package_version,
+                dependency_versions=dict(lock.dependency_versions),
+            ),
+        )
+    with pytest.raises(BenchmarkLockError):
+        require_runtime_lineage(
+            lock,
+            repository_root=tmp_path,
+            current=RuntimeLineage(
+                git_commit_sha=lock.code_commit_sha,
+                python_version=lock.python_version,
+                package_version="2.0.0a2",
+                dependency_versions=dict(lock.dependency_versions),
+            ),
+        )
+    dependencies = dict(lock.dependency_versions)
+    dependencies["pandas"] = "0.0"
+    with pytest.raises(BenchmarkLockError):
+        require_runtime_lineage(
+            lock,
+            repository_root=tmp_path,
+            current=RuntimeLineage(
+                git_commit_sha=lock.code_commit_sha,
+                python_version=lock.python_version,
+                package_version=lock.package_version,
+                dependency_versions=dependencies,
+            ),
+        )
+
+
+def test_regime_diagnostics_include_metrics_warnings_and_signal_attribution() -> None:
+    sessions = [
+        date(2020, 1, 2),
+        date(2020, 1, 3),
+        date(2021, 1, 4),
+        date(2021, 1, 5),
+    ]
+    labels = pd.DataFrame({"session": sessions, "target": [1, 1, 0, 1]})
+    predictions = pd.DataFrame(
+        {
+            "session": sessions,
+            "target": [1, 1, 0, 1],
+            "probability_positive": [0.8, 0.7, 0.2, 0.6],
+            "predicted_class": [1, 1, 0, 1],
+        }
+    )
+    regimes = pd.DataFrame(
+        {
+            "session": sessions,
+            "trend_200": ["bull", "bull", "bear", "bear"],
+            "realized_volatility_20": [
+                "high_volatility",
+                "lower_volatility",
+                "high_volatility",
+                "lower_volatility",
+            ],
+            "drawdown_10": ["normal", "drawdown", "normal", "drawdown"],
+            "calendar_year": ["2020", "2020", "2021", "2021"],
+        }
+    )
+    strategy = StrategyMetricSet(
+        benchmark_id="bench",
+        dataset_id="dataset",
+        strategy_name="selected_model_logistic_regression",
+        partition_name="validation",
+        cost_scenario="base",
+        metrics={},
+        proposed_orders=(
+            {"sequence_number": 1, "signal_session": "2020-01-02"},
+            {"sequence_number": 2, "signal_session": "2021-01-04"},
+        ),
+        risk_decisions=(
+            {"order_sequence_number": 1, "approved": True},
+            {"order_sequence_number": 2, "approved": False},
+        ),
+        fills=({"order_sequence_number": 1, "signal_session": "2020-01-02"},),
+        portfolio_states=(
+            {"signal_session": "2020-01-02", "cash": "9900", "shares": 1},
+            {"signal_session": "2021-01-04", "cash": "10000", "shares": 0},
+        ),
+    )
+
+    diagnostics = regime_diagnostics(
+        benchmark_id="bench",
+        dataset_id="dataset",
+        partition_name="validation",
+        labels=labels,
+        regimes=regimes,
+        selected_model_predictions=predictions,
+        classification_baseline_predictions={"always_positive": predictions},
+        strategy_results={"selected_model:base": strategy},
+        volatility_threshold=Decimal("0.1"),
+        strategy_attribution_rule="attribute by signal_session",
+        small_sample_threshold=40,
+    )
+
+    bull = diagnostics.regimes["trend_200"]["bull"]
+    bear = diagnostics.regimes["trend_200"]["bear"]
+    high_vol = diagnostics.regimes["realized_volatility_20"]["high_volatility"]
+    lower_vol = diagnostics.regimes["realized_volatility_20"]["lower_volatility"]
+    drawdown = diagnostics.regimes["drawdown_10"]["drawdown"]
+
+    assert bull.sample_size == 2
+    assert bull.positive_count == 2
+    assert bull.small_sample is True
+    assert bull.selected_model_classification is not None
+    assert bull.selected_model_classification.metrics["roc_auc"].undefined_reason
+    assert bull.selected_model_strategy["selected_model:base"].metrics["orders"] == 1
+    assert bear.negative_count == 1
+    assert high_vol.sample_size == 2
+    assert lower_vol.sample_size == 2
+    assert drawdown.sample_size == 2
+    assert set(diagnostics.regimes["calendar_year"]) == {"2020", "2021"}
+
+
+def test_phase2_selected_model_signal_path_matches_v1_backtest_engine() -> None:
+    batch, _, _, evaluation = make_phase6_inputs()
+    config = BacktestConfig(
+        cost_assumptions=BacktestCostAssumptions(
+            commission_bps_per_side=Decimal("0.125"),
+            slippage_bps_per_side=Decimal("0.25"),
+        )
+    )
+    signal_set = build_long_cash_strategy_signals(evaluation, batch, created_at=CREATED_AT)
+
+    v1_result = run_long_or_cash_backtest(
+        evaluation,
+        batch,
+        backtest_config=config,
+        risk_config=RiskConfig(),
+        created_at=CREATED_AT,
+    )
+    phase2_result = run_strategy_signal_backtest(
+        signal_set,
+        batch,
+        backtest_config=config,
+        risk_config=RiskConfig(),
+        created_at=CREATED_AT,
+    )
+
+    pd.testing.assert_frame_equal(phase2_result.proposed_orders, v1_result.proposed_orders)
+    pd.testing.assert_frame_equal(phase2_result.risk_decisions, v1_result.risk_decisions)
+    pd.testing.assert_frame_equal(phase2_result.fills, v1_result.fills)
+    pd.testing.assert_frame_equal(phase2_result.portfolio, v1_result.portfolio)
+    assert phase2_result.metrics == v1_result.metrics
 
 
 def test_artifact_store_reuses_matching_and_rejects_conflicts(tmp_path: Path) -> None:

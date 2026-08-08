@@ -1,22 +1,22 @@
 from __future__ import annotations
 
-import platform
 from datetime import UTC, datetime
 from decimal import Decimal
-from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any
 
 from pydantic import ValidationError
 
-from spy_market_agent import __version__
 from spy_market_agent.benchmark.artifacts import (
     BenchmarkArtifactStore,
     canonical_json_bytes,
     sha256_bytes,
     sha256_json,
 )
-from spy_market_agent.benchmark.baselines import classification_baseline_metrics
+from spy_market_agent.benchmark.baselines import (
+    classification_baseline_metrics,
+    classification_baseline_prediction_frames,
+)
 from spy_market_agent.benchmark.dataset import (
     build_supervised_phase2_dataset,
     evaluate_dataset_eligibility,
@@ -47,8 +47,10 @@ from spy_market_agent.benchmark.locks import (
     BenchmarkRole,
     DatasetEligibilityReport,
     FinalTestAccessRecord,
+    FinalTestCompletionRecord,
     FinalTestLock,
     FinalTestReadiness,
+    FinalTestResults,
     SelectedModelManifest,
     ValidationResult,
     classification_baseline_definitions,
@@ -62,22 +64,28 @@ from spy_market_agent.benchmark.models import (
     final_probabilities,
     final_test_evaluation,
     run_validation_candidates,
+    validation_prediction_set_for_selected,
     validation_probabilities_for_selected,
 )
 from spy_market_agent.benchmark.regimes import (
-    regime_counts,
+    regime_diagnostics,
     regime_frame,
     regime_policy_summary,
     training_volatility_threshold,
 )
 from spy_market_agent.benchmark.reporting import benchmark_report
+from spy_market_agent.benchmark.runtime import (
+    RuntimeLineage,
+    current_runtime_lineage,
+    require_runtime_lineage,
+)
 from spy_market_agent.benchmark.splits import construct_phase2_split, stage_a_bundle
 from spy_market_agent.benchmark.strategies import strategy_comparator_metrics
 from spy_market_agent.benchmark.verification import verify_benchmark_directory
 from spy_market_agent.datasets.models import SupervisedDataset
 from spy_market_agent.datasets.splits import ChronologicalPartitions
 from spy_market_agent.features.models import FEATURE_SCHEMA_VERSION
-from spy_market_agent.market_data.acquisition import DatasetManifest, current_git_commit
+from spy_market_agent.market_data.acquisition import DatasetManifest
 from spy_market_agent.market_data.models import MarketDataBatch
 from spy_market_agent.modeling.models import DEFAULT_RANDOM_SEED
 from spy_market_agent.risk.models import RiskConfig
@@ -94,6 +102,7 @@ def prepare_benchmark(
     repository_root: Path | None = None,
 ) -> BenchmarkLock:
     repo_root = (repository_root or Path.cwd()).resolve()
+    runtime = current_runtime_lineage(repository_root=repo_root)
     manifest, market_data = load_verified_phase1_dataset(manifest_path, repository_root=repo_root)
     feed_record = load_feed_record(feed_record_path)
     created_at = manifest.retrieval_timestamp
@@ -135,6 +144,7 @@ def prepare_benchmark(
             "boundary_exclusion_sessions": pending_split.boundary_exclusion_sessions,
         },
         policy=policy,
+        runtime=runtime,
     )
     benchmark_id = benchmark_identity(identity_input)
     eligibility = evaluate_dataset_eligibility(
@@ -180,10 +190,10 @@ def prepare_benchmark(
         dataset_eligibility_checksum=eligibility_checksum,
         benchmark_policy=policy,
         identity_input=identity_input,
-        code_commit_sha=current_git_commit(),
-        python_version=platform.python_version(),
-        package_version=__version__,
-        dependency_versions=_dependency_versions(),
+        code_commit_sha=runtime.git_commit_sha,
+        python_version=runtime.python_version,
+        package_version=runtime.package_version,
+        dependency_versions=runtime.dependency_versions,
         owner_acknowledgement=owner_approve_assumptions,
     )
     lock_checksum = store.write_json(benchmark_id, "benchmark_lock.json", lock)
@@ -210,6 +220,7 @@ def run_validation(*, benchmark_lock_path: Path) -> ValidationResult:
         store.benchmark_dir(lock.benchmark_id),
         repository_root=store.repository_root,
     )
+    require_runtime_lineage(lock, repository_root=store.repository_root)
     eligibility, split_manifest, market_data, partitions = _reconstruct(lock, store)
     bundle = stage_a_bundle(split_manifest=split_manifest, partitions=partitions)
     model_metrics, selected_manifest, comparison = run_validation_candidates(
@@ -229,12 +240,34 @@ def run_validation(*, benchmark_lock_path: Path) -> ValidationResult:
     strategy_results = strategy_comparator_metrics(
         benchmark_id=lock.benchmark_id,
         dataset_id=lock.dataset_id,
-        market_data=market_data.data,
-        partition_labels=bundle.validation.labels,
+        market_data=market_data,
+        partition=bundle.validation,
         probabilities=validation_probabilities_for_selected(comparison),
         selected_model_name=selected_manifest.selected_model_name,
         cost_scenarios=lock.benchmark_policy.cost_scenarios,
         partition_name="validation",
+        created_at=_stable_created_at(lock),
+    )
+    regimes = regime_frame(
+        market_data.data,
+        volatility_threshold=lock.benchmark_policy.regime_policy.volatility_threshold,
+    )
+    validation_regime_results = regime_diagnostics(
+        benchmark_id=lock.benchmark_id,
+        dataset_id=lock.dataset_id,
+        partition_name="validation",
+        labels=bundle.validation.labels,
+        regimes=regimes.data,
+        selected_model_predictions=validation_prediction_set_for_selected(comparison),
+        classification_baseline_predictions=classification_baseline_prediction_frames(
+            sessions=bundle.validation.labels["session"].to_list(),
+            training_targets=bundle.train.labels["target"].to_list(),
+            evaluation_targets=bundle.validation.labels["target"].to_list(),
+        ),
+        strategy_results=strategy_results,
+        volatility_threshold=lock.benchmark_policy.regime_policy.volatility_threshold,
+        strategy_attribution_rule=(lock.benchmark_policy.regime_policy.strategy_attribution_rule),
+        small_sample_threshold=(lock.benchmark_policy.regime_policy.small_sample_warning_threshold),
     )
     validation = ValidationResult(
         benchmark_id=lock.benchmark_id,
@@ -244,6 +277,7 @@ def run_validation(*, benchmark_lock_path: Path) -> ValidationResult:
         model_metrics=model_metrics,
         classification_baselines=baseline_metrics,
         strategy_results=strategy_results,
+        regime_results=validation_regime_results,
     )
     validation_checksum = store.write_json(lock.benchmark_id, "validation_results.json", validation)
     baseline_checksum = store.write_json(
@@ -305,6 +339,7 @@ def finalize_lock(
             "final-test lock requires explicit owner acknowledgement.",
         )
     lock, store = load_lock_from_path(benchmark_lock_path)
+    require_runtime_lineage(lock, repository_root=store.repository_root)
     required = (
         "validation_results.json",
         "classification_baselines.json",
@@ -370,6 +405,7 @@ def run_final_test(
                 ]
             ) from exc
         raise
+    require_runtime_lineage(lock, repository_root=store.repository_root)
     if not final_lock.owner_acknowledgement:
         raise_benchmark_error(
             BenchmarkFinalTestAccessError,
@@ -377,19 +413,29 @@ def run_final_test(
             "final-test lock must contain owner acknowledgement.",
         )
     final_results_path = store.artifact_path(lock.benchmark_id, "final_test_results.json")
+    access_path = store.artifact_path(lock.benchmark_id, "final_test_access.json")
+    completion_path = store.artifact_path(lock.benchmark_id, "final_test_completion.json")
     if final_results_path.exists() and not audit_replay:
         raise_benchmark_error(
             BenchmarkFinalTestAccessError,
             "final_test_already_completed",
             "final test already completed; use audit replay for deterministic verification.",
         )
+    if access_path.exists() and not audit_replay:
+        raise_benchmark_error(
+            BenchmarkFinalTestAccessError,
+            "final_test_access_already_started",
+            "final-test access already began; operator review is required before any "
+            "non-audit re-attempt.",
+        )
     if audit_replay:
-        if not final_results_path.exists():
+        if not final_results_path.exists() or not completion_path.exists():
             raise_benchmark_error(
                 BenchmarkFinalTestAccessError,
                 "audit_replay_without_final_result",
-                "audit replay requires an existing final-test result.",
+                "audit replay requires existing final-test result and completion artifacts.",
             )
+        _require_audit_replay_lineage(lock, final_lock, store)
         recomputed = _compute_final_results(lock, store)
         if sha256_json(recomputed) != sha256_bytes(final_results_path.read_bytes()):
             raise_benchmark_error(
@@ -404,30 +450,54 @@ def run_final_test(
             "missing_final_test_access_acknowledgement",
             "run-final-test requires explicit final-test access acknowledgement.",
         )
+    runtime = current_runtime_lineage(repository_root=store.repository_root)
     access = FinalTestAccessRecord(
         benchmark_id=lock.benchmark_id,
         dataset_id=lock.dataset_id,
         final_test_lock_checksum=store.checksum(lock.benchmark_id, "final_test_lock.json"),
         access_timestamp=datetime.now(tz=UTC),
-        code_commit_sha=current_git_commit(),
-        package_version=__version__,
-        dependency_versions=_dependency_versions(),
+        code_commit_sha=runtime.git_commit_sha,
+        python_version=runtime.python_version,
+        package_version=runtime.package_version,
+        dependency_versions=runtime.dependency_versions,
         owner_acknowledgement=True,
         access_state="started",
     )
-    store.write_json(lock.benchmark_id, "final_test_access.json", access)
+    access_checksum = store.write_json(lock.benchmark_id, "final_test_access.json", access)
     results = _compute_final_results(lock, store)
-    store.write_json(lock.benchmark_id, "final_test_results.json", results)
-    store.write_json(lock.benchmark_id, "cost_sensitivity.json", results["cost_sensitivity"])
-    store.write_json(lock.benchmark_id, "regime_results.json", results["regime_results"])
-    store.write_json(lock.benchmark_id, "backtest_results.json", results["strategy_results"])
-    completed_access = access.model_copy(update={"access_state": "completed"})
-    store.write_json(
+    final_results_checksum = store.write_json(lock.benchmark_id, "final_test_results.json", results)
+    cost_checksum = store.write_json(
         lock.benchmark_id,
-        "final_test_access.json",
-        completed_access,
-        allow_replace=True,
+        "cost_sensitivity.json",
+        results["cost_sensitivity"],
     )
+    regime_checksum = store.write_json(
+        lock.benchmark_id,
+        "regime_results.json",
+        results["regime_results"],
+    )
+    backtest_checksum = store.write_json(
+        lock.benchmark_id,
+        "backtest_results.json",
+        results["strategy_results"],
+    )
+    completion = FinalTestCompletionRecord(
+        benchmark_id=lock.benchmark_id,
+        dataset_id=lock.dataset_id,
+        final_test_lock_checksum=store.checksum(lock.benchmark_id, "final_test_lock.json"),
+        access_record_checksum=access_checksum,
+        final_test_results_checksum=final_results_checksum,
+        cost_sensitivity_checksum=cost_checksum,
+        regime_results_checksum=regime_checksum,
+        backtest_results_checksum=backtest_checksum,
+        completion_timestamp=datetime.now(tz=UTC),
+        code_commit_sha=runtime.git_commit_sha,
+        python_version=runtime.python_version,
+        package_version=runtime.package_version,
+        dependency_versions=runtime.dependency_versions,
+        completed_state="completed",
+    )
+    store.write_json(lock.benchmark_id, "final_test_completion.json", completion)
     eligibility = DatasetEligibilityReport.model_validate(
         store.read_json(lock.benchmark_id, "dataset_eligibility.json")
     )
@@ -507,6 +577,114 @@ def load_final_lock_from_path(
     return final_lock, lock, store
 
 
+def _require_audit_replay_lineage(
+    lock: BenchmarkLock,
+    final_lock: FinalTestLock,
+    store: BenchmarkArtifactStore,
+) -> None:
+    if final_lock.benchmark_id != lock.benchmark_id or final_lock.dataset_id != lock.dataset_id:
+        raise_benchmark_error(
+            BenchmarkFinalTestAccessError,
+            "audit_replay_lock_identity_mismatch",
+            "audit replay final-test lock must match the benchmark lock identity.",
+        )
+    selected = SelectedModelManifest.model_validate(
+        store.read_json(lock.benchmark_id, "selected_model_manifest.json")
+    )
+    completion = FinalTestCompletionRecord.model_validate(
+        store.read_json(lock.benchmark_id, "final_test_completion.json")
+    )
+    access = FinalTestAccessRecord.model_validate(
+        store.read_json(lock.benchmark_id, "final_test_access.json")
+    )
+    if selected.selected_model_name != final_lock.selected_model_name:
+        raise_benchmark_error(
+            BenchmarkFinalTestAccessError,
+            "audit_replay_selected_model_mismatch",
+            "audit replay selected model must match locked validation selection.",
+        )
+    expected_checksums = {
+        "benchmark_lock_checksum": store.checksum(lock.benchmark_id, "benchmark_lock.json"),
+        "validation_results_checksum": store.checksum(
+            lock.benchmark_id,
+            "validation_results.json",
+        ),
+        "classification_baselines_checksum": store.checksum(
+            lock.benchmark_id,
+            "classification_baselines.json",
+        ),
+        "strategy_baselines_checksum": store.checksum(
+            lock.benchmark_id,
+            "strategy_baselines.json",
+        ),
+        "selected_model_manifest_checksum": store.checksum(
+            lock.benchmark_id,
+            "selected_model_manifest.json",
+        ),
+        "final_test_readiness_checksum": store.checksum(
+            lock.benchmark_id,
+            "final_test_readiness.json",
+        ),
+    }
+    for field_name, expected in expected_checksums.items():
+        if getattr(final_lock, field_name) != expected:
+            raise_benchmark_error(
+                BenchmarkFinalTestAccessError,
+                "audit_replay_final_lock_checksum_mismatch",
+                "audit replay final-test lock checksums must match existing artifacts.",
+            )
+    completion_checksums = {
+        "final_test_lock_checksum": store.checksum(lock.benchmark_id, "final_test_lock.json"),
+        "access_record_checksum": store.checksum(lock.benchmark_id, "final_test_access.json"),
+        "final_test_results_checksum": store.checksum(
+            lock.benchmark_id,
+            "final_test_results.json",
+        ),
+        "cost_sensitivity_checksum": store.checksum(lock.benchmark_id, "cost_sensitivity.json"),
+        "regime_results_checksum": store.checksum(lock.benchmark_id, "regime_results.json"),
+        "backtest_results_checksum": store.checksum(lock.benchmark_id, "backtest_results.json"),
+    }
+    for field_name, expected in completion_checksums.items():
+        if getattr(completion, field_name) != expected:
+            raise_benchmark_error(
+                BenchmarkFinalTestAccessError,
+                "audit_replay_completion_checksum_mismatch",
+                "audit replay completion checksums must match existing artifacts.",
+            )
+    if completion.access_record_checksum != store.checksum(
+        lock.benchmark_id,
+        "final_test_access.json",
+    ):
+        raise_benchmark_error(
+            BenchmarkFinalTestAccessError,
+            "audit_replay_access_checksum_mismatch",
+            "audit replay access record checksum must match completion evidence.",
+        )
+    final_lock_checksum = store.checksum(lock.benchmark_id, "final_test_lock.json")
+    if (
+        access.final_test_lock_checksum != final_lock_checksum
+        or completion.final_test_lock_checksum != final_lock_checksum
+    ):
+        raise_benchmark_error(
+            BenchmarkFinalTestAccessError,
+            "audit_replay_access_lock_checksum_mismatch",
+            "audit replay access and completion records must reference the final-test lock.",
+        )
+    runtime = require_runtime_lineage(lock, repository_root=store.repository_root)
+    for lineage in (access, completion):
+        if (
+            lineage.code_commit_sha != runtime.git_commit_sha
+            or lineage.python_version != runtime.python_version
+            or lineage.package_version != runtime.package_version
+            or lineage.dependency_versions != runtime.dependency_versions
+        ):
+            raise_benchmark_error(
+                BenchmarkFinalTestAccessError,
+                "audit_replay_runtime_lineage_mismatch",
+                "audit replay runtime lineage must match access and completion evidence.",
+            )
+
+
 def _compute_final_results(lock: BenchmarkLock, store: BenchmarkArtifactStore) -> dict[str, Any]:
     _, _, market_data, partitions = _reconstruct(lock, store)
     selected = SelectedModelManifest.model_validate(
@@ -534,21 +712,33 @@ def _compute_final_results(lock: BenchmarkLock, store: BenchmarkArtifactStore) -
     strategy_results = strategy_comparator_metrics(
         benchmark_id=lock.benchmark_id,
         dataset_id=lock.dataset_id,
-        market_data=market_data.data,
-        partition_labels=partitions.test.labels,
+        market_data=market_data,
+        partition=partitions.test,
         probabilities=final_probabilities(evaluation),
         selected_model_name=evaluation.selected_model_name,
         cost_scenarios=lock.benchmark_policy.cost_scenarios,
         partition_name="final_test",
+        created_at=_stable_created_at(lock),
     )
     regimes = regime_frame(
         market_data.data,
         volatility_threshold=lock.benchmark_policy.regime_policy.volatility_threshold,
     )
-    regime_results = regime_counts(
+    regime_results = regime_diagnostics(
+        benchmark_id=lock.benchmark_id,
+        dataset_id=lock.dataset_id,
+        partition_name="final_test",
         labels=partitions.test.labels,
         regimes=regimes.data,
-        sessions=partitions.test.labels["session"].to_list(),
+        selected_model_predictions=evaluation.prediction_set.data,
+        classification_baseline_predictions=classification_baseline_prediction_frames(
+            sessions=partitions.test.labels["session"].to_list(),
+            training_targets=partitions.train.labels["target"].to_list(),
+            evaluation_targets=partitions.test.labels["target"].to_list(),
+        ),
+        strategy_results=strategy_results,
+        volatility_threshold=lock.benchmark_policy.regime_policy.volatility_threshold,
+        strategy_attribution_rule=(lock.benchmark_policy.regime_policy.strategy_attribution_rule),
         small_sample_threshold=lock.benchmark_policy.regime_policy.small_sample_warning_threshold,
     )
     cost_sensitivity = {
@@ -556,19 +746,18 @@ def _compute_final_results(lock: BenchmarkLock, store: BenchmarkArtifactStore) -
         for name, value in strategy_results.items()
         if name.startswith("selected_model:")
     }
-    return {
-        "artifact_schema_version": lock.artifact_schema_version,
-        "benchmark_id": lock.benchmark_id,
-        "dataset_id": lock.dataset_id,
-        "selected_model_name": evaluation.selected_model_name,
-        "classification_metrics": model_metrics,
-        "classification_baselines": baseline_metrics,
-        "strategy_results": strategy_results,
-        "cost_sensitivity": cost_sensitivity,
-        "regime_results": regime_results,
-        "no_tuning_performed": True,
-        "no_model_binary_persisted": True,
-    }
+    return FinalTestResults(
+        benchmark_id=lock.benchmark_id,
+        dataset_id=lock.dataset_id,
+        selected_model_name=evaluation.selected_model_name,
+        classification_metrics=model_metrics,
+        classification_baselines=baseline_metrics,
+        strategy_results=strategy_results,
+        cost_sensitivity=cost_sensitivity,
+        regime_results=regime_results,
+        no_tuning_performed=True,
+        no_model_binary_persisted=True,
+    ).model_dump(mode="python")
 
 
 def _reconstruct(
@@ -622,6 +811,7 @@ def _identity_input(
     supervised: SupervisedDataset,
     split_policy: dict[str, Any],
     policy: BenchmarkPolicy,
+    runtime: RuntimeLineage,
 ) -> BenchmarkIdentityInput:
     risk = RiskConfig()
     return BenchmarkIdentityInput(
@@ -658,9 +848,10 @@ def _identity_input(
         rounding_policy=ROUNDING_POLICY_ID,
         regime_definitions=regime_policy_summary(policy.regime_policy),
         frozen_volatility_threshold=policy.regime_policy.volatility_threshold,
-        code_commit_sha=current_git_commit(),
-        package_version=__version__,
-        dependency_versions=_dependency_versions(),
+        code_commit_sha=runtime.git_commit_sha,
+        python_version=runtime.python_version,
+        package_version=runtime.package_version,
+        dependency_versions=runtime.dependency_versions,
     )
 
 
@@ -724,17 +915,6 @@ def _write_index(
 
 def _stable_created_at(lock: BenchmarkLock) -> datetime:
     return lock.feed_availability.probe_timestamp
-
-
-def _dependency_versions() -> dict[str, str]:
-    packages = ("pandas", "pydantic", "scikit-learn", "exchange-calendars", "alpaca-py")
-    versions: dict[str, str] = {}
-    for package in packages:
-        try:
-            versions[package] = version(package)
-        except PackageNotFoundError:
-            versions[package] = "not-installed"
-    return versions
 
 
 def _assert_checksum_used(checksum: str) -> None:

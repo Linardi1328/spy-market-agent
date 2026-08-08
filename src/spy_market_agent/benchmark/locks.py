@@ -5,7 +5,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 BENCHMARK_SCHEMA_VERSION = "spy-v2-phase2-benchmark-artifacts-v1"
 BENCHMARK_ID_VERSION = "spy-v2-phase2-benchmark-id-v1"
@@ -109,6 +109,7 @@ class RegimePolicy(ArtifactModel):
     drawdown_10: dict[str, str | Decimal]
     calendar_year: dict[str, str]
     volatility_threshold: Decimal
+    strategy_attribution_rule: str
     small_sample_warning_threshold: int = 40
 
 
@@ -210,6 +211,31 @@ class StrategyMetricSet(BenchmarkArtifact):
     cost_scenario: str
     metrics: dict[str, Decimal | int | float | str | None]
     warnings: tuple[str, ...] = ()
+    proposed_orders: tuple[dict[str, Any], ...] = ()
+    risk_decisions: tuple[dict[str, Any], ...] = ()
+    fills: tuple[dict[str, Any], ...] = ()
+    portfolio_states: tuple[dict[str, Any], ...] = ()
+
+
+class RegimeCellDiagnostics(ArtifactModel):
+    sample_size: int
+    positive_count: int
+    negative_count: int
+    small_sample: bool
+    warnings: tuple[str, ...] = ()
+    selected_model_classification: ClassificationMetricSet | None = None
+    classification_baselines: dict[str, ClassificationMetricSet] = Field(default_factory=dict)
+    selected_model_strategy: dict[str, StrategyMetricSet] = Field(default_factory=dict)
+    strategy_comparators: dict[str, StrategyMetricSet] = Field(default_factory=dict)
+    undefined_reasons: dict[str, str] = Field(default_factory=dict)
+
+
+class RegimeDiagnostics(BenchmarkArtifact):
+    partition_name: str
+    volatility_threshold: Decimal
+    strategy_attribution_rule: str
+    small_sample_warning_threshold: int
+    regimes: dict[str, dict[str, RegimeCellDiagnostics]]
 
 
 class ValidationResult(BenchmarkArtifact):
@@ -218,6 +244,7 @@ class ValidationResult(BenchmarkArtifact):
     model_metrics: dict[str, ClassificationMetricSet]
     classification_baselines: dict[str, ClassificationMetricSet]
     strategy_results: dict[str, StrategyMetricSet]
+    regime_results: RegimeDiagnostics | None = None
 
 
 class SelectedModelManifest(BenchmarkArtifact):
@@ -254,11 +281,38 @@ class FinalTestAccessRecord(BenchmarkArtifact):
     final_test_lock_checksum: str
     access_timestamp: datetime
     code_commit_sha: str | None
+    python_version: str
     package_version: str
     dependency_versions: dict[str, str]
     owner_acknowledgement: bool
-    access_state: Literal["started", "completed"]
+    access_state: Literal["started"]
     contains_results: bool = False
+
+
+class FinalTestCompletionRecord(BenchmarkArtifact):
+    final_test_lock_checksum: str
+    access_record_checksum: str
+    final_test_results_checksum: str
+    cost_sensitivity_checksum: str
+    regime_results_checksum: str
+    backtest_results_checksum: str
+    completion_timestamp: datetime
+    code_commit_sha: str | None
+    python_version: str
+    package_version: str
+    dependency_versions: dict[str, str]
+    completed_state: Literal["completed"]
+
+
+class FinalTestResults(BenchmarkArtifact):
+    selected_model_name: str
+    classification_metrics: ClassificationMetricSet
+    classification_baselines: dict[str, ClassificationMetricSet]
+    strategy_results: dict[str, StrategyMetricSet]
+    cost_sensitivity: dict[str, StrategyMetricSet]
+    regime_results: RegimeDiagnostics
+    no_tuning_performed: bool
+    no_model_binary_persisted: bool
 
 
 class BenchmarkIdentityInput(ArtifactModel):
@@ -286,6 +340,7 @@ class BenchmarkIdentityInput(ArtifactModel):
     regime_definitions: dict[str, Any]
     frozen_volatility_threshold: Decimal
     code_commit_sha: str | None
+    python_version: str
     package_version: str
     dependency_versions: dict[str, str]
     artifact_schema_version: str = BENCHMARK_SCHEMA_VERSION
@@ -406,6 +461,12 @@ def strategy_baseline_definitions() -> tuple[StrategyBaselineDefinition, ...]:
 
 
 def default_regime_policy(volatility_threshold: Decimal) -> RegimePolicy:
+    attribution_rule = (
+        "Regime strategy diagnostics are attributed by signal_session. Proposed orders, "
+        "risk decisions, fills, and portfolio states caused by a signal are included in the "
+        "regime cell for that signal session; non-contiguous regime subsets do not receive "
+        "standalone annualized return, drawdown, or Sharpe interpretations."
+    )
     return RegimePolicy(
         trend_200={
             "input": "canonical adjusted close through session t",
@@ -427,4 +488,5 @@ def default_regime_policy(volatility_threshold: Decimal) -> RegimePolicy:
         },
         calendar_year={"definition": "XNYS session calendar year reported independently"},
         volatility_threshold=volatility_threshold,
+        strategy_attribution_rule=attribution_rule,
     )

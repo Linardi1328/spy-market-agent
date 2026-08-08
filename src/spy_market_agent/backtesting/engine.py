@@ -337,6 +337,115 @@ def run_long_or_cash_backtest(
         batch=batch,
         created_at=created_at_utc,
     )
+    return _run_validated_signal_backtest(
+        signal_set=signal_set,
+        batch=batch,
+        config=config,
+        risk=risk,
+        execution_prices=execution_prices,
+        created_at_utc=created_at_utc,
+    )
+
+
+def run_strategy_signal_backtest(
+    signal_set: StrategySignalSet,
+    market_data: MarketDataBatch,
+    *,
+    backtest_config: object,
+    risk_config: object,
+    created_at: datetime,
+) -> BacktestResult:
+    """Run the approved risk-controlled backtest for a deterministic signal set."""
+
+    created_at_utc = require_aware_utc(created_at, field_name="created_at")
+    if not isinstance(backtest_config, BacktestConfig):
+        raise_backtest_error(
+            BacktestInputError,
+            "invalid_backtest_config",
+            "backtest_config must be a BacktestConfig.",
+        )
+    config = BacktestConfig(
+        cost_assumptions=backtest_config.cost_assumptions,
+        initial_cash=backtest_config.initial_cash,
+    )
+    if not isinstance(risk_config, RiskConfig):
+        raise_backtest_error(
+            BacktestInputError,
+            "invalid_risk_config",
+            "risk_config must be a RiskConfig.",
+        )
+    risk = RiskConfig(
+        supported_symbol=risk_config.supported_symbol,
+        allow_short_selling=risk_config.allow_short_selling,
+        allow_leverage=risk_config.allow_leverage,
+        allow_fractional_shares=risk_config.allow_fractional_shares,
+        maximum_position_weight=risk_config.maximum_position_weight,
+    )
+    batch = _revalidate_market_data(market_data)
+    if not isinstance(signal_set, StrategySignalSet):
+        raise_backtest_error(
+            BacktestInputError,
+            "invalid_strategy_signal_set",
+            "signal_set must be a StrategySignalSet.",
+        )
+    try:
+        signals = StrategySignalSet(
+            data=signal_set.data,
+            selected_model_name=signal_set.selected_model_name,
+            strategy_threshold=signal_set.strategy_threshold,
+            source_market_data_checksum=signal_set.source_market_data_checksum,
+            source_schema_version=signal_set.source_schema_version,
+            feature_schema_version=signal_set.feature_schema_version,
+            label_schema_version=signal_set.label_schema_version,
+            model_schema_version=signal_set.model_schema_version,
+            strategy_schema_version=signal_set.strategy_schema_version,
+            feature_columns=signal_set.feature_columns,
+            split_spec=signal_set.split_spec,
+            market_sessions=signal_set.market_sessions,
+            first_signal_session=signal_set.first_signal_session,
+            last_signal_session=signal_set.last_signal_session,
+            first_execution_session=signal_set.first_execution_session,
+            last_execution_session=signal_set.last_execution_session,
+            row_count=signal_set.row_count,
+            sklearn_version=signal_set.sklearn_version,
+            created_at=signal_set.created_at,
+        )
+    except StrategyError:
+        raise_backtest_error(
+            BacktestInputError,
+            "invalid_strategy_inputs",
+            "strategy signal construction failed.",
+        )
+    if signals.created_at != created_at_utc:
+        raise_backtest_error(
+            BacktestInputError,
+            "strategy_created_at_mismatch",
+            "signal_set created_at must match the backtest created_at.",
+        )
+    execution_prices = _build_execution_prices(
+        signal_set=signals,
+        batch=batch,
+        created_at=created_at_utc,
+    )
+    return _run_validated_signal_backtest(
+        signal_set=signals,
+        batch=batch,
+        config=config,
+        risk=risk,
+        execution_prices=execution_prices,
+        created_at_utc=created_at_utc,
+    )
+
+
+def _run_validated_signal_backtest(
+    *,
+    signal_set: StrategySignalSet,
+    batch: MarketDataBatch,
+    config: BacktestConfig,
+    risk: RiskConfig,
+    execution_prices: ExecutionPriceSet,
+    created_at_utc: datetime,
+) -> BacktestResult:
 
     price_by_session = execution_prices.data.set_index("execution_session", drop=False)
     cash = config.initial_cash

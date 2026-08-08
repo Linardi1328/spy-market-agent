@@ -6,7 +6,8 @@ Status: Implementation in review
 
 - Starting main SHA: `a53160716ec9b266b9bee899a20855c24c4b7d91`
 - Branch name: `review/v2-phase-02-real-benchmark`
-- Final implementation SHA: to be reported after commit/push
+- Final implementation SHA (original implementation candidate): `61f1431...`
+- Hardening SHA: to be reported after commit/push
 - Package/runtime version: `2.0.0a1`
 - Target public release identifier: `v2.0.0-alpha.2`
 - Git tag status: `v2.0.0-alpha.2` not created
@@ -14,12 +15,17 @@ Status: Implementation in review
 ## Scope Implemented
 
 Implemented a dedicated `spy_market_agent.benchmark` package for deterministic, auditable,
-file-based Phase 2 benchmark infrastructure. The package accepts verified Phase 1 manifests,
-records offline feed evidence, checks dataset eligibility, builds the approved features and
-labels, constructs the Phase 2 chronological split, writes immutable benchmark locks, runs
-validation-only model selection, creates final-test locks, gates final-test access, evaluates
-locked baselines/strategies/costs/regimes, writes artifact indexes, and verifies artifact
-checksums offline.
+file-based Phase 2 benchmark infrastructure. The original implementation candidate at
+`61f1431...` accepts verified Phase 1 manifests, records offline feed evidence, checks
+dataset eligibility, builds the approved features and labels, constructs the Phase 2
+chronological split, writes immutable benchmark locks, runs validation-only model selection,
+creates final-test locks, gates final-test access, evaluates locked
+baselines/strategies/costs/regimes, writes artifact indexes, and verifies artifacts offline.
+
+This hardening pass strengthens the implementation before owner-run real-data acceptance. It
+adds deep semantic verification, frozen runtime-lineage enforcement, real regime-performance
+diagnostics, reuse of the approved Version 1 risk/backtest engine for executable long/cash
+strategy paths, and immutable final-test access plus separate completion evidence.
 
 ## Files Created
 
@@ -70,7 +76,8 @@ SQLite schema is unchanged, no migration is added, and no model binary is persis
 ## Policies
 
 - Regime policy: `trend_200`, `realized_volatility_20` with training-only median threshold,
-  `drawdown_10`, and independent `calendar_year` diagnostics.
+  `drawdown_10`, independent `calendar_year` diagnostics, and locked signal-session
+  strategy attribution.
 - Split policy: 20-row warm-up, five-session mandatory gap, six-session boundary exclusions,
   70% train, 15% validation, final-test remainder, and fixed minimum row/class counts.
 - Cost matrix: `idealized`, `base`, `adverse`, and `severe` with `Decimal("10000")` initial
@@ -84,13 +91,25 @@ SQLite schema is unchanged, no migration is added, and no model binary is persis
   `training_prevalence`.
 - Strategy comparators: `always_cash`, `buy_and_hold`, `fixed_20_session_momentum`, plus the
   selected model using the existing fixed long-or-cash threshold.
+- Runtime lineage: Git SHA, Python version, package/runtime version, pandas, pydantic,
+  scikit-learn, exchange-calendars, alpaca-py, and benchmark-identity dependencies are
+  frozen in the lock and enforced before critical stages.
 
 ## Controls
 
+- `benchmark verify` performs deep offline semantic verification for the declared workflow
+  stage and rejects semantic tampering even when `artifact_index.json` checksums are
+  recomputed.
 - Final-test row-level labels are guarded from Stage A services.
-- `final_test_access.json` is written before final-test labels are loaded.
+- `final_test_access.json` is written before final-test labels are loaded and remains
+  immutable started-access evidence.
+- `final_test_completion.json` is written only after completed final-test artifacts are
+  written and references all required final checksums.
 - A completed non-audit final run cannot be silently repeated.
 - Audit replay verifies existing final artifacts and does not overwrite accepted results.
+- Selected-model and fixed-momentum strategy paths use the approved Version 1
+  `StrategySignalSet` -> `ProposedOrder` -> `RiskConfig` / `evaluate_order_risk` -> fill ->
+  backtest metric flow.
 - Benchmark commands do not make network requests, require credentials, construct Alpaca
   clients, construct broker `TradingClient`, initialize execution databases, or submit
   orders.
@@ -102,26 +121,35 @@ SQLite schema is unchanged, no migration is added, and no model binary is persis
 Test categories include Phase 1 manifest integration, dataset eligibility, feed rules,
 split arithmetic, final-test label guards, model configuration snapshots, validation-only
 selection, classification baselines, strategy comparators, cost matrix, Decimal accounting,
-classification metrics, regimes, deterministic artifact serialization, locks, safe writes,
-idempotency/conflict behavior, final-test lock/access, audit replay, corrupted artifact
-verification, no-network/no-broker import safety, CLI behavior, documentation Quick Start
-requirements, and existing Version 1/Phase 1 regression flows.
+classification metrics, regimes, deterministic artifact serialization, locks, runtime
+lineage mismatch handling, semantic tampering rejection, safe writes,
+idempotency/conflict behavior, immutable final-test access/completion, audit replay,
+approved risk/backtest engine reuse, no-network/no-broker import safety, CLI behavior,
+documentation Quick Start requirements, and existing Version 1/Phase 1 regression flows.
 
 ## Verification
 
-- Full test total: `994` passing
-- Unit-test total: `945` passing
-- Integration-test total: `49` passing
-- Targeted Phase 2 test total: `16` passing
-- Coverage percentage: `85.21%`
-- Ruff: passed
-- Ruff format: passed
-- MyPy: passed
-- FutureWarning gate: passed
-- Local startup smoke test: passed with temporary SQLite database, FastAPI
-  `127.0.0.1:50237`, Streamlit `127.0.0.1:50238`, `/health` status `ok`,
-  Streamlit HTTP response confirmed, no Alpaca/trading-client/order terms observed in
-  startup logs, both child processes stopped, temporary database/logs removed
+Hardening verification run:
+
+- `python -m pip install -e ".[dev]"`: passed.
+- `pytest --cov-fail-under=85`: 999 passed, 85.13% coverage.
+- `pytest tests/unit -q`: passed; 948 collected unit tests.
+- `pytest tests/integration -q`: passed; 51 collected integration tests.
+- `pytest -W error::FutureWarning`: 999 passed.
+- Targeted Phase 2 tests:
+  `pytest tests/unit/test_v2_phase2_benchmark.py tests/integration/test_v2_phase2_benchmark_flow.py -q`:
+  21 passed.
+- `ruff check .`: passed.
+- `ruff format --check .`: passed.
+- `mypy src tests`: passed.
+- `git diff --check`: passed.
+- Package/runtime version check: `2.0.0a1 2.0.0a1`.
+- Local dashboard smoke: not rerun for this hardening pass because README Quick Start and
+  startup code paths were not changed.
+
+The previous original implementation candidate recorded 994 passing full tests, 945 unit
+tests, 49 integration tests, 16 targeted Phase 2 tests, 85.21% coverage, and passing Ruff,
+Ruff format, MyPy, FutureWarning, and local startup smoke checks.
 
 ## Known Limitations
 

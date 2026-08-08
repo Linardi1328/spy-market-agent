@@ -160,6 +160,56 @@ Generated benchmark outputs remain ignored under `artifacts/benchmarks/<benchmar
 Codex verification uses synthetic manifests only. Owner-run real benchmark execution remains
 a later acceptance gate.
 
+Deep-verify a benchmark directory offline:
+
+```bash
+python -m spy_market_agent.benchmark.cli verify \
+  --benchmark-root artifacts/benchmarks/BENCHMARK_ID
+```
+
+Require current runtime lineage to match the frozen lock during verification:
+
+```bash
+python -m spy_market_agent.benchmark.cli verify \
+  --benchmark-root artifacts/benchmarks/BENCHMARK_ID \
+  --require-runtime-lineage
+```
+
+Run Stage A validation only after reviewing the lock and assumptions:
+
+```bash
+python -m spy_market_agent.benchmark.cli run-validation \
+  --benchmark-lock artifacts/benchmarks/BENCHMARK_ID/benchmark_lock.json
+```
+
+Finalize the final-test lock only after validation review:
+
+```bash
+python -m spy_market_agent.benchmark.cli finalize-lock \
+  --benchmark-lock artifacts/benchmarks/BENCHMARK_ID/benchmark_lock.json \
+  --acknowledge-final-test-policy
+```
+
+Stage B final-test access remains an owner-run acceptance action and must not be run by
+Codex during implementation review. When the owner explicitly authorizes it, the command
+writes immutable `final_test_access.json` before loading final-test labels and writes
+`final_test_completion.json` only after all final artifacts are completed:
+
+```bash
+python -m spy_market_agent.benchmark.cli run-final-test \
+  --final-test-lock artifacts/benchmarks/BENCHMARK_ID/final_test_lock.json \
+  --acknowledge-final-test-access
+```
+
+Audit replay verifies an existing completed final-test bundle without creating a new access
+record or overwriting accepted artifacts:
+
+```bash
+python -m spy_market_agent.benchmark.cli run-final-test \
+  --final-test-lock artifacts/benchmarks/BENCHMARK_ID/final_test_lock.json \
+  --audit-replay
+```
+
 ## Inspect Model Evaluations
 
 With the read API running:

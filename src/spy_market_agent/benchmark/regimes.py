@@ -8,7 +8,15 @@ from decimal import Decimal
 
 import pandas as pd
 
-from spy_market_agent.benchmark.locks import RegimePolicy
+from spy_market_agent.benchmark.locks import (
+    ClassificationMetricSet,
+    RegimeCellDiagnostics,
+    RegimeDiagnostics,
+    RegimePolicy,
+    StrategyMetricSet,
+)
+from spy_market_agent.benchmark.metrics import classification_metric_set
+from spy_market_agent.benchmark.strategies import regime_strategy_metric_set
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,6 +92,7 @@ def regime_policy_summary(policy: RegimePolicy) -> dict[str, object]:
         "drawdown_10": policy.drawdown_10,
         "calendar_year": policy.calendar_year,
         "volatility_threshold": policy.volatility_threshold,
+        "strategy_attribution_rule": policy.strategy_attribution_rule,
         "small_sample_warning_threshold": policy.small_sample_warning_threshold,
     }
 
@@ -114,3 +123,126 @@ def regime_counts(
             }
         result[regime_name] = cells
     return result
+
+
+def regime_diagnostics(
+    *,
+    benchmark_id: str,
+    dataset_id: str,
+    partition_name: str,
+    labels: pd.DataFrame,
+    regimes: pd.DataFrame,
+    selected_model_predictions: pd.DataFrame,
+    classification_baseline_predictions: dict[str, pd.DataFrame],
+    strategy_results: dict[str, StrategyMetricSet],
+    volatility_threshold: Decimal,
+    strategy_attribution_rule: str,
+    small_sample_threshold: int = 40,
+) -> RegimeDiagnostics:
+    session_set = set(labels["session"].to_list())
+    joined = regimes[regimes["session"].isin(session_set)].copy(deep=True)
+    target_by_session = {
+        session: int(target)
+        for session, target in zip(labels["session"], labels["target"], strict=True)
+    }
+    cells_by_regime: dict[str, dict[str, RegimeCellDiagnostics]] = {}
+    for regime_name in ("trend_200", "realized_volatility_20", "drawdown_10", "calendar_year"):
+        cells: dict[str, RegimeCellDiagnostics] = {}
+        for value, group in joined.groupby(regime_name, sort=True):
+            cell_sessions = tuple(group["session"].to_list())
+            targets = [target_by_session[session] for session in cell_sessions]
+            positive = sum(targets)
+            total = len(targets)
+            warnings = ("small_sample",) if total < small_sample_threshold else ()
+            undefined_reasons: dict[str, str] = {}
+            if positive == 0 or positive == total:
+                undefined_reasons["classification_auc_metrics"] = (
+                    "both positive and negative classes are required"
+                )
+            selected_classification = _classification_for_sessions(
+                benchmark_id=benchmark_id,
+                dataset_id=dataset_id,
+                model_name="selected_model",
+                partition_name=f"{partition_name}:{regime_name}:{value}",
+                predictions=selected_model_predictions,
+                sessions=cell_sessions,
+            )
+            baseline_metrics = {
+                name: _classification_for_sessions(
+                    benchmark_id=benchmark_id,
+                    dataset_id=dataset_id,
+                    model_name=name,
+                    partition_name=f"{partition_name}:{regime_name}:{value}",
+                    predictions=frame,
+                    sessions=cell_sessions,
+                )
+                for name, frame in classification_baseline_predictions.items()
+            }
+            selected_strategy: dict[str, StrategyMetricSet] = {}
+            comparator_strategy: dict[str, StrategyMetricSet] = {}
+            for name, metric_set in strategy_results.items():
+                attributed = regime_strategy_metric_set(
+                    source=metric_set,
+                    benchmark_id=benchmark_id,
+                    dataset_id=dataset_id,
+                    strategy_name=metric_set.strategy_name,
+                    partition_name=f"{partition_name}:{regime_name}:{value}",
+                    cost_scenario=metric_set.cost_scenario,
+                    attributed_sessions=cell_sessions,
+                )
+                if name.startswith("selected_model:"):
+                    selected_strategy[name] = attributed
+                else:
+                    comparator_strategy[name] = attributed
+            if selected_strategy or comparator_strategy:
+                undefined_reasons["strategy_path_metrics"] = (
+                    "non-contiguous regime subsets are attributed by signal_session and "
+                    "do not define standalone annualized return, drawdown, or Sharpe metrics"
+                )
+            cells[str(value)] = RegimeCellDiagnostics(
+                sample_size=total,
+                positive_count=positive,
+                negative_count=total - positive,
+                small_sample=total < small_sample_threshold,
+                warnings=warnings,
+                selected_model_classification=selected_classification,
+                classification_baselines=baseline_metrics,
+                selected_model_strategy=selected_strategy,
+                strategy_comparators=comparator_strategy,
+                undefined_reasons=undefined_reasons,
+            )
+        cells_by_regime[regime_name] = cells
+    return RegimeDiagnostics(
+        benchmark_id=benchmark_id,
+        dataset_id=dataset_id,
+        partition_name=partition_name,
+        volatility_threshold=volatility_threshold,
+        strategy_attribution_rule=strategy_attribution_rule,
+        small_sample_warning_threshold=small_sample_threshold,
+        regimes=cells_by_regime,
+    )
+
+
+def _classification_for_sessions(
+    *,
+    benchmark_id: str,
+    dataset_id: str,
+    model_name: str,
+    partition_name: str,
+    predictions: pd.DataFrame,
+    sessions: tuple[date, ...],
+) -> ClassificationMetricSet:
+    subset = (
+        predictions[predictions["session"].isin(set(sessions))]
+        .copy(deep=True)
+        .sort_values("session")
+    )
+    return classification_metric_set(
+        benchmark_id=benchmark_id,
+        dataset_id=dataset_id,
+        model_name=model_name,
+        partition_name=partition_name,
+        targets=[int(value) for value in subset["target"].to_list()],
+        probabilities=[float(value) for value in subset["probability_positive"].to_list()],
+        predictions=[int(value) for value in subset["predicted_class"].to_list()],
+    )

@@ -50,7 +50,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"benchmark_id={final_result['benchmark_id']}")
             return 0
         if args.command == "verify":
-            verification = verify_benchmark_directory(Path(args.benchmark_root))
+            verification = verify_benchmark_directory(
+                Path(args.benchmark_root),
+                require_runtime_reproduction=args.require_runtime_lineage,
+            )
             print(f"benchmark_id={verification.benchmark_id}")
             print("verification=passed")
             return 0
@@ -109,6 +112,7 @@ def _parser() -> argparse.ArgumentParser:
 
     verify = subparsers.add_parser("verify")
     verify.add_argument("--benchmark-root", required=True)
+    verify.add_argument("--require-runtime-lineage", action="store_true")
     return parser
 
 
