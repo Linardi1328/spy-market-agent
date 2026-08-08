@@ -61,9 +61,9 @@ def test_version_2_alpha_release_version_matches_pyproject_and_metadata() -> Non
     with (ROOT / "pyproject.toml").open("rb") as pyproject_file:
         pyproject = tomllib.load(pyproject_file)
 
-    assert pyproject["project"]["version"] == "2.0.0a1"
-    assert version("spy-market-agent") == "2.0.0a1"
-    assert spy_market_agent.__version__ == "2.0.0a1"
+    assert pyproject["project"]["version"] == "2.0.0a2"
+    assert version("spy-market-agent") == "2.0.0a2"
+    assert spy_market_agent.__version__ == "2.0.0a2"
 
 
 def test_required_top_level_documentation_files_exist() -> None:
