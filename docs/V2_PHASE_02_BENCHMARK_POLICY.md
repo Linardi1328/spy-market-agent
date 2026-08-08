@@ -1,10 +1,19 @@
 # Version 2 Phase 2 Benchmark Policy
 
-Status: Implementation in review
+Status: Engineering acceptance complete; release preparation in review
 
 This policy records the exact implementation decisions for the Version 2 Phase 2 Real
-Historical Benchmark infrastructure. It is not an acceptance report and does not claim that a
-real SPY benchmark has been run.
+Historical Benchmark infrastructure. It is not a raw benchmark artifact and does not include
+provider data, row-level labels, credentials, account identifiers, or generated benchmark
+JSON.
+
+Owner-run acceptance completed for benchmark ID `spy-v2p2-a065593e952e6a9d96f4be86` using
+dataset ID `spy-v2p1-825930b0a2bcab20c733b867`. The workflow passed dataset verification,
+validation, one controlled final-test execution, completed benchmark verification,
+runtime-lineage verification, and quality gates. The scientific result was weak: the
+selected `logistic_regression` classifier did not establish convincing directional
+discrimination, and Phase 2 must not be framed as proof of a predictive edge or
+profitability.
 
 ## Persistence
 

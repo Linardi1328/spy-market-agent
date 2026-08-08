@@ -1,108 +1,134 @@
 # Version 2 Phase 2 Review
 
-Status: Implementation in review
+Status: Engineering acceptance complete; release preparation in review
 
-## Branch
+## Branch And Release State
 
-- Starting main SHA: `a53160716ec9b266b9bee899a20855c24c4b7d91`
-- Branch name: `review/v2-phase-02-real-benchmark`
-- Final implementation SHA (original implementation candidate): `61f1431...`
-- Hardening SHA: to be reported after commit/push
-- Package/runtime version: `2.0.0a1`
+- Implementation PR: `#20`
+- Implementation branch: `review/v2-phase-02-real-benchmark`
+- Release-preparation branch: `review/v2-phase-02-release-preparation`
+- Release-preparation base: `main` at `1155c3c`
+- Final implementation SHA, original implementation candidate: `61f1431...`
+- Hardening SHA: `779567f55a353f9f6f806cbc2c50d2754146a770`
+- Package/runtime version prepared for release: `2.0.0a2`
 - Target public release identifier: `v2.0.0-alpha.2`
-- Git tag status: `v2.0.0-alpha.2` not created
+- Git tag status: `v2.0.0-alpha.2` not created on the review branch
 
-## Scope Implemented
+## Scope Accepted
 
-Implemented a dedicated `spy_market_agent.benchmark` package for deterministic, auditable,
-file-based Phase 2 benchmark infrastructure. The original implementation candidate at
-`61f1431...` accepts verified Phase 1 manifests, records offline feed evidence, checks
-dataset eligibility, builds the approved features and labels, constructs the Phase 2
-chronological split, writes immutable benchmark locks, runs validation-only model selection,
-creates final-test locks, gates final-test access, evaluates locked
-baselines/strategies/costs/regimes, writes artifact indexes, and verifies artifacts offline.
+Version 2 Phase 2 implemented a dedicated `spy_market_agent.benchmark` package for
+deterministic, auditable, file-based real historical benchmark infrastructure. The accepted
+workflow covers verified Phase 1 manifests, offline feed evidence, dataset eligibility,
+feature and label construction, chronological split construction, immutable benchmark locks,
+validation-only model selection, final-test locks, controlled final-test access, locked
+baseline and strategy evaluation, regime diagnostics, artifact indexes, runtime-lineage
+checks, audit replay, and deep offline semantic verification.
 
-This hardening pass strengthens the implementation before owner-run real-data acceptance. It
-adds deep semantic verification, frozen runtime-lineage enforcement, real regime-performance
+The hardening commit strengthened the implementation before owner-run real-data acceptance by
+adding deep semantic verification, frozen runtime-lineage enforcement, regime-performance
 diagnostics, reuse of the approved Version 1 risk/backtest engine for executable long/cash
-strategy paths, and immutable final-test access plus separate completion evidence.
+strategy paths, and immutable final-test access with separate completion evidence.
 
-## Files Created
+## Owner-Run Acceptance Evidence
 
-- `artifacts/benchmarks/.gitkeep`
-- `docs/V2_PHASE_02_BENCHMARK_POLICY.md`
-- `docs/V2_PHASE_02_DATA_CARD_TEMPLATE.md`
-- `reviews/V2_PHASE_02_REVIEW.md`
-- `src/spy_market_agent/benchmark/__init__.py`
-- `src/spy_market_agent/benchmark/artifacts.py`
-- `src/spy_market_agent/benchmark/baselines.py`
-- `src/spy_market_agent/benchmark/cli.py`
-- `src/spy_market_agent/benchmark/dataset.py`
-- `src/spy_market_agent/benchmark/errors.py`
-- `src/spy_market_agent/benchmark/identity.py`
-- `src/spy_market_agent/benchmark/locks.py`
-- `src/spy_market_agent/benchmark/metrics.py`
-- `src/spy_market_agent/benchmark/models.py`
-- `src/spy_market_agent/benchmark/pipeline.py`
-- `src/spy_market_agent/benchmark/regimes.py`
-- `src/spy_market_agent/benchmark/reporting.py`
-- `src/spy_market_agent/benchmark/splits.py`
-- `src/spy_market_agent/benchmark/strategies.py`
-- `src/spy_market_agent/benchmark/verification.py`
-- `tests/integration/test_v2_phase2_benchmark_flow.py`
-- `tests/unit/test_v2_phase2_benchmark.py`
-- `tests/unit/v2_phase2_helpers.py`
+- Dataset ID: `spy-v2p1-825930b0a2bcab20c733b867`
+- Dataset configuration: SPY, Alpaca, SIP, `1Day`, adjustment `all`, 2018-01-02 through
+  2025-12-31, 2011 sessions.
+- Dataset canonical checksum:
+  `d1c62194a3e13a164bbe09edad8cb6b4aa8bbd17a621d34da17e3e8edc96a259`
+- Dataset verification: passed.
+- Benchmark ID: `spy-v2p2-a065593e952e6a9d96f4be86`
+- Benchmark role: primary.
+- Chronological split: 1381 train rows, 295 validation rows, 297 final-test rows, 20
+  feature warm-up sessions, six boundary-exclusion sessions, `t+1` open entry, and `t+6`
+  open exit.
+- Benchmark verification: passed.
+- Runtime-lineage verification: passed.
+- Final test: opened once under the controlled Stage B process after final-test lock and
+  owner acknowledgement.
+- Post-final-test tuning: none.
 
-## Files Modified
+This review records sanitized summary evidence only. Raw Alpaca data, benchmark JSON
+artifacts, row-level labels, raw provider payloads, credentials, account identifiers, and
+authentication data remain uncommitted.
 
-- `.gitignore`
-- `AGENTS.md`
-- `CHANGELOG.md`
-- `FUTURE_ROADMAP.md`
-- `README.md`
-- `docs/ARCHITECTURE.md`
-- `docs/DEMO_GUIDE.md`
-- `docs/REPRODUCIBILITY.md`
-- `docs/SECURITY_AND_SAFETY.md`
-- `docs/V2_PHASE_02_REAL_HISTORICAL_BENCHMARK_SPEC.md`
-- `docs/WORKFLOWS.md`
-- `tests/unit/test_phase9_documentation.py`
+## Scientific Result
 
-## Persistence Decision
+Validation selected `logistic_regression` because it had higher validation ROC AUC than the
+locked `gradient_boosting` candidate:
 
-Phase 2 uses immutable file artifacts under `artifacts/benchmarks/<benchmark_id>/`. The
-SQLite schema is unchanged, no migration is added, and no model binary is persisted.
+| Model | ROC AUC | Log loss | Brier score |
+| --- | ---: | ---: | ---: |
+| Logistic Regression | 0.4524265002013693 | 0.6655731478455287 | 0.2362171314791596 |
+| Gradient Boosting | 0.4438683044703987 | 0.6750181668327135 | 0.2406752163211499 |
 
-## Policies
+Final Logistic Regression classification results were scientifically weak:
 
-- Regime policy: `trend_200`, `realized_volatility_20` with training-only median threshold,
-  `drawdown_10`, independent `calendar_year` diagnostics, and locked signal-session
-  strategy attribution.
-- Split policy: 20-row warm-up, five-session mandatory gap, six-session boundary exclusions,
-  70% train, 15% validation, final-test remainder, and fixed minimum row/class counts.
-- Cost matrix: `idealized`, `base`, `adverse`, and `severe` with `Decimal("10000")` initial
-  cash, zero risk-free rate, no cash yield, whole shares, and no intermediate cents
-  quantization.
-- Model policy: existing `logistic_regression` and `gradient_boosting` candidates only,
-  fixed parameters verified through existing lineage.
-- Selection policy: validation ROC AUC, log loss, Brier score, then logistic-regression
-  tie-break.
-- Classification baselines: `majority_class`, `always_positive`, `always_negative`,
-  `training_prevalence`.
-- Strategy comparators: `always_cash`, `buy_and_hold`, `fixed_20_session_momentum`, plus the
-  selected model using the existing fixed long-or-cash threshold.
-- Runtime lineage: Git SHA, Python version, package/runtime version, pandas, pydantic,
-  scikit-learn, exchange-calendars, alpaca-py, and benchmark-identity dependencies are
-  frozen in the lock and enforced before critical stages.
+- Rows: 297.
+- Positives: 177.
+- Negatives: 120.
+- Accuracy: 0.6127946127946128.
+- Balanced accuracy: 0.5221751412429378.
+- Precision: 0.6068965517241379.
+- Recall: 0.9943502824858758.
+- F1: 0.7537473233404711.
+- ROC AUC: 0.4640772128060263.
+- Average precision: 0.5768659559801369.
+- Log loss: 0.6758076912128111.
+- Brier score: 0.24133930491472247.
+- Predicted-positive rate: 0.9764309764309764.
 
-## Controls
+The classifier did not establish convincing directional predictive discrimination. Its final
+ROC AUC remained below 0.5, probability metrics did not beat the training-prevalence
+baseline, and the approximately 97.6% predicted-positive rate means the final-period signal
+behaved close to almost-always-long. This is valid benchmark evidence and not an engineering
+failure, but it must not be framed as a proven predictive edge, trading readiness, or
+profitability.
+
+## Final-Test Strategy Summary
+
+Primary base-cost selected-model strategy:
+
+- Initial cash: 10000 USD.
+- Final equity: 12546.511708197906.
+- Total return: 0.2546511708197906.
+- Annualized return: approximately 0.21226.
+- Annualized volatility: approximately 0.18171.
+- Maximum drawdown: approximately -0.14852.
+- Sharpe ratio: approximately 1.18062.
+- Exposure: approximately 97.64%.
+- Completed trades: 5.
+
+Base-cost comparators:
+
+| Strategy | Final equity | Total return | Maximum drawdown | Sharpe ratio |
+| --- | ---: | ---: | ---: | ---: |
+| Selected model | 12546.511708197906 | 0.2546511708197906 | approximately -0.14852 | approximately 1.18062 |
+| Buy and hold | 11858.828299706134 | 0.1858828299706134 | approximately -0.18326 | approximately 0.90744 |
+| Fixed 20-session momentum | 11497.440235049025 | 0.1497440235049025 | approximately -0.06335 | approximately 1.32024 |
+
+Cost sensitivity for the selected-model strategy:
+
+- Idealized return: 25.5052%.
+- Base return: 25.4651%.
+- Adverse return: 25.1845%.
+- Severe return: 20.8255%.
+
+Although the selected-model strategy outperformed buy-and-hold on return and drawdown during
+this single untouched final-test period, the classifier itself showed weak discrimination and
+very high exposure. The strategy result must not be represented as evidence of a reliable
+predictive market edge or guaranteed profitability.
+
+## Controls Accepted
 
 - `benchmark verify` performs deep offline semantic verification for the declared workflow
   stage and rejects semantic tampering even when `artifact_index.json` checksums are
   recomputed.
+- Runtime lineage is frozen in the lock and enforced before validation, final locking,
+  final-test execution, audit replay, and reproduction verification.
 - Final-test row-level labels are guarded from Stage A services.
-- `final_test_access.json` is written before final-test labels are loaded and remains
-  immutable started-access evidence.
+- `final_test_access.json` is immutable started-access evidence and is written before
+  final-test labels are loaded.
 - `final_test_completion.json` is written only after completed final-test artifacts are
   written and references all required final checksums.
 - A completed non-audit final run cannot be silently repeated.
@@ -116,64 +142,57 @@ SQLite schema is unchanged, no migration is added, and no model binary is persis
 - Safe path validation blocks path traversal, artifact-root escapes, source/test/doc/data/Git
   writes, symlink artifacts, and conflicting immutable writes.
 
-## Tests
+## Owner-Run Quality Gates
 
-Test categories include Phase 1 manifest integration, dataset eligibility, feed rules,
-split arithmetic, final-test label guards, model configuration snapshots, validation-only
-selection, classification baselines, strategy comparators, cost matrix, Decimal accounting,
-classification metrics, regimes, deterministic artifact serialization, locks, runtime
-lineage mismatch handling, semantic tampering rejection, safe writes,
-idempotency/conflict behavior, immutable final-test access/completion, audit replay,
-approved risk/backtest engine reuse, no-network/no-broker import safety, CLI behavior,
-documentation Quick Start requirements, and existing Version 1/Phase 1 regression flows.
+- `pytest`: 999 passed.
+- Coverage: 85% total.
+- Ruff format: 164 files already formatted.
+- Ruff lint: all checks passed.
+- MyPy: success, no issues found in 132 source files.
+- Git working tree after real benchmark: clean.
+- Generated benchmark artifacts: confirmed ignored under `artifacts/benchmarks/*`.
 
-## Verification
+## Release-Preparation Boundaries
 
-Hardening verification run:
+- Documentation may record only sanitized evidence and release-preparation status.
+- No benchmark algorithms, model behavior, feature engineering, label definitions, split
+  logic, risk rules, execution behavior, APIs, dashboard behavior, market-data logic, or
+  other runtime behavior are changed in this branch.
+- No raw Alpaca data, benchmark JSON artifacts, row-level labels, provider payloads,
+  credentials, account identifiers, authentication data, model binaries, SQLite artifacts, or
+  temporary benchmark artifacts are committed.
+- No real benchmark is rerun by Codex.
+- No final test is reopened.
+- No Phase 3 implementation begins.
+- Phase 3 remains Version 2 Phase 3 / `v2.0.0-alpha.3`, Walk-Forward Model Research, under
+  its own future governing protocol.
+- Phase 3 research must not tune against the already-opened Phase 2 final test.
 
-- `python -m pip install -e ".[dev]"`: passed.
-- `pytest --cov-fail-under=85`: 999 passed, 85.13% coverage.
-- `pytest tests/unit -q`: passed; 948 collected unit tests.
-- `pytest tests/integration -q`: passed; 51 collected integration tests.
-- `pytest -W error::FutureWarning`: 999 passed.
-- Targeted Phase 2 tests:
-  `pytest tests/unit/test_v2_phase2_benchmark.py tests/integration/test_v2_phase2_benchmark_flow.py -q`:
-  21 passed.
-- `ruff check .`: passed.
-- `ruff format --check .`: passed.
-- `mypy src tests`: passed.
-- `git diff --check`: passed.
-- Package/runtime version check: `2.0.0a1 2.0.0a1`.
-- Local dashboard smoke: not rerun for this hardening pass because README Quick Start and
-  startup code paths were not changed.
+## Release-Preparation Verification
 
-The previous original implementation candidate recorded 994 passing full tests, 945 unit
-tests, 49 integration tests, 16 targeted Phase 2 tests, 85.21% coverage, and passing Ruff,
-Ruff format, MyPy, FutureWarning, and local startup smoke checks.
+Release-preparation quality gates are rerun on
+`review/v2-phase-02-release-preparation` after documentation and metadata edits:
 
-## Known Limitations
+- `python -m pytest`
+- `python -m ruff check .`
+- `python -m ruff format --check .`
+- `python -m mypy`
+- `git status --short`
 
-- No real Phase 2 benchmark was run by Codex.
-- No real final test was accessed.
-- No real SPY dataset is distributed or committed.
-- No generated real benchmark result is committed.
-- Owner-run feed, dataset, validation, final-test authorization, real final benchmark,
-  artifact verification, and release-preparation review remain open acceptance gates.
+Results are reported in the release-preparation branch final report.
 
 ## Explicit Confirmations
 
-- No real benchmark was run by Codex.
-- No real final test was accessed.
-- No real SPY dataset was committed.
-- No generated real benchmark result was committed.
-- No credentials or account identifiers were committed.
-- No model family or parameter changed.
-- No feature or label changed.
-- No threshold tuning was added.
-- No paper-execution behavior changed.
-- No API write route was added.
-- No dashboard execution control was added.
-- No live support was added.
-- Package/runtime version remains `2.0.0a1`.
-- `v2.0.0-alpha.2` was not created.
+- Phase 2 benchmark infrastructure and controlled evaluation workflow passed engineering
+  acceptance.
+- The owner-run real SIP benchmark completed under controlled validation and one final-test
+  execution.
+- Benchmark verification and runtime-lineage verification passed.
+- Quality gates passed in owner-run final acceptance.
+- The scientific result did not establish a reliable predictive edge.
+- No profitability, trading readiness, or model superiority claim is made.
+- Package/runtime version is prepared as `2.0.0a2`.
+- `v2.0.0-alpha.2` was not created on the review branch.
+- No runtime behavior changes are part of release preparation.
+- No raw real data, benchmark artifacts, final-test records, or secrets are committed.
 - Phase 3 was not started.

@@ -311,15 +311,18 @@ Current tracking:
 
 - `v1.0.0` remains the frozen stable baseline.
 - V2 Phase 1 / `v2.0.0-alpha.1`: Accepted - Version 2 Real SPY Data Foundation.
-- V2 Phase 2 / `v2.0.0-alpha.2`: Implementation in review; real benchmark not run.
-- V2 Phase 3 / `v2.0.0-alpha.3`: Planned and not started.
+- V2 Phase 2 / `v2.0.0-alpha.2`: Engineering acceptance complete; release preparation in
+  review after owner-run real SIP benchmark completion.
+- V2 Phase 3 / `v2.0.0-alpha.3`: Planned and not started; weak Phase 2 predictive
+  discrimination is research motivation, not authorization to tune on the opened Phase 2
+  final test.
 
 | Track | Version | Name | Recommended Branch | Scope |
 | --- | --- | --- | --- | --- |
 | V1 baseline | `v1.0.0` | Frozen Version 1 baseline | Already tagged | Educational SPY daily research, backtesting, persistence, read-only API/dashboard, and explicit paper-only safeguards. |
 | V2 Phase 1 | `v2.0.0-alpha.1` | Real SPY Data Foundation | `review/v2-phase-01-release-preparation` | Accepted - Version 2 Real SPY Data Foundation with approved provider workflow, licensing record, validated SPY dataset handling, checksums, and data lineage. |
-| V2 Phase 2 | `v2.0.0-alpha.2` | Real Historical Benchmark | `review/v2-phase-02-real-benchmark` | Implementation in review. Real SPY benchmark infrastructure with regimes, baselines, cost/slippage sensitivity, and no live execution; no owner-run real benchmark result yet. |
-| V2 Phase 3 | `v2.0.0-alpha.3` | Walk-Forward Model Research | `review/v2-phase-03-walk-forward-research` | Planned and not started. Walk-forward evaluation, ablations, calibration, threshold research, drift analysis, and registry evidence. |
+| V2 Phase 2 | `v2.0.0-alpha.2` | Real Historical Benchmark | `review/v2-phase-02-release-preparation` | Engineering acceptance complete after owner-run real SIP benchmark, validation, one controlled final-test execution, benchmark verification, and quality gates. Release preparation is in review; no live execution or profitability claim. |
+| V2 Phase 3 | `v2.0.0-alpha.3` | Walk-Forward Model Research | `review/v2-phase-03-walk-forward-research` | Planned and not started. Walk-forward evaluation, ablations, calibration, threshold research, drift analysis, and registry evidence. Phase 3 must not tune against the already-opened Phase 2 final test. |
 | V2 Phase 4 | `v2.0.0-beta.1` | Real-Time Shadow Mode | `review/v2-phase-04-shadow-mode` | Reliable ingestion, freshness checks, scheduled inference, monitoring, alerts, and no submission capability. |
 | V2 Phase 5 | `v2.0.0-beta.2` | Production Paper Operation | `review/v2-phase-05-production-paper` | Production paper operation, reconciliation, recovery runbooks, and observation evidence. |
 | V2 Phase 6 | `v2.0.0-rc.1` | Version 2 Release Candidate | `review/v2-phase-06-release-candidate` | Feature-complete Version 2 audit for real-data, shadow, and production-paper scope. |
@@ -329,9 +332,10 @@ The Phase 1 planning specification is
 [Version 2 Phase 1 - Real SPY Data Foundation Specification](docs/V2_PHASE_01_REAL_SPY_DATA_SPEC.md).
 It is accepted for `v2.0.0-alpha.1`. The Phase 2 governing specification is
 [Version 2 Phase 2 - Real Historical Benchmark Specification](docs/V2_PHASE_02_REAL_HISTORICAL_BENCHMARK_SPEC.md).
-Phase 2 implementation is under code review and still requires owner-run feed, dataset,
-validation, final-test, artifact-verification, and release-preparation gates before any
-`v2.0.0-alpha.2` release work.
+Phase 2 implementation was merged through PR #20, and the owner-run feed, dataset,
+validation, final-test, artifact-verification, and quality gates completed. The
+release-preparation branch records sanitized evidence for `v2.0.0-alpha.2`; generated real
+benchmark artifacts and provider data remain ignored and are not committed.
 
 Recommended branch sequence:
 
@@ -637,16 +641,21 @@ Related documents:
 - [Version 2 Phase 1 - Real SPY Data Foundation Specification](docs/V2_PHASE_01_REAL_SPY_DATA_SPEC.md):
   accepted specification for `v2.0.0-alpha.1`.
 - [Version 2 Phase 2 - Real Historical Benchmark Specification](docs/V2_PHASE_02_REAL_HISTORICAL_BENCHMARK_SPEC.md):
-  planning specification in review; implementation is not authorized until approval.
+  accepted governing specification for `v2.0.0-alpha.2` release preparation.
 - [Version 2.0.0 Alpha 1 Release Notes](RELEASE_NOTES_V2.0.0_ALPHA_1.md): release notes
   for the `v2.0.0-alpha.1` release identifier.
+- [Version 2.0.0 Alpha 2 Release Notes](RELEASE_NOTES_V2.0.0_ALPHA_2.md): release notes
+  for the `v2.0.0-alpha.2` release-preparation branch.
 - [Version 2 Phase 1 Release Checklist](VERSION_2_PHASE_01_RELEASE_CHECKLIST.md):
+  release checklist and post-merge operator actions.
+- [Version 2 Phase 2 Release Checklist](VERSION_2_PHASE_02_RELEASE_CHECKLIST.md):
   release checklist and post-merge operator actions.
 
 Change log:
 
 | Date | Base Main SHA | Change |
 | --- | --- | --- |
+| 2026-08-09 | `1155c3c` | Recorded V2 Phase 2 engineering acceptance after PR #20 merge and owner-run real SIP benchmark completion. The benchmark showed weak predictive discrimination, motivating future Phase 3 walk-forward research without authorizing tuning on the already-opened Phase 2 final test. |
 | 2026-08-05 | `8074ec1dbe738b67d288bf648b5cfc2126f4e76c` | Added the V2 Phase 2 Real Historical Benchmark specification for review; at that time implementation had not started, and no benchmark, profitability claim, or live-money capability was added. |
 | 2026-08-05 | `c66d9e5ae7c99eeb7ab01e00a3c3494b2da1a7b0` | Recorded V2 Phase 1 acceptance for `v2.0.0-alpha.1`, owner-run smoke-test completion, and stable release metadata; at that time Phase 2 had not started and live-money trading remained outside Version 2.0.0. |
 | 2026-08-04 | `0947c391b6c7646a27c1baeb7778cd229726bacb` | Added the Version 2 Phase 1 specification reference and clarified roadmap SHA metadata as base-main context; documentation-only planning with no Version 2 implementation. |
