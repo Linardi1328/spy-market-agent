@@ -11,15 +11,19 @@ profitability, and is not real-money trading infrastructure.
 ## Release Status
 
 - Current stable historical baseline: `v1.0.0`.
-- Package version: `2.0.0a1`.
-- Release identifier: `v2.0.0-alpha.1`.
+- Current package/runtime version remains `2.0.0a1`.
+- Current released identifier remains `v2.0.0-alpha.1`.
 - V2 Phase 1: accepted and complete - Real SPY Data Foundation.
-- V2 Phase 2: next planned phase - Real Historical Benchmark; not started.
+- V2 Phase 2: Real Historical Benchmark implementation is under review.
+- No real Phase 2 benchmark result exists yet.
+- No Phase 3 implementation has begun.
 - Live-money readiness: not approved.
 
 Version 2 Phase 1 uses package version `2.0.0a1` and release identifier
 `v2.0.0-alpha.1`. The release tag must point only to a successfully verified `main` commit.
-Version 2 Phase 2 has not begun and requires a separate approved specification.
+Version 2 Phase 2 infrastructure is implemented on the review branch for code review and
+owner-run acceptance gates. It does not include a completed real benchmark, profitability
+claim, final-test acceptance, or release-preparation version bump.
 
 ## Version 1 Historical Baseline
 
@@ -145,43 +149,218 @@ The current implemented system intentionally does not include:
 Version 1.0.0 specifically did not include market-data downloading; the explicit SPY
 historical-data acquisition CLI begins in Version 2 Phase 1.
 
-## Quick Start
+## Quick Start — Open the Local Dashboard
 
-Use Python 3.12:
+This workflow launches the application locally in your browser. It is not a public internet
+deployment. No Alpaca credentials are required for the safe dashboard demo. The API and
+dashboard are read-only, no order is submitted, and an empty dashboard is expected until
+research artifacts are persisted.
+
+### 1. Clone and Enter the Repository
+
+```bash
+git clone https://github.com/Linardi1328/spy-market-agent.git
+cd spy-market-agent
+
+pwd
+git rev-parse --show-toplevel
+test -f pyproject.toml && echo "Repository root confirmed"
+```
+
+Editable installation fails with errors such as `neither setup.py nor pyproject.toml found`
+when these commands are run from your home directory or another folder.
+
+### 2. Create and Activate a Python 3.12 Environment
+
+macOS/Linux:
 
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
+
+python --version
+python -c "import spy_market_agent; print(spy_market_agent.__version__)"
 ```
 
-Run the complete verification gate:
+Windows PowerShell:
 
-```bash
-pytest --cov-fail-under=85
-ruff check .
-ruff format --check .
-mypy src tests
+```powershell
+py -3.12 -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
+
+python --version
+python -c "import spy_market_agent; print(spy_market_agent.__version__)"
 ```
 
-Initialize a local SQLite database explicitly:
+The import command is the source of truth for the package version on your branch.
+
+### 3. Initialize the Local Database Explicitly
 
 ```bash
 python -c "from spy_market_agent.persistence import initialize_database; initialize_database('./spy_market_agent.sqlite3')"
+test -f spy_market_agent.sqlite3 && echo "Database initialized"
 ```
 
-Start the read-only FastAPI application:
+Initialization does not download data, train a model, contact Alpaca, or submit an order.
+The database file is local and ignored by Git.
+
+### 4. Start FastAPI in Terminal A
+
+Open a new terminal window or tab. Keep this command running. Do not type the Streamlit
+command into the same active terminal.
 
 ```bash
-python -m uvicorn "spy_market_agent.api.main:create_app" --factory --host 127.0.0.1 --port 8000
+cd /path/to/spy-market-agent
+source .venv/bin/activate
+
+SQLITE_DATABASE_PATH=./spy_market_agent.sqlite3 \
+python -m uvicorn "spy_market_agent.api.main:create_app" \
+  --factory \
+  --host 127.0.0.1 \
+  --port 8000
 ```
 
-Start the read-only Streamlit dashboard:
+PowerShell:
+
+```powershell
+cd C:\path\to\spy-market-agent
+.venv\Scripts\Activate.ps1
+
+$env:SQLITE_DATABASE_PATH="./spy_market_agent.sqlite3"
+python -m uvicorn "spy_market_agent.api.main:create_app" `
+  --factory `
+  --host 127.0.0.1 `
+  --port 8000
+```
+
+The FastAPI terminal must remain open.
+
+### 5. Verify FastAPI Before Starting Streamlit
+
+In another terminal, run:
 
 ```bash
-streamlit run src/spy_market_agent/dashboard/streamlit_app.py
+curl http://127.0.0.1:8000/health
 ```
+
+The response should contain `"status":"ok"`. You can also open
+`http://127.0.0.1:8000/health` in a browser. Do not continue until the health check works.
+
+### 6. Start Streamlit in Terminal B
+
+Use another terminal window or tab; this is a separate terminal from Terminal A:
+
+```bash
+cd /path/to/spy-market-agent
+source .venv/bin/activate
+
+DASHBOARD_API_BASE_URL=http://127.0.0.1:8000 \
+streamlit run src/spy_market_agent/dashboard/streamlit_app.py \
+  --server.address 127.0.0.1 \
+  --server.port 8501 \
+  --server.headless true \
+  --browser.gatherUsageStats false
+```
+
+PowerShell:
+
+```powershell
+cd C:\path\to\spy-market-agent
+.venv\Scripts\Activate.ps1
+
+$env:DASHBOARD_API_BASE_URL="http://127.0.0.1:8000"
+streamlit run src/spy_market_agent/dashboard/streamlit_app.py `
+  --server.address 127.0.0.1 `
+  --server.port 8501 `
+  --server.headless true `
+  --browser.gatherUsageStats false
+```
+
+Headless mode avoids Streamlit's first-run email prompt.
+
+### 7. Open the Application
+
+- Dashboard: `http://127.0.0.1:8501`
+- API health: `http://127.0.0.1:8000/health`
+- FastAPI interactive documentation: `http://127.0.0.1:8000/docs`
+
+These addresses work only while their corresponding terminal processes remain running.
+
+### 8. Expected First-Run Behavior
+
+A newly initialized database may correctly show no persisted market-data status, no model
+runs, no backtests, no paper-order attempts, paper execution disabled, dry-run enabled, kill
+switches engaged, and Alpaca credential presence false.
+
+This proves the interface and API are running. It does not prove that a model benchmark has
+been executed.
+
+### 9. Stop and Clean Up
+
+Stop each server with `Ctrl+C` in its own terminal. Optional cleanup:
+
+```bash
+deactivate 2>/dev/null || true
+rm -rf .venv
+rm -f spy_market_agent.sqlite3
+git status --short
+```
+
+Do not delete ignored Phase 1 market-data files or benchmark artifacts unless you
+intentionally created them and no longer need them.
+
+### 10. Troubleshooting
+
+Error: `neither setup.py nor pyproject.toml found`
+
+Cause: the command was run outside the repository root.
+
+Fix:
+
+```bash
+cd spy-market-agent
+test -f pyproject.toml && echo "Repository root confirmed"
+```
+
+Error: `ModuleNotFoundError: spy_market_agent`
+
+Fix:
+
+```bash
+source .venv/bin/activate
+python -m pip install -e ".[dev]"
+```
+
+Error: dashboard says API unavailable
+
+Fix: confirm the FastAPI terminal is still running, open
+`http://127.0.0.1:8000/health`, confirm `DASHBOARD_API_BASE_URL`, and confirm ports `8000`
+and `8501` are not occupied.
+
+Error: database unavailable
+
+Fix: initialize `spy_market_agent.sqlite3` and ensure `SQLITE_DATABASE_PATH` points to the
+same file used during initialization.
+
+Error: port already in use
+
+Fix: stop the process using the port or choose local alternatives, for example FastAPI
+`--port 8001` and Streamlit `--server.port 8502`. If FastAPI uses a different port, set
+`DASHBOARD_API_BASE_URL` to match it.
+
+Error: dashboard opens but contains no results
+
+Fix: the database is empty. Research artifacts must be generated and persisted through
+approved workflows before model runs or backtests appear.
+
+Detailed guides use the same local database, ports, and startup order:
+[Demo Guide](docs/DEMO_GUIDE.md), [Workflows](docs/WORKFLOWS.md),
+[Reproducibility](docs/REPRODUCIBILITY.md), and
+[Security and Safety](docs/SECURITY_AND_SAFETY.md).
 
 ## Documentation
 
@@ -195,6 +374,8 @@ streamlit run src/spy_market_agent/dashboard/streamlit_app.py
 - [Version 2 Phase 1 Real SPY Data Specification](docs/V2_PHASE_01_REAL_SPY_DATA_SPEC.md)
 - [Version 2 Phase 1 Provider Decision](docs/V2_PHASE_01_PROVIDER_DECISION.md)
 - [Version 2 Phase 2 Real Historical Benchmark Specification](docs/V2_PHASE_02_REAL_HISTORICAL_BENCHMARK_SPEC.md)
+- [Version 2 Phase 2 Benchmark Policy](docs/V2_PHASE_02_BENCHMARK_POLICY.md)
+- [Version 2 Phase 2 Data Card Template](docs/V2_PHASE_02_DATA_CARD_TEMPLATE.md)
 - [Version 2.0.0 Alpha 1 Release Notes](RELEASE_NOTES_V2.0.0_ALPHA_1.md)
 - [Version 2 Phase 1 Release Checklist](VERSION_2_PHASE_01_RELEASE_CHECKLIST.md)
 - [Project Specification](PROJECT_SPEC.md)

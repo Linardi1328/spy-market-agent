@@ -1,6 +1,6 @@
 # Version 2 Phase 2 — Real Historical Benchmark Specification
 
-Status: Planning — awaiting review and implementation approval
+Status: Implementation in review
 
 Target future release identifier: `v2.0.0-alpha.2`
 
@@ -10,14 +10,14 @@ Target future package version: `2.0.0a2`
 
 Planned implementation branch: `review/v2-phase-02-real-benchmark`
 
-This specification does not authorize implementation until it is reviewed and explicitly
-approved. Phase 2 evaluates the existing approved research pipeline using frozen real
-historical SPY data. It does not authorize new model research, live execution, shadow
-operation, additional paper-execution behavior, profitability claims, or investment
-suitability claims.
+This specification governs the Phase 2 implementation review branch. Phase 2 evaluates the
+existing approved research pipeline using frozen real historical SPY data. It does not
+authorize new model research, live execution, shadow operation, additional paper-execution
+behavior, profitability claims, or investment suitability claims.
 
-Version 2 Phase 1 is accepted. Version 2 Phase 2 implementation has not started, no real
-Phase 2 benchmark has been run, and no benchmark result is claimed by this planning branch.
+Version 2 Phase 1 is accepted. Version 2 Phase 2 infrastructure is in implementation review,
+no owner-run real Phase 2 benchmark has been run by Codex, and no benchmark result is
+claimed by this branch.
 
 ## Table of Contents
 
@@ -831,8 +831,9 @@ python -m spy_market_agent.benchmark.cli verify \
   --benchmark-report <report-or-manifest>
 ```
 
-These commands are planning examples only and are not implemented by this specification
-branch.
+The implementation-review branch provides these commands as manually invoked, offline
+benchmark workflow entry points. They are not automatic jobs and do not run real-data
+acceptance by themselves.
 
 Required command behavior for a future implementation:
 
@@ -1085,5 +1086,7 @@ Do not implement these deliverables in this specification branch.
 
 ## 29. Approval Boundary
 
-This specification is planning documentation only. Version 2 Phase 2 implementation must not
-begin until this document is reviewed and explicitly approved.
+This specification is the governing implementation-review document. Version 2 Phase 2 is not
+accepted, complete, or released until the implementation branch is reviewed and the owner-run
+real-data validation, final-test authorization, benchmark completion, artifact verification,
+and release-preparation gates are complete.

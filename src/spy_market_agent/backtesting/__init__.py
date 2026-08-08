@@ -3,7 +3,10 @@ from spy_market_agent.backtesting.costs import (
     estimate_order_cost,
     maximum_affordable_buy_quantity,
 )
-from spy_market_agent.backtesting.engine import run_long_or_cash_backtest
+from spy_market_agent.backtesting.engine import (
+    run_long_or_cash_backtest,
+    run_strategy_signal_backtest,
+)
 from spy_market_agent.backtesting.metrics import calculate_backtest_metrics
 from spy_market_agent.backtesting.models import (
     BACKTEST_SCHEMA_VERSION,
@@ -52,4 +55,5 @@ __all__ = [
     "estimate_order_cost",
     "maximum_affordable_buy_quantity",
     "run_long_or_cash_backtest",
+    "run_strategy_signal_backtest",
 ]

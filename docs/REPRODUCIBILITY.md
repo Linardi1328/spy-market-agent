@@ -162,6 +162,63 @@ checksums, recomputes the dataset ID, confirms filenames and recorded generated 
 row count and first/last sessions, reruns OHLCV and XNYS validation from the recorded
 retrieval timestamp, and fails closed on mismatches.
 
+## Version 2 Phase 2 Benchmark Reproducibility
+
+**Implementation in review:** Phase 2 benchmark infrastructure uses ignored immutable files
+under `artifacts/benchmarks/<benchmark_id>/`. It does not change the SQLite schema and does
+not persist model binaries. The final model is reconstructed from the locked configuration
+and refit deterministically from verified data.
+
+Benchmark preparation accepts a Phase 1 manifest path only. It deep-verifies the Phase 1 raw,
+canonical, and manifest artifacts before loading canonical daily bars, then reuses the
+approved feature, label, model, strategy, risk, and backtest implementations.
+
+Benchmark identity is SHA-256 over canonical JSON containing stable values: dataset ID,
+canonical checksum, provider/feed/adjustment mode, feature and label schema IDs, forecast
+horizon, deterministic split boundaries, candidate model configurations, random seed,
+selection rule, signal and risk policy, baseline definitions, strategy comparator
+definitions, full cost matrix, exact regime definitions and attribution rule, frozen
+training volatility threshold, code commit, Python version, package version, dependency
+versions, and artifact schema versions. It excludes clock time, usernames, hostnames, local
+absolute paths, credentials, and random UUIDs.
+
+Phase 2 generated JSON uses sorted keys, compact separators, no NaN/Infinity, deterministic
+Decimal strings, LF line endings, and a terminal newline. Every artifact is covered by
+checksums and `artifact_index.json`. `benchmark verify` performs deep offline semantic
+verification rather than trusting hashes alone: it validates artifact schemas, verifies the
+Phase 1 dataset, reconstructs features, labels, split sessions, eligibility, benchmark
+identity, policies, validation artifacts, final-test locks, and completed final-test
+relationships for the declared workflow stage. It rejects semantic tampering even when
+`artifact_index.json` was recomputed.
+
+Critical benchmark stages enforce frozen runtime lineage against the lock: Git commit SHA,
+Python version, package/runtime version, pandas, pydantic, scikit-learn,
+exchange-calendars, alpaca-py, and all dependencies included in the benchmark identity.
+`run-validation`, `finalize-lock`, `run-final-test`, audit replay, and `benchmark verify
+--require-runtime-lineage` fail closed on mismatches and never update the lock
+automatically.
+
+The deterministic split is positional: six supervised rows are excluded at each boundary,
+assignable rows are split 70% train, 15% validation, and all rounding remainder goes to the
+final test. Split construction is independent of model outcomes and fails closed on row or
+class-count minimums.
+
+Stage A validation receives row-level training and validation labels only. Final-test
+row-level labels are guarded until `final_test_lock.json` exists and
+`run-final-test --acknowledge-final-test-access` writes immutable started-access evidence to
+`final_test_access.json`. Successful completion is recorded separately in
+`final_test_completion.json`; audit replay never creates a new access record or overwrites
+accepted artifacts.
+
+Phase 2 strategy diagnostics reuse the approved Version 1 risk/backtest path for selected
+model and executable long/cash comparator transitions. Generated strategy artifacts retain
+proposed orders, risk decisions, fills, costs, slippage, portfolio states, ending cash, and
+ending shares. Regime diagnostics are descriptive, use validation only during Stage A, and
+report explicit undefined reasons for metrics that are not mathematically meaningful.
+
+Normal automated tests use synthetic Phase 1 manifests and make no network request. Owner-run
+real benchmark execution remains an acceptance gate outside Codex verification.
+
 ## Checksums and Schema Versions
 
 Validated data and downstream artifacts retain explicit schema and checksum lineage:
@@ -175,6 +232,7 @@ Validated data and downstream artifacts retain explicit schema and checksum line
 - backtest schema: `spy-daily-next-open-backtest-v1`
 - paper-execution schema: `spy-paper-execution-v1`
 - SQLite schema: `spy-sqlite-persistence-v2`
+- benchmark artifact schema: `spy-v2-phase2-benchmark-artifacts-v1`
 
 Market-data checksums are deterministic over canonical rows, column order, session order,
 prices, and volume. Backtest results also retain source market data and execution-price
@@ -198,6 +256,11 @@ SQLite initialization is explicit and idempotent:
 
 ```bash
 python -c "from spy_market_agent.persistence import initialize_database; initialize_database('./spy_market_agent.sqlite3')"
+SQLITE_DATABASE_PATH=./spy_market_agent.sqlite3 \
+python -m uvicorn "spy_market_agent.api.main:create_app" \
+  --factory \
+  --host 127.0.0.1 \
+  --port 8000
 ```
 
 Imports, API startup, and dashboard startup do not initialize or migrate SQLite files. Read
