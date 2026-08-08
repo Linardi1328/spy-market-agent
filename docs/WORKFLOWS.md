@@ -157,8 +157,9 @@ python -m spy_market_agent.benchmark.cli prepare \
 ```
 
 Generated benchmark outputs remain ignored under `artifacts/benchmarks/<benchmark_id>/`.
-Codex verification uses synthetic manifests only. Owner-run real benchmark execution remains
-a later acceptance gate.
+Codex verification uses synthetic manifests only. The owner-run primary real SIP benchmark
+for `v2.0.0-alpha.2` has completed; do not rerun or reopen that final test during release
+preparation. Record only sanitized summary evidence in Git.
 
 Deep-verify a benchmark directory offline:
 
@@ -190,10 +191,11 @@ python -m spy_market_agent.benchmark.cli finalize-lock \
   --acknowledge-final-test-policy
 ```
 
-Stage B final-test access remains an owner-run acceptance action and must not be run by
-Codex during implementation review. When the owner explicitly authorizes it, the command
-writes immutable `final_test_access.json` before loading final-test labels and writes
-`final_test_completion.json` only after all final artifacts are completed:
+Stage B final-test access is an owner-run controlled action and must not be run by Codex
+during release preparation. For the accepted Phase 2 benchmark, this command has already
+been run once by the owner. A new non-audit run would require a new approved benchmark
+identity. The command writes immutable `final_test_access.json` before loading final-test
+labels and writes `final_test_completion.json` only after all final artifacts are completed:
 
 ```bash
 python -m spy_market_agent.benchmark.cli run-final-test \
