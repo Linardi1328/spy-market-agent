@@ -75,7 +75,14 @@ Date: 2026-08-09
 - [x] Owner-run Ruff lint passed.
 - [x] Owner-run MyPy passed: no issues in 132 source files.
 - [x] Owner-run Git working tree after real benchmark was clean.
-- [ ] Release-preparation branch verification completed after documentation edits.
+- [x] Release-preparation branch verification completed after documentation edits.
+      - Pytest: 999 passed.
+      - Coverage: 85%.
+      - Ruff lint: passed.
+      - Ruff formatting: 166 files already formatted.
+      - MyPy: no issues found in 132 source files.
+      - Working tree clean after verification.
+      - Package/runtime version: 2.0.0a2.
 
 ## Post-Merge Steps
 
