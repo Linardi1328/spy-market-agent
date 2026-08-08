@@ -2,12 +2,6 @@
 
 ## [Unreleased]
 
-- No unreleased changes are recorded after the Version 2 Phase 2 release-preparation updates.
-
-## [2.0.0-alpha.2] - 2026-08-09
-
-Corresponding Python package version: `2.0.0a2`.
-
 ### Added
 
 - Added the Version 2 Phase 2 Real Historical Benchmark specification.
@@ -20,34 +14,12 @@ Corresponding Python package version: `2.0.0a2`.
   setup, explicit SQLite initialization, FastAPI and Streamlit startup order, health
   verification, expected empty-state behavior, and troubleshooting.
 
-### Accepted
+### Planning
 
-- Implementation PR #20 was merged at main commit `1155c3c`.
-- Owner-run real SIP Phase 2 benchmark acceptance completed using dataset ID
-  `spy-v2p1-825930b0a2bcab20c733b867` and benchmark ID
-  `spy-v2p2-a065593e952e6a9d96f4be86`.
-- Dataset verification, benchmark verification, runtime-lineage verification, validation,
-  one controlled final-test execution, and quality gates passed in the owner environment.
-- Generated real benchmark artifacts and provider data remained ignored and were not added
-  to Git.
-
-### Scientific Result
-
-- `logistic_regression` was selected by validation ROC AUC over `gradient_boosting`.
-- Final-test ROC AUC was below `0.5`, and probability metrics did not beat the
-  training-prevalence baseline.
-- The selected model behaved close to an almost-always-long signal during the final-test
-  period, with about `97.6%` predicted-positive rate.
-- The final-test strategy evidence is valid benchmark evidence, but it does not establish a
-  reliable predictive edge, trading readiness, or profitability.
-
-### Not Included
-
-- No raw Alpaca data, benchmark JSON artifacts, row-level labels, provider payloads,
-  credentials, account identifiers, or authentication data are committed.
-- No model research, feature changes, hyperparameter tuning, calibration, threshold
-  research, API write route, dashboard execution control, paper-execution behavior, live
-  trading, or Phase 3 implementation is included.
+- Phase 2 implementation is under review pending owner-run acceptance gates.
+- Package/runtime version remains `2.0.0a1`.
+- No real Phase 2 benchmark result or profitability result has been produced.
+- No `v2.0.0-alpha.2` release section has been created.
 
 ## [2.0.0-alpha.1] - 2026-08-05
 

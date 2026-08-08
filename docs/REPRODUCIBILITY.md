@@ -164,16 +164,10 @@ retrieval timestamp, and fails closed on mismatches.
 
 ## Version 2 Phase 2 Benchmark Reproducibility
 
-**Engineering accepted for alpha release preparation:** Phase 2 benchmark infrastructure
-uses ignored immutable files under `artifacts/benchmarks/<benchmark_id>/`. It does not
-change the SQLite schema and does not persist model binaries. The final model is
-reconstructed from the locked configuration and refit deterministically from verified data.
-
-The owner-run primary benchmark used dataset ID `spy-v2p1-825930b0a2bcab20c733b867` and
-benchmark ID `spy-v2p2-a065593e952e6a9d96f4be86`. Dataset verification, completed benchmark
-verification, runtime-lineage verification, one controlled final-test execution, and quality
-gates passed. Raw provider data, benchmark JSON artifacts, row-level labels, and generated
-reports remain local ignored artifacts and are not committed.
+**Implementation in review:** Phase 2 benchmark infrastructure uses ignored immutable files
+under `artifacts/benchmarks/<benchmark_id>/`. It does not change the SQLite schema and does
+not persist model binaries. The final model is reconstructed from the locked configuration
+and refit deterministically from verified data.
 
 Benchmark preparation accepts a Phase 1 manifest path only. It deep-verifies the Phase 1 raw,
 canonical, and manifest artifacts before loading canonical daily bars, then reuses the
@@ -222,9 +216,8 @@ proposed orders, risk decisions, fills, costs, slippage, portfolio states, endin
 ending shares. Regime diagnostics are descriptive, use validation only during Stage A, and
 report explicit undefined reasons for metrics that are not mathematically meaningful.
 
-Normal automated tests use synthetic Phase 1 manifests and make no network request. The
-accepted owner-run benchmark is recorded only as sanitized summary evidence. The final-test
-result showed weak predictive discrimination and must not be used for Phase 3 tuning.
+Normal automated tests use synthetic Phase 1 manifests and make no network request. Owner-run
+real benchmark execution remains an acceptance gate outside Codex verification.
 
 ## Checksums and Schema Versions
 

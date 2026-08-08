@@ -11,20 +11,19 @@ profitability, and is not real-money trading infrastructure.
 ## Release Status
 
 - Current stable historical baseline: `v1.0.0`.
-- Current package/runtime version: `2.0.0a2`.
-- Current released identifier remains `v2.0.0-alpha.1` until the reviewed release-preparation
-  branch is merged and tagged.
-- Release-preparation target: `v2.0.0-alpha.2`.
+- Current package/runtime version remains `2.0.0a1`.
+- Current released identifier remains `v2.0.0-alpha.1`.
 - V2 Phase 1: accepted and complete - Real SPY Data Foundation.
-- V2 Phase 2: engineering acceptance complete - Real Historical Benchmark.
-- Owner-run real SIP benchmark and one controlled final-test execution completed.
+- V2 Phase 2: Real Historical Benchmark implementation is under review.
+- No real Phase 2 benchmark result exists yet.
 - No Phase 3 implementation has begun.
 - Live-money readiness: not approved.
 
 Version 2 Phase 1 uses package version `2.0.0a1` and release identifier
-`v2.0.0-alpha.1`. Version 2 Phase 2 prepares package version `2.0.0a2` for release
-identifier `v2.0.0-alpha.2`. Release tags must point only to successfully verified `main`
-commits after review approval and merge.
+`v2.0.0-alpha.1`. The release tag must point only to a successfully verified `main` commit.
+Version 2 Phase 2 infrastructure is implemented on the review branch for code review and
+owner-run acceptance gates. It does not include a completed real benchmark, profitability
+claim, final-test acceptance, or release-preparation version bump.
 
 ## Version 1 Historical Baseline
 
@@ -94,36 +93,6 @@ local and ignored under `data/raw/`, `data/canonical/`, and `data/manifests/`.
 Phase 1 does not train models, run benchmarks, test prediction accuracy, claim profitability,
 submit orders, add real-time operation, or enable live trading.
 
-## Version 2 Phase 2 Alpha Candidate
-
-Version 2 Phase 2 adds accepted real historical benchmark infrastructure and owner-run
-acceptance evidence for the existing approved SPY research workflow. It uses a verified
-Alpaca SIP, `1Day`, adjustment `all` SPY dataset from 2018-01-02 through 2025-12-31. The
-owner-run benchmark used dataset ID `spy-v2p1-825930b0a2bcab20c733b867` and benchmark ID
-`spy-v2p2-a065593e952e6a9d96f4be86`; generated provider data and benchmark artifacts remain
-ignored and are not distributed with the repository.
-
-Engineering result:
-
-- Implementation PR #20 was merged at main commit `1155c3c`.
-- Dataset verification, benchmark verification, and runtime-lineage verification passed in
-  the owner environment.
-- Validation, final-test locking, one controlled final-test execution, completion evidence,
-  and audit verification completed.
-- Owner-run quality gates passed: 999 tests, 85% coverage, Ruff, formatting, MyPy, and clean
-  working tree.
-
-Scientific result:
-
-- `logistic_regression` was selected over `gradient_boosting` by higher validation ROC AUC.
-- Final-test ROC AUC was `0.4640772128060263`, below `0.5`.
-- Final-test log loss and Brier score did not beat the training-prevalence baseline.
-- The selected model predicted positive on about `97.6%` of final-test rows, behaving close
-  to an almost-always-long signal during that period.
-
-This is valid benchmark evidence and not an engineering failure. It does not establish a
-reliable predictive edge, trading readiness, profitability, or investment suitability.
-
 ## Safety Boundaries
 
 Live trading is not supported. `EXECUTION_MODE` may only be `paper`, and any attempt to
@@ -165,6 +134,7 @@ The current implemented system intentionally does not include:
 - real-time data feeds
 - investment recommendations
 - profitability claims
+- completed historical benchmarking on real SPY data
 - probability calibration or threshold optimization
 - hyperparameter tuning or model binary persistence
 - API write routes
@@ -175,10 +145,6 @@ The current implemented system intentionally does not include:
 - schedulers, workers, cron jobs, deployment files, or cloud infrastructure
 - live trading or live Alpaca endpoints
 - assets other than SPY
-
-Version 2 Phase 2 includes completed historical benchmarking on one owner-run real SPY SIP
-dataset. It does not include model research beyond the approved locked candidates and does
-not prove predictive market edge.
 
 Version 1.0.0 specifically did not include market-data downloading; the explicit SPY
 historical-data acquisition CLI begins in Version 2 Phase 1.
@@ -411,9 +377,7 @@ Detailed guides use the same local database, ports, and startup order:
 - [Version 2 Phase 2 Benchmark Policy](docs/V2_PHASE_02_BENCHMARK_POLICY.md)
 - [Version 2 Phase 2 Data Card Template](docs/V2_PHASE_02_DATA_CARD_TEMPLATE.md)
 - [Version 2.0.0 Alpha 1 Release Notes](RELEASE_NOTES_V2.0.0_ALPHA_1.md)
-- [Version 2.0.0 Alpha 2 Release Notes](RELEASE_NOTES_V2.0.0_ALPHA_2.md)
 - [Version 2 Phase 1 Release Checklist](VERSION_2_PHASE_01_RELEASE_CHECKLIST.md)
-- [Version 2 Phase 2 Release Checklist](VERSION_2_PHASE_02_RELEASE_CHECKLIST.md)
 - [Project Specification](PROJECT_SPEC.md)
 - [Changelog](CHANGELOG.md)
 - [Version 1.0.0 Release Notes](RELEASE_NOTES_V1.0.0.md)

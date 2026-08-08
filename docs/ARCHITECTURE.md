@@ -114,11 +114,11 @@ orders, add API write routes, add dashboard controls, or enable live trading.
 
 ## Version 2 Phase 2 Benchmark Flow
 
-**Engineering accepted for alpha release preparation:** Phase 2 adds a dedicated
-`spy_market_agent.benchmark` package that accepts a verified Phase 1 manifest, not an
-arbitrary CSV. It deep-verifies the raw, canonical, and manifest artifacts, reuses the
-existing feature, label, model, signal, risk, and backtest logic, and writes ignored
-immutable files under `artifacts/benchmarks/<benchmark_id>/`.
+**Implementation in review:** Phase 2 adds a dedicated `spy_market_agent.benchmark` package
+that accepts a verified Phase 1 manifest, not an arbitrary CSV. It deep-verifies the raw,
+canonical, and manifest artifacts, reuses the existing feature, label, model, signal, risk,
+and backtest logic, and writes ignored immutable files under
+`artifacts/benchmarks/<benchmark_id>/`.
 
 The benchmark workflow is split into locked stages:
 
@@ -138,10 +138,6 @@ The benchmark workflow is split into locked stages:
 Phase 2 does not use SQLite for benchmark persistence, does not persist model binaries, does
 not add model families, features, threshold tuning, API write routes, dashboard execution
 controls, paper-execution behavior, real-time data, or live trading.
-
-The owner-run real SIP benchmark completed under this flow for `v2.0.0-alpha.2` release
-preparation. The engineering workflow passed, while the selected classifier showed weak
-predictive discrimination and must not be described as a proven market edge.
 
 ## Backtest Data Flow
 

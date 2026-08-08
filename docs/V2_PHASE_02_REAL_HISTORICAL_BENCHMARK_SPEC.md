@@ -1,30 +1,27 @@
 # Version 2 Phase 2 — Real Historical Benchmark Specification
 
-Status: Engineering acceptance complete; release preparation in review
+Status: Implementation in review
 
-Target release identifier: `v2.0.0-alpha.2`
+Target future release identifier: `v2.0.0-alpha.2`
 
-Release-preparation package/runtime version: `2.0.0a2`
+Current package/runtime version for this specification branch: `2.0.0a1`
 
-Implementation branch: `review/v2-phase-02-real-benchmark`
+Target future package version: `2.0.0a2`
 
-Release-preparation branch: `review/v2-phase-02-release-preparation`
+Planned implementation branch: `review/v2-phase-02-real-benchmark`
 
-This specification governs the Phase 2 implementation and release-preparation record. Phase 2
-evaluates the existing approved research pipeline using frozen real historical SPY data. It does not
+This specification governs the Phase 2 implementation review branch. Phase 2 evaluates the
+existing approved research pipeline using frozen real historical SPY data. It does not
 authorize new model research, live execution, shadow operation, additional paper-execution
 behavior, profitability claims, or investment suitability claims.
 
-Version 2 Phase 1 is accepted. Version 2 Phase 2 infrastructure was merged through PR #20 at
-main commit `1155c3c`, and the owner-run real SIP benchmark acceptance gates completed. Codex
-did not run or reopen the real Phase 2 benchmark or final test. This release-preparation
-branch records only sanitized summary evidence; generated benchmark artifacts and provider
-data remain ignored and are not committed.
+Version 2 Phase 1 is accepted. Version 2 Phase 2 infrastructure is in implementation review,
+no owner-run real Phase 2 benchmark has been run by Codex, and no benchmark result is
+claimed by this branch.
 
 ## Table of Contents
 
 - [1. Purpose](#1-purpose)
-- [Acceptance Summary](#acceptance-summary)
 - [2. Entry Criteria](#2-entry-criteria)
 - [3. In Scope](#3-in-scope)
 - [4. Explicitly Out of Scope](#4-explicitly-out-of-scope)
@@ -50,7 +47,7 @@ data remain ignored and are not committed.
 - [24. Real Benchmark Acceptance Procedure](#24-real-benchmark-acceptance-procedure)
 - [25. Acceptance Criteria](#25-acceptance-criteria)
 - [26. Rejection Criteria](#26-rejection-criteria)
-- [27. Implemented Deliverables](#27-implemented-deliverables)
+- [27. Deliverables for the Future Implementation](#27-deliverables-for-the-future-implementation)
 - [28. Versioning Contract](#28-versioning-contract)
 - [29. Approval Boundary](#29-approval-boundary)
 
@@ -70,27 +67,6 @@ The objective is to determine:
 Phase 2 does not guarantee profitability, real-market accuracy, investment suitability, or
 live-money readiness. A weak benchmark result is valid evidence and must be reported
 honestly.
-
-## Acceptance Summary
-
-The owner-run primary benchmark used the verified Phase 1 dataset
-`spy-v2p1-825930b0a2bcab20c733b867` with canonical checksum
-`d1c62194a3e13a164bbe09edad8cb6b4aa8bbd17a621d34da17e3e8edc96a259`, Alpaca SIP `1Day`
-SPY bars, adjustment mode `all`, and the 2018-01-02 through 2025-12-31 session range.
-
-Benchmark ID `spy-v2p2-a065593e952e6a9d96f4be86` completed the approved workflow:
-dataset verification, deterministic split construction, validation-only model selection,
-final-test lock, one controlled final-test access, completion evidence, deep benchmark
-verification, runtime-lineage verification, and final quality gates.
-
-Engineering result: Phase 2 benchmark infrastructure and controlled evaluation workflow
-passed acceptance.
-
-Scientific result: the selected `logistic_regression` classifier did not establish strong
-directional predictive discrimination. Final-test ROC AUC was `0.4640772128060263`, and log
-loss and Brier score did not beat the training-prevalence baseline. The final-test
-predicted-positive rate was approximately `97.6%`, so strategy performance must not be
-represented as evidence of a proven predictive market edge.
 
 ## 2. Entry Criteria
 
@@ -1062,9 +1038,9 @@ Phase 2 must be rejected or held when:
 A weak benchmark result is not itself an engineering failure. The result must be reported
 honestly even when the models underperform naive baselines.
 
-## 27. Implemented Deliverables
+## 27. Deliverables for the Future Implementation
 
-Implemented deliverables include:
+Planned implementation deliverables include:
 
 - benchmark domain models;
 - dataset eligibility service;
@@ -1086,13 +1062,15 @@ Implemented deliverables include:
 - model comparison report;
 - release notes and checklist for `2.0.0a2`.
 
+Do not implement these deliverables in this specification branch.
+
 ## 28. Versioning Contract
 
-- This specification branch began at package/runtime version `2.0.0a1`.
+- This specification branch remains package/runtime version `2.0.0a1`.
 - The Phase 2 implementation branch begins at `2.0.0a1`.
 - Phase 2 implementation must not bump the version at the start of implementation.
 - After implementation, real benchmark acceptance, and all gates pass, the final
-  release-preparation branch sets:
+  release-preparation commit sets:
   - `pyproject.toml` package version to `2.0.0a2`;
   - `spy_market_agent.__version__` to `2.0.0a2`.
 - Public Git release identifier: `v2.0.0-alpha.2`.
@@ -1108,8 +1086,7 @@ Implemented deliverables include:
 
 ## 29. Approval Boundary
 
-This specification is the governing Phase 2 document. Version 2 Phase 2
-engineering acceptance is complete after implementation review and owner-run real-data
-validation, final-test authorization, benchmark completion, artifact verification, runtime
-lineage verification, and quality gates. The public release is not complete until the
-release-preparation branch is reviewed, merged, verified on `main`, and tagged by the owner.
+This specification is the governing implementation-review document. Version 2 Phase 2 is not
+accepted, complete, or released until the implementation branch is reviewed and the owner-run
+real-data validation, final-test authorization, benchmark completion, artifact verification,
+and release-preparation gates are complete.
