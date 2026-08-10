@@ -1,6 +1,15 @@
 from spy_market_agent.research.artifacts import ResearchArtifactStore
 from spy_market_agent.research.baselines import classification_baseline_probabilities
 from spy_market_agent.research.calibration import build_calibration_split
+from spy_market_agent.research.campaign import (
+    ResearchCampaignConfig,
+    campaign_config_identity,
+    load_research_campaign_config,
+)
+from spy_market_agent.research.candidates import (
+    development_hyperparameter_searches,
+    development_model_registry,
+)
 from spy_market_agent.research.constants import (
     BOUNDARY_EXCLUSION_SESSIONS,
     DEFAULT_ASSESSMENT_WINDOW_ROWS,
@@ -44,6 +53,7 @@ from spy_market_agent.research.registries import (
     build_experiment_manifest,
     required_classification_baselines,
 )
+from spy_market_agent.research.runner import run_development_campaign
 from spy_market_agent.research.selection import (
     NO_CANDIDATE_PROMOTION,
     rank_classification_candidates,
@@ -69,6 +79,7 @@ __all__ = [
     "WALK_FORWARD_FOLD_POLICY_ID",
     "FeatureGenerationPolicy",
     "ResearchArtifactStore",
+    "ResearchCampaignConfig",
     "TransformationFitRecord",
     "ablation_scaffold",
     "aggregate_metric",
@@ -78,15 +89,20 @@ __all__ = [
     "build_calibration_split",
     "build_experiment_manifest",
     "calculate_research_classification_metrics",
+    "campaign_config_identity",
     "classification_baseline_probabilities",
     "construct_walk_forward_manifest",
     "deny_protected_label_access",
+    "development_hyperparameter_searches",
+    "development_model_registry",
     "diagnostic_threshold_policy",
     "experiment_identity",
     "fold_manifest_identity",
+    "load_research_campaign_config",
     "planned_trials_from_grid",
     "rank_classification_candidates",
     "required_classification_baselines",
+    "run_development_campaign",
     "strategy_threshold_policy",
     "validate_inner_training_search",
     "validate_no_forbidden_feature_columns",

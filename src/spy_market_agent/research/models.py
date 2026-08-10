@@ -127,8 +127,10 @@ class FoldPolicy(ResearchArtifactModel):
 
     @model_validator(mode="after")
     def _validate_defaults(self) -> FoldPolicy:
+        if self.feature_warmup_rows < FEATURE_WARMUP_ROWS:
+            msg = "feature_warmup_rows must be at least the approved Phase 3 baseline warm-up."
+            raise ValueError(msg)
         expected = {
-            "feature_warmup_rows": FEATURE_WARMUP_ROWS,
             "entry_offset_sessions": ENTRY_OFFSET_SESSIONS,
             "exit_offset_sessions": EXIT_OFFSET_SESSIONS,
             "mandatory_gap_sessions": MANDATORY_GAP_SESSIONS,

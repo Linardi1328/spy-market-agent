@@ -40,6 +40,23 @@ MINIMUMS = {
 
 
 @dataclass(frozen=True, slots=True)
+class Phase2SplitLayout:
+    split_policy_id: str
+    supervised_row_count: int
+    assignable_row_count: int
+    train_slice: slice
+    train_validation_boundary_slice: slice
+    validation_slice: slice
+    validation_test_boundary_slice: slice
+    final_test_slice: slice
+    train_included_sessions: tuple[date, ...]
+    train_validation_boundary_excluded_sessions: tuple[date, ...]
+    validation_included_sessions: tuple[date, ...]
+    validation_test_boundary_excluded_sessions: tuple[date, ...]
+    final_test_included_sessions: tuple[date, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class StageADataBundle:
     train: DatasetPartition
     validation: DatasetPartition
@@ -84,33 +101,19 @@ def construct_phase2_split(
             "invalid_supervised_sessions",
             "supervised sessions must be unique and strictly increasing.",
         )
-    n_rows = len(sessions)
-    exclusions_total = 2 * BOUNDARY_EXCLUSION_SESSIONS
-    assignable_rows = n_rows - exclusions_total
-    if assignable_rows <= 0:
+    layout = phase2_split_layout_from_prediction_sessions(sessions)
+    labels = supervised.labels.reset_index(drop=True)
+    train_labels = labels.iloc[layout.train_slice].reset_index(drop=True)
+    validation_labels = labels.iloc[layout.validation_slice].reset_index(drop=True)
+    final_labels = labels.iloc[layout.final_test_slice].reset_index(drop=True)
+    final_slice_stop = layout.final_test_slice.stop
+    if final_slice_stop is None or len(final_labels) != len(layout.final_test_included_sessions):
         raise_benchmark_error(
             BenchmarkSplitError,
-            "insufficient_assignable_rows",
-            "supervised dataset is too short after boundary exclusions.",
+            "split_remainder_allocation_failed",
+            "final test must receive every integer-rounding remainder.",
         )
-    train_rows = assignable_rows * 70 // 100
-    validation_rows = assignable_rows * 15 // 100
-    final_test_rows = assignable_rows - train_rows - validation_rows
-
-    train_slice = slice(0, train_rows)
-    train_gap_slice = slice(train_rows, train_rows + BOUNDARY_EXCLUSION_SESSIONS)
-    validation_start = train_rows + BOUNDARY_EXCLUSION_SESSIONS
-    validation_slice = slice(validation_start, validation_start + validation_rows)
-    test_gap_start = validation_start + validation_rows
-    test_gap_slice = slice(test_gap_start, test_gap_start + BOUNDARY_EXCLUSION_SESSIONS)
-    final_start = test_gap_start + BOUNDARY_EXCLUSION_SESSIONS
-    final_slice = slice(final_start, final_start + final_test_rows)
-
-    labels = supervised.labels.reset_index(drop=True)
-    train_labels = labels.iloc[train_slice].reset_index(drop=True)
-    validation_labels = labels.iloc[validation_slice].reset_index(drop=True)
-    final_labels = labels.iloc[final_slice].reset_index(drop=True)
-    if len(final_labels) != final_test_rows or final_start + final_test_rows != n_rows:
+    if final_slice_stop != layout.supervised_row_count:
         raise_benchmark_error(
             BenchmarkSplitError,
             "split_remainder_allocation_failed",
@@ -142,17 +145,17 @@ def construct_phase2_split(
         exit_offset_sessions=EXIT_OFFSET_SESSIONS,
         mandatory_gap_sessions=MANDATORY_GAP_SESSIONS,
         boundary_exclusion_sessions=BOUNDARY_EXCLUSION_SESSIONS,
-        supervised_row_count=n_rows,
-        assignable_row_count=assignable_rows,
+        supervised_row_count=layout.supervised_row_count,
+        assignable_row_count=layout.assignable_row_count,
         feature_warmup_excluded_sessions=tuple(warmup_excluded),
         label_horizon_excluded_sessions=tuple(label_horizon_excluded),
         train_included_sessions=tuple(train_labels["session"].to_list()),
         train_validation_boundary_excluded_sessions=tuple(
-            labels.iloc[train_gap_slice]["session"].to_list()
+            labels.iloc[layout.train_validation_boundary_slice]["session"].to_list()
         ),
         validation_included_sessions=tuple(validation_labels["session"].to_list()),
         validation_test_boundary_excluded_sessions=tuple(
-            labels.iloc[test_gap_slice]["session"].to_list()
+            labels.iloc[layout.validation_test_boundary_slice]["session"].to_list()
         ),
         final_test_included_sessions=tuple(final_labels["session"].to_list()),
         train=_summary("train", train_labels),
@@ -168,6 +171,75 @@ def construct_phase2_split(
         },
     )
     return manifest, partitions
+
+
+def phase2_split_layout_from_prediction_sessions(
+    prediction_sessions: tuple[date, ...],
+) -> Phase2SplitLayout:
+    """Return the frozen Phase 2 positional split layout without reading labels."""
+
+    sessions = tuple(prediction_sessions)
+    if not sessions:
+        raise_benchmark_error(
+            BenchmarkSplitError,
+            "empty_phase2_prediction_sessions",
+            "Phase 2 split layout requires at least one prediction session.",
+        )
+    if sessions != tuple(sorted(sessions)) or len(sessions) != len(set(sessions)):
+        raise_benchmark_error(
+            BenchmarkSplitError,
+            "invalid_phase2_prediction_sessions",
+            "Phase 2 split prediction sessions must be unique and strictly increasing.",
+        )
+    n_rows = len(sessions)
+    exclusions_total = 2 * BOUNDARY_EXCLUSION_SESSIONS
+    assignable_rows = n_rows - exclusions_total
+    if assignable_rows <= 0:
+        raise_benchmark_error(
+            BenchmarkSplitError,
+            "insufficient_assignable_rows",
+            "supervised dataset is too short after boundary exclusions.",
+        )
+    train_rows = assignable_rows * 70 // 100
+    validation_rows = assignable_rows * 15 // 100
+    final_test_rows = assignable_rows - train_rows - validation_rows
+
+    train_slice = slice(0, train_rows)
+    train_gap_slice = slice(train_rows, train_rows + BOUNDARY_EXCLUSION_SESSIONS)
+    validation_start = train_rows + BOUNDARY_EXCLUSION_SESSIONS
+    validation_slice = slice(validation_start, validation_start + validation_rows)
+    test_gap_start = validation_start + validation_rows
+    test_gap_slice = slice(test_gap_start, test_gap_start + BOUNDARY_EXCLUSION_SESSIONS)
+    final_start = test_gap_start + BOUNDARY_EXCLUSION_SESSIONS
+    final_slice = slice(final_start, final_start + final_test_rows)
+    if final_start + final_test_rows != n_rows:
+        raise_benchmark_error(
+            BenchmarkSplitError,
+            "split_remainder_allocation_failed",
+            "final test must receive every integer-rounding remainder.",
+        )
+    final_sessions = sessions[final_slice]
+    if not final_sessions:
+        raise_benchmark_error(
+            BenchmarkSplitError,
+            "empty_phase2_final_test_partition",
+            "Phase 2 split layout must produce a final-test partition.",
+        )
+    return Phase2SplitLayout(
+        split_policy_id=SPLIT_POLICY_ID,
+        supervised_row_count=n_rows,
+        assignable_row_count=assignable_rows,
+        train_slice=train_slice,
+        train_validation_boundary_slice=train_gap_slice,
+        validation_slice=validation_slice,
+        validation_test_boundary_slice=test_gap_slice,
+        final_test_slice=final_slice,
+        train_included_sessions=sessions[train_slice],
+        train_validation_boundary_excluded_sessions=sessions[train_gap_slice],
+        validation_included_sessions=sessions[validation_slice],
+        validation_test_boundary_excluded_sessions=sessions[test_gap_slice],
+        final_test_included_sessions=final_sessions,
+    )
 
 
 def stage_a_bundle(

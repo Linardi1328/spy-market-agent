@@ -1,12 +1,18 @@
 # Version 2 Phase 3 - Walk-Forward Model Research Specification
 
-Status: Active development for specification and initial research scaffolding
+Status: Active development-only walk-forward experimentation after PR #24 framework merge
 
 Target release identifier: `v2.0.0-alpha.3`
 
-Implementation branch: `review/v2-phase-03-walk-forward-research`
+Current implementation branch: `review/v2-phase-03-development-research`
 
 Package/runtime version during this branch: `2.0.0a2`
+
+PR #24 merged the approved Phase 3 framework and initial research scaffolding. The current
+authorized substage implements manual, offline, classification-first development
+experimentation against owner-verified local Phase 1 manifests. It does not authorize Phase
+3 protected evaluation, strategy-threshold optimization, Phase 4 shadow mode, Phase 5
+production paper operation, live trading, broker communication, or release preparation.
 
 Phase 3 begins after the completed `v2.0.0-alpha.2` release. Phase 2 established the first
 real SPY historical benchmark on a verified Alpaca SIP, `1Day`, adjustment `all` dataset.
@@ -18,6 +24,13 @@ This document governs Phase 3 only. It does not modify, invalidate, rerun, or re
 the frozen Phase 2 benchmark. Phase 3 must not tune against the already-opened Phase 2 final
 test. Phase 3 must not add live-money trading, production paper operation, API write routes,
 dashboard execution controls, or automatic execution behavior.
+
+For development experimentation on the accepted Phase 1 lineage, the Phase 3 runner must
+mechanically reconstruct the frozen Phase 2 development/final-test split, truncate the
+eligible market-data slice before label construction, and ensure every Phase 3 training,
+boundary, assessment, calibration, diagnostic, and selection session precedes the Phase 2
+final-test prediction partition. The boundary and research-slice identity are
+lineage-defining campaign metadata.
 
 ## Table of Contents
 
@@ -88,9 +101,13 @@ Phase 3 may include:
 - synthetic offline tests for fold, lineage, registry, and leakage contracts;
 - owner-run research reports that use verified local data without committing provider data.
 
-Phase 3 implementation work should begin with specification and scaffolding. Full model
-experimentation is allowed only after the framework, leakage checks, artifact identity, and
-selection rules are reviewed.
+Phase 3 implementation began with specification and scaffolding in PR #24. The current
+authorized development substage may run only the predeclared classification-first
+walk-forward campaign: verified Phase 1 manifest input, baseline and research OHLCV
+features, feature ablations, fixed Phase 2 model baselines, finite scikit-learn model grids,
+the predeclared calibration sub-study, classification metrics, regime/drift diagnostics, and
+candidate selection. Strategy optimization and protected evaluation remain locked until a
+later explicit approval.
 
 ## 3. Explicit Non-Goals
 
@@ -138,6 +155,14 @@ Prohibited Phase 3 uses:
 Phase 3 research reports must include a clear statement that the Phase 2 final test has
 already been opened and is not available as a tuning or selection surface.
 
+When the Phase 3 development runner consumes the accepted Phase 1 dataset lineage used by
+Phase 2, it must derive the Phase 2 final-test prediction sessions from the frozen Phase 2
+split policy rather than from filenames alone. The eligible Phase 3 development source data
+must be truncated before `build_forward_label_set(...)`; the last eligible Phase 3
+prediction row must have its `t + 6` exit before the first Phase 2 final-test prediction
+session. Any attempted fold, calibration split, diagnostic assessment, or model-selection
+surface that intersects Phase 2 final-test prediction sessions must fail closed.
+
 ## 5. Dataset Eligibility
 
 The primary Phase 3 research dataset should use the same data-governance standard as Phase 2:
@@ -150,6 +175,9 @@ The primary Phase 3 research dataset should use the same data-governance standar
 - no mixing of raw and adjusted fields inside one calculation;
 - Phase 1 manifest verification passes;
 - canonical checksum and dataset ID are recorded;
+- when the input lineage corresponds to the accepted Phase 2 parent dataset, the recorded
+  Phase 3 research slice excludes the Phase 2 final-test prediction partition before labels
+  are built;
 - XNYS sessions validate;
 - duplicate sessions, future sessions, incomplete current-session candles, and OHLCV
   inconsistencies fail closed.
@@ -366,6 +394,10 @@ when bins or classes are insufficient.
 Phase 3 may research decision thresholds, but threshold research must be separated from
 classifier discrimination.
 
+Current implementation-stage note: the development-research branch preserves threshold
+policy scaffolding but does not implement strategy-threshold optimization or use strategy
+returns for candidate selection.
+
 Rules:
 
 - `0.5` remains the fixed diagnostic classification threshold unless a report explicitly
@@ -421,6 +453,11 @@ Each experiment record must include:
 - experiment ID;
 - phase identifier: `v2-phase-03`;
 - dataset ID and canonical checksum;
+- parent Phase 1 dataset ID and checksum when the campaign uses a derived development-only
+  research slice;
+- Phase 2 final-test exclusion policy, eligible Phase 3 development session range,
+  research-slice checksum/identity, and excluded-session count for development campaigns
+  derived from the accepted Phase 2 parent lineage;
 - provider, feed, timeframe, adjustment mode, and session range;
 - feature schema and enabled feature families;
 - label schema and forecast horizon;
@@ -718,9 +755,12 @@ Phase 3 must be rejected or held when:
 
 ## 27. Approval Boundary
 
-This specification is the governing Phase 3 document. It authorizes only walk-forward model
-research framework and initial research scaffolding on the approved review branch.
+This specification is the governing Phase 3 document. PR #24 delivered the approved
+walk-forward model-research framework and initial research scaffolding. The current
+authorized branch may add development-only, manual, offline classification experimentation
+under the same leakage, lineage, fold, artifact, and selection controls.
 
 It does not authorize Phase 4 shadow mode, Phase 5 production paper operation, live trading,
-new assets, or production execution behavior. Any expansion beyond this specification
-requires explicit owner approval and a new or amended governing specification.
+new assets, protected evaluation execution, strategy optimization in the current branch, or
+production execution behavior. Any expansion beyond this specification requires explicit
+owner approval and a new or amended governing specification.

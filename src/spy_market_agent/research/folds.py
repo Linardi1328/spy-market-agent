@@ -5,7 +5,6 @@ from typing import cast
 
 import pandas as pd
 
-from spy_market_agent.datasets.models import SupervisedDataset
 from spy_market_agent.research.constants import (
     BOUNDARY_EXCLUSION_SESSIONS,
     WALK_FORWARD_FOLD_POLICY_ID,
@@ -24,10 +23,11 @@ from spy_market_agent.research.models import (
     WalkForwardFold,
     WalkForwardManifest,
 )
+from spy_market_agent.research.types import ResearchSupervisedDatasetLike
 
 
 def construct_walk_forward_manifest(
-    supervised: SupervisedDataset,
+    supervised: ResearchSupervisedDatasetLike,
     *,
     dataset_lineage: DatasetLineage,
     runtime_lineage: RuntimeLineage,
@@ -101,7 +101,7 @@ def construct_walk_forward_manifest(
 
 
 def _validated_labels(
-    supervised: SupervisedDataset,
+    supervised: ResearchSupervisedDatasetLike,
     *,
     dataset_lineage: DatasetLineage,
 ) -> pd.DataFrame:

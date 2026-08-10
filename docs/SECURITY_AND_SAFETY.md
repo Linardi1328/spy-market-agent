@@ -153,12 +153,18 @@ failed first access preserves the started record and requires explicit operator 
 any non-audit re-attempt; audit replay never creates a new access record or overwrites
 accepted final artifacts.
 
-The Version 2 Phase 3 research path is framework and research-scaffolding work first. Its
-package-local scaffolding must not load Phase 2 final-test row-level labels, predictions,
-strategy rows, fills, or generated benchmark JSON for tuning. Phase 3 generated real-data
-research artifacts remain ignored under `artifacts/research/<experiment_id>/`. No Phase 3
-CLI is currently exposed. Any future Phase 3 CLI must be manual, offline for normal tests,
-credential-free, broker-free, and unable to submit paper or live orders.
+The Version 2 Phase 3 research path is now in development-only walk-forward experimentation
+after PR #24 merged the approved framework and initial scaffolding. Its package-local runner
+must not load Phase 2 final-test row-level labels, predictions, strategy rows, fills, or
+generated benchmark JSON for tuning. It also must not reconstruct Phase 2 final-test
+row-level labels indirectly from the parent canonical dataset: the development runner
+reconstructs the frozen Phase 2 split boundary, truncates the research slice before label
+construction, and fails closed if training, assessment, calibration, diagnostics, or
+selection sessions intersect Phase 2 final-test prediction sessions. Phase 3 generated
+real-data research artifacts remain ignored under `artifacts/research/<experiment_id>/`.
+The Phase 3 CLI is manual, offline after data acquisition, credential-free, broker-free,
+and unable to submit paper or live orders. Protected evaluation, Phase 4 shadow mode, and
+strategy optimization remain unauthorized.
 
 ## Historical Market-Data Safety
 

@@ -151,22 +151,31 @@ predictive discrimination and must not be described as a proven market edge.
 
 ## Version 2 Phase 3 Research Framework
 
-**Active for framework implementation and initial research scaffolding:** Phase 3 adds the
-`spy_market_agent.research` package for future model improvement work. It is governed by
-`docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md` and starts from the completed Phase 2
-benchmark evidence as sanitized baseline motivation only.
+**Active for development-only walk-forward experimentation:** Phase 3 PR #24 merged the
+approved framework and initial research scaffolding. The current branch adds a manual,
+offline, classification-first research runner under `spy_market_agent.research`. It is
+governed by `docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md` and starts from the completed
+Phase 2 benchmark evidence as sanitized baseline motivation only.
 
 The default Phase 3 protocol is expanding-window walk-forward validation with chronological
 assessment windows, a six-row boundary exclusion after each training window, explicit
 feature warm-up handling, deterministic fold identities, deterministic experiment
 identities, leakage validation, registry manifests, and ignored artifact schemas. The
 framework separates classification diagnostics from strategy diagnostics and requires
-experiment lineage before substantive real-data research.
+experiment lineage before substantive real-data research. The development runner accepts
+verified Phase 1 manifests, builds research-only OHLCV features without changing Version 1
+feature contracts, reruns fixed Phase 2 baselines, evaluates finite scikit-learn candidate
+grids, runs the predeclared calibration sub-study, and writes ignored research artifacts.
+For accepted Phase 2 parent lineage, it reconstructs the frozen Phase 2 final-test
+prediction-session boundary and truncates the development research slice before Version 1
+labels are built.
 
 Phase 3 does not introduce a production runtime package, API mutation path, dashboard
 control, scheduler, broker connection, paper-execution change, live-execution behavior, or
-new asset support. No Phase 3 CLI is exposed in the current scaffolding. The already-opened
-Phase 2 final test remains frozen evidence and must not be used for Phase 3 tuning.
+new asset support. The Phase 3 CLI is manual, local, offline after data acquisition, and has
+no acquisition or execution command. The already-opened Phase 2 final test remains frozen
+evidence and must not be used for Phase 3 tuning. Protected evaluation and strategy
+optimization remain unauthorized.
 
 ## Backtest Data Flow
 

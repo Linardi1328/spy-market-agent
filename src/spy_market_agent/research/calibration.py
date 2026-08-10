@@ -5,14 +5,14 @@ from typing import cast
 
 import pandas as pd
 
-from spy_market_agent.datasets.models import SupervisedDataset
 from spy_market_agent.research.errors import ResearchRegistryError, raise_research_error
 from spy_market_agent.research.leakage import validate_phase2_final_test_isolation
 from spy_market_agent.research.models import CalibrationPolicy, CalibrationSplit, WalkForwardFold
+from spy_market_agent.research.types import ResearchSupervisedDatasetLike
 
 
 def build_calibration_split(
-    supervised: SupervisedDataset,
+    supervised: ResearchSupervisedDatasetLike,
     *,
     fold: WalkForwardFold,
     policy: CalibrationPolicy,
@@ -76,7 +76,10 @@ def build_calibration_split(
     )
 
 
-def _validate_calibration_lineage(supervised: SupervisedDataset, fold: WalkForwardFold) -> None:
+def _validate_calibration_lineage(
+    supervised: ResearchSupervisedDatasetLike,
+    fold: WalkForwardFold,
+) -> None:
     if supervised.metadata.source_market_data_checksum != fold.canonical_dataset_checksum:
         raise_research_error(
             ResearchRegistryError,
