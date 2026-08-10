@@ -12,19 +12,21 @@ profitability, and is not real-money trading infrastructure.
 
 - Current stable historical baseline: `v1.0.0`.
 - Current package/runtime version: `2.0.0a2`.
-- Current released identifier remains `v2.0.0-alpha.1` until the reviewed release-preparation
-  branch is merged and tagged.
-- Release-preparation target: `v2.0.0-alpha.2`.
+- Current released identifier: `v2.0.0-alpha.2`.
+- Active development target: `v2.0.0-alpha.3`.
 - V2 Phase 1: accepted and complete - Real SPY Data Foundation.
-- V2 Phase 2: engineering acceptance complete - Real Historical Benchmark.
+- V2 Phase 2: accepted and released - Real Historical Benchmark.
+- V2 Phase 3: active framework implementation and initial research scaffolding -
+  Walk-Forward Model Research.
 - Owner-run real SIP benchmark and one controlled final-test execution completed.
-- No Phase 3 implementation has begun.
 - Live-money readiness: not approved.
 
 Version 2 Phase 1 uses package version `2.0.0a1` and release identifier
-`v2.0.0-alpha.1`. Version 2 Phase 2 prepares package version `2.0.0a2` for release
-identifier `v2.0.0-alpha.2`. Release tags must point only to successfully verified `main`
-commits after review approval and merge.
+`v2.0.0-alpha.1`. Version 2 Phase 2 uses package version `2.0.0a2` and release identifier
+`v2.0.0-alpha.2`. Version 2 Phase 3 starts from `2.0.0a2`; a later release-preparation
+branch may prepare `2.0.0a3` for `v2.0.0-alpha.3` only after review acceptance. Release
+tags must point only to successfully verified `main` commits after review approval and
+merge.
 
 ## Version 1 Historical Baseline
 
@@ -94,7 +96,7 @@ local and ignored under `data/raw/`, `data/canonical/`, and `data/manifests/`.
 Phase 1 does not train models, run benchmarks, test prediction accuracy, claim profitability,
 submit orders, add real-time operation, or enable live trading.
 
-## Version 2 Phase 2 Alpha Candidate
+## Version 2 Phase 2 Alpha Release
 
 Version 2 Phase 2 adds accepted real historical benchmark infrastructure and owner-run
 acceptance evidence for the existing approved SPY research workflow. It uses a verified
@@ -123,6 +125,25 @@ Scientific result:
 
 This is valid benchmark evidence and not an engineering failure. It does not establish a
 reliable predictive edge, trading readiness, profitability, or investment suitability.
+
+## Version 2 Phase 3 Active Research Framework
+
+Version 2 Phase 3 begins the Walk-Forward Model Research phase. The active branch is
+`review/v2-phase-03-walk-forward-research`, governed by
+[Version 2 Phase 3 Walk-Forward Model Research Specification](docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md).
+
+Phase 3 is framework and research-scaffolding work first. The
+`spy_market_agent.research` package provides programmatic scaffolding for expanding-window
+walk-forward folds, chronological boundary exclusions and purges, leakage guards, feature
+and model registries, ablation definitions, finite hyperparameter-search manifests,
+calibration and threshold policy records, experiment lineage, metrics, baselines, candidate
+selection with predeclared identity-defining thresholds, protected-evaluation denial, and
+ignored research artifact schemas.
+
+Phase 3 does not tune against the already-opened Phase 2 final test. The Phase 2 result may
+be cited only as frozen summary baseline evidence. Phase 3 does not add live trading,
+production paper execution, shadow mode, API write routes, dashboard execution controls,
+schedulers, automatic order submission, or unrestricted real-data model experimentation.
 
 ## Safety Boundaries
 
@@ -165,8 +186,8 @@ The current implemented system intentionally does not include:
 - real-time data feeds
 - investment recommendations
 - profitability claims
-- probability calibration or threshold optimization
-- hyperparameter tuning or model binary persistence
+- implemented probability calibration or threshold optimization
+- implemented hyperparameter tuning or model binary persistence
 - API write routes
 - dashboard execution controls
 - automatic broker communication
@@ -179,6 +200,10 @@ The current implemented system intentionally does not include:
 Version 2 Phase 2 includes completed historical benchmarking on one owner-run real SPY SIP
 dataset. It does not include model research beyond the approved locked candidates and does
 not prove predictive market edge.
+
+Version 2 Phase 3 currently adds the governing walk-forward research framework and initial
+programmatic scaffolding. It does not yet run full model experimentation or promote a
+candidate model.
 
 Version 1.0.0 specifically did not include market-data downloading; the explicit SPY
 historical-data acquisition CLI begins in Version 2 Phase 1.
@@ -410,6 +435,7 @@ Detailed guides use the same local database, ports, and startup order:
 - [Version 2 Phase 2 Real Historical Benchmark Specification](docs/V2_PHASE_02_REAL_HISTORICAL_BENCHMARK_SPEC.md)
 - [Version 2 Phase 2 Benchmark Policy](docs/V2_PHASE_02_BENCHMARK_POLICY.md)
 - [Version 2 Phase 2 Data Card Template](docs/V2_PHASE_02_DATA_CARD_TEMPLATE.md)
+- [Version 2 Phase 3 Walk-Forward Model Research Specification](docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md)
 - [Version 2.0.0 Alpha 1 Release Notes](RELEASE_NOTES_V2.0.0_ALPHA_1.md)
 - [Version 2.0.0 Alpha 2 Release Notes](RELEASE_NOTES_V2.0.0_ALPHA_2.md)
 - [Version 2 Phase 1 Release Checklist](VERSION_2_PHASE_01_RELEASE_CHECKLIST.md)

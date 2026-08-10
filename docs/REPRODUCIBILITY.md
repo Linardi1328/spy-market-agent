@@ -226,6 +226,39 @@ Normal automated tests use synthetic Phase 1 manifests and make no network reque
 accepted owner-run benchmark is recorded only as sanitized summary evidence. The final-test
 result showed weak predictive discrimination and must not be used for Phase 3 tuning.
 
+## Version 2 Phase 3 Research Reproducibility
+
+**Active for framework implementation and initial research scaffolding:** Phase 3 defines
+walk-forward research rules under `docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md` and
+implements package-local scaffolding under `src/spy_market_agent/research`.
+Package/runtime version remains `2.0.0a2` until a later accepted release-preparation branch
+explicitly prepares `2.0.0a3`.
+
+The recommended primary protocol is expanding-window walk-forward validation:
+
+- minimum initial training rows: 756;
+- six supervised rows excluded after each training window for mandatory gap and label
+  purge;
+- 126 supervised-row assessment windows by default;
+- 63 supervised-row step size by default;
+- deterministic fold identities from dataset, feature, label, fold policy, boundaries, and
+  code lineage.
+
+Phase 3 experiment records must capture dataset ID and checksum, provider/feed/timeframe,
+adjustment mode, feature schema, label schema, exact fold boundaries, model configuration,
+hyperparameter search space, calibration policy, threshold policy, metric definitions,
+selection rule, candidate-selection configuration, Git SHA, package/runtime version, Python
+version, and dependency versions. Fold and experiment identities are deterministic from
+stable dataset, feature, label, policy, boundary, configuration, selection-threshold, and
+code-lineage inputs. Creation timestamps are metadata only and do not define experiment
+identity.
+
+Generated real-data research artifacts remain ignored under
+`artifacts/research/<experiment_id>/`. Normal tests must remain offline and synthetic. The
+already-opened Phase 2 final test is frozen baseline evidence and must not be loaded or used
+to choose Phase 3 features, models, hyperparameters, calibration, thresholds, or report
+framing.
+
 ## Checksums and Schema Versions
 
 Validated data and downstream artifacts retain explicit schema and checksum lineage:

@@ -2,7 +2,15 @@
 
 ## [Unreleased]
 
-- No unreleased changes are recorded after the Version 2 Phase 2 release-preparation updates.
+- Added the Version 2 Phase 3 Walk-Forward Model Research specification.
+- Implemented initial `spy_market_agent.research` scaffolding for deterministic
+  walk-forward fold manifests, leakage guards, research registries, metrics, baselines,
+  calibration and threshold policies, candidate selection, protected-evaluation denial, and
+  ignored research artifact schemas.
+- Updated roadmap, README, workflows, architecture, reproducibility, safety, and agent
+  guidance to mark Phase 3 as active framework implementation and initial research
+  scaffolding.
+- Documented that Phase 3 must not tune against the already-opened Phase 2 final test.
 
 ## [2.0.0-alpha.2] - 2026-08-09
 
