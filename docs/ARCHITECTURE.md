@@ -166,6 +166,9 @@ experiment lineage before substantive real-data research. The development runner
 verified Phase 1 manifests, builds research-only OHLCV features without changing Version 1
 feature contracts, reruns fixed Phase 2 baselines, evaluates finite scikit-learn candidate
 grids, runs the predeclared calibration sub-study, and writes ignored research artifacts.
+For accepted Phase 2 parent lineage, it reconstructs the frozen Phase 2 final-test
+prediction-session boundary and truncates the development research slice before Version 1
+labels are built.
 
 Phase 3 does not introduce a production runtime package, API mutation path, dashboard
 control, scheduler, broker connection, paper-execution change, live-execution behavior, or

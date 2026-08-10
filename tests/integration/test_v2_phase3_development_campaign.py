@@ -27,8 +27,8 @@ def test_phase3_development_cli_runs_complete_synthetic_campaign(
     shutil.copyfile(ROOT / "configs/research/phase3_development_campaign.json", config_path)
     manifest_path = write_synthetic_phase1_dataset(
         tmp_path,
-        start=date(2020, 1, 2),
-        end=date(2024, 3, 29),
+        start=date(2019, 1, 2),
+        end=date(2025, 12, 31),
     )
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
@@ -84,6 +84,23 @@ def test_phase3_development_cli_runs_complete_synthetic_campaign(
     assert experiment_manifest["protected_evaluation_status"]["state"] == (
         "scaffolded_locked_no_access"
     )
+    phase2_boundary = experiment_manifest["phase2_final_test_exclusion_boundary"]
+    protected_sessions = set(phase2_boundary["phase2_final_test_prediction_sessions"])
+    fold_manifest = json.loads((artifact_dir / "fold_manifest.json").read_text())
+    fold_prediction_sessions: set[str] = set()
+    for fold in fold_manifest["folds"]:
+        fold_prediction_sessions.update(fold["training"]["prediction_sessions"])
+        fold_prediction_sessions.update(fold["boundary_excluded_sessions"])
+        fold_prediction_sessions.update(fold["assessment"]["prediction_sessions"])
+
+    assert experiment_manifest["dataset_id"] == phase2_boundary["research_slice_id"]
+    assert experiment_manifest["parent_phase1_dataset_id"] != experiment_manifest["dataset_id"]
+    assert (
+        experiment_manifest["phase3_development_eligibility"]["research_slice_checksum"]
+        == (phase2_boundary["research_slice_checksum"])
+    )
+    assert phase2_boundary["excluded_source_session_count"] > 0
+    assert fold_prediction_sessions.isdisjoint(protected_sessions)
     assert experiment_manifest["phase2_final_test_available_for_tuning"] is False
     assert experiment_manifest["strategy_results_artifact"] == (
         "not_generated_classification_first_branch"
@@ -94,6 +111,7 @@ def test_phase3_development_cli_runs_complete_synthetic_campaign(
     )
     assert calibration_results["results"]
     assert "Phase 2 final test: unavailable for tuning" in selection_report
+    assert "research_slice_id" in selection_report
     assert "protected evaluation: scaffolded_locked_no_access" in selection_report
     assert "strategy optimization: not authorized and not executed" in selection_report
 

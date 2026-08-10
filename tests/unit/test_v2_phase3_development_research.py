@@ -15,6 +15,13 @@ import pytest
 from spy_market_agent.datasets.labels import build_forward_label_set
 from spy_market_agent.datasets.models import LABEL_COLUMNS, TradingCostAssumptions
 from spy_market_agent.features.models import FEATURE_COLUMNS
+from spy_market_agent.market_data.acquisition import (
+    PHASE1_MANIFEST_SCHEMA_VERSION,
+    PHASE1_SCHEMA_VERSION,
+    DatasetManifest,
+    GeneratedFileLocations,
+    MissingSessionSummary,
+)
 from spy_market_agent.market_data.calendar import XNYSCalendar
 from spy_market_agent.market_data.checksum import compute_market_data_checksum
 from spy_market_agent.market_data.models import (
@@ -29,6 +36,7 @@ from spy_market_agent.modeling.models import (
     LOGISTIC_REGRESSION_MODEL,
     fixed_model_parameters,
 )
+from spy_market_agent.research.calibration import build_calibration_split
 from spy_market_agent.research.campaign import ResearchCampaignConfig, campaign_config_identity
 from spy_market_agent.research.candidates import (
     EXTRA_TREES_GRID,
@@ -38,8 +46,11 @@ from spy_market_agent.research.candidates import (
     development_model_registry,
 )
 from spy_market_agent.research.diagnostics import fold_drift_diagnostics, fold_regime_diagnostics
-from spy_market_agent.research.errors import LeakageValidationError
-from spy_market_agent.research.evaluation import evaluate_calibration_variant
+from spy_market_agent.research.errors import LeakageValidationError, ResearchRegistryError
+from spy_market_agent.research.evaluation import (
+    evaluate_calibration_variant,
+    evaluate_model_candidate,
+)
 from spy_market_agent.research.features import (
     BASELINE_FAMILY_ORDER,
     DOLLAR_VOLUME_FAMILY,
@@ -62,6 +73,13 @@ from spy_market_agent.research.models import (
     DatasetLineage,
     FoldPolicy,
     RuntimeLineage,
+    WalkForwardManifest,
+)
+from spy_market_agent.research.phase2_isolation import (
+    Phase2FinalTestExclusionBoundary,
+    apply_phase2_final_test_session_isolation,
+    derive_phase2_final_test_exclusion_boundary,
+    validate_phase2_session_isolation,
 )
 from spy_market_agent.research.runner import run_development_campaign
 from spy_market_agent.research.selection import NO_CANDIDATE_PROMOTION
@@ -70,14 +88,15 @@ CREATED_AT = datetime(2026, 8, 10, 12, tzinfo=UTC)
 
 
 def _market_data(row_count: int = 1030, *, constant_close: bool = False) -> MarketDataBatch:
-    sessions = XNYSCalendar().sessions_between(date(2020, 1, 2), date(2024, 3, 29))[:row_count]
+    sessions = XNYSCalendar().sessions_between(date(2020, 1, 2), date(2030, 12, 31))[:row_count]
     closes: list[float] = []
     for index in range(row_count):
         if constant_close:
             close = 100.0
         else:
-            close = 100.0 + min(index, 40) * 0.8 - max(0, index - 40) * 0.12
-            close += 1.5 * math.sin(index / 7.0)
+            close = (
+                100.0 + index * 0.025 + 1.5 * math.sin(index / 7.0) + 0.8 * math.sin(index / 29.0)
+            )
         closes.append(close)
     frame = pd.DataFrame(
         {
@@ -136,6 +155,93 @@ def _dataset_lineage(market_data: MarketDataBatch) -> DatasetLineage:
         first_session=market_data.metadata.first_session,
         last_session=market_data.metadata.last_session,
     )
+
+
+def _phase1_manifest(market_data: MarketDataBatch) -> DatasetManifest:
+    checksum = market_data.metadata.dataset_checksum
+    return DatasetManifest(
+        dataset_id="synthetic-phase1-parent",
+        symbol="SPY",
+        provider="alpaca",
+        provider_api_version="synthetic",
+        sdk_package_name="alpaca-py",
+        sdk_package_version="synthetic",
+        feed="sip",
+        timeframe="1Day",
+        requested_start_date=market_data.metadata.first_session,
+        requested_end_date=market_data.metadata.last_session,
+        actual_first_session=market_data.metadata.first_session,
+        actual_last_session=market_data.metadata.last_session,
+        retrieval_timestamp=CREATED_AT,
+        adjustment_mode="all",
+        canonical_schema_version=PHASE1_SCHEMA_VERSION,
+        manifest_schema_version=PHASE1_MANIFEST_SCHEMA_VERSION,
+        row_count=market_data.metadata.row_count,
+        expected_session_count=market_data.metadata.row_count,
+        missing_session_summary=MissingSessionSummary(count=0),
+        duplicate_session_count=0,
+        incomplete_session_policy="exclude_incomplete_current_session",
+        corporate_action_policy="adjustment=all",
+        corporate_action_evidence="synthetic",
+        source_checksum=checksum,
+        canonical_content_checksum=checksum,
+        artifact_checksum=checksum,
+        raw_artifact_checksum=checksum,
+        manifest_artifact_checksum=checksum,
+        relevant_configuration={},
+        lineage_identifier="synthetic-phase1-lineage",
+        git_commit_sha="abc123",
+        python_version="3.12.13",
+        package_version="2.0.0a2",
+        dependency_versions={"pandas": "2.2.test"},
+        licensing_classification="synthetic",
+        generated_file_locations=GeneratedFileLocations(
+            raw_snapshot_path="data/raw/synthetic.json",
+            canonical_path="data/canonical/synthetic.csv",
+            manifest_path="data/manifests/synthetic.manifest.json",
+        ),
+    )
+
+
+def _isolated_supervised_and_fold_manifest() -> tuple[
+    ResearchSupervisedDataset,
+    Phase2FinalTestExclusionBoundary,
+    WalkForwardManifest,
+]:
+    parent_market_data = _market_data(1400)
+    manifest = _phase1_manifest(parent_market_data)
+    market_data, boundary = apply_phase2_final_test_session_isolation(
+        manifest=manifest,
+        market_data=parent_market_data,
+        global_feature_warmup_rows=60,
+    )
+    features = build_research_feature_matrix(market_data, created_at=CREATED_AT)
+    labels = build_forward_label_set(
+        market_data,
+        cost_assumptions=TradingCostAssumptions(
+            commission_bps_per_side=Decimal("0.125"),
+            slippage_bps_per_side=Decimal("0.25"),
+        ),
+        created_at=CREATED_AT,
+    )
+    supervised = build_research_supervised_dataset(features, labels, created_at=CREATED_AT)
+    lineage = DatasetLineage(
+        dataset_id=boundary.research_slice_id,
+        canonical_dataset_checksum=boundary.research_slice_checksum,
+        provider="alpaca",
+        feed="sip",
+        timeframe="1Day",
+        adjustment="all",
+        first_session=market_data.metadata.first_session,
+        last_session=market_data.metadata.last_session,
+    )
+    fold_manifest = construct_walk_forward_manifest(
+        supervised,
+        dataset_lineage=lineage,
+        runtime_lineage=_runtime_lineage(),
+        policy=FoldPolicy(feature_warmup_rows=60),
+    )
+    return supervised, boundary, fold_manifest
 
 
 def test_research_features_match_hand_calculated_trailing_formulas() -> None:
@@ -256,6 +362,137 @@ def test_phase3_global_warmup_and_fold_policy_identity_are_deterministic() -> No
     assert first.boundary_excluded_sessions[-1] < first.assessment.first_prediction_session
 
 
+def test_phase2_final_test_sessions_are_excluded_before_labels_and_folds() -> None:
+    supervised, boundary, fold_manifest = _isolated_supervised_and_fold_manifest()
+    parent_market_data = _market_data(1400)
+    repeated = derive_phase2_final_test_exclusion_boundary(
+        manifest=_phase1_manifest(parent_market_data),
+        market_data=parent_market_data,
+        global_feature_warmup_rows=60,
+    )
+
+    protected_sessions = set(boundary.phase2_final_test_prediction_sessions)
+    label_sessions = set(supervised.labels["session"].to_list())
+    fold_sessions: set[date] = set()
+    for fold in fold_manifest.folds:
+        fold_sessions.update(fold.training.prediction_sessions)
+        fold_sessions.update(fold.training.entry_sessions)
+        fold_sessions.update(fold.training.exit_sessions)
+        fold_sessions.update(fold.boundary_excluded_sessions)
+        fold_sessions.update(fold.assessment.prediction_sessions)
+        fold_sessions.update(fold.assessment.entry_sessions)
+        fold_sessions.update(fold.assessment.exit_sessions)
+
+    assert boundary.research_slice_id == repeated.research_slice_id
+    assert boundary.research_slice_checksum == repeated.research_slice_checksum
+    assert protected_sessions
+    assert label_sessions.isdisjoint(protected_sessions)
+    assert fold_sessions.isdisjoint(protected_sessions)
+    assert (
+        supervised.labels["exit_session"].max()
+        < boundary.phase2_final_test_first_prediction_session
+    )
+    assert fold_manifest.dataset_lineage.dataset_id == boundary.research_slice_id
+    assert (
+        fold_manifest.dataset_lineage.canonical_dataset_checksum == boundary.research_slice_checksum
+    )
+    validate_phase2_session_isolation(
+        boundary,
+        supervised=supervised,
+        fold_manifest=fold_manifest,
+        diagnostic_assessment_sessions=tuple(
+            session
+            for fold in fold_manifest.folds
+            for session in fold.assessment.prediction_sessions
+        ),
+    )
+
+    unsafe_features = build_research_feature_matrix(parent_market_data, created_at=CREATED_AT)
+    unsafe_labels = build_forward_label_set(
+        parent_market_data,
+        cost_assumptions=TradingCostAssumptions(
+            commission_bps_per_side=Decimal("0.125"),
+            slippage_bps_per_side=Decimal("0.25"),
+        ),
+        created_at=CREATED_AT,
+    )
+    unsafe_supervised = build_research_supervised_dataset(
+        unsafe_features,
+        unsafe_labels,
+        created_at=CREATED_AT,
+    )
+    with pytest.raises(ResearchRegistryError, match="phase2_final_test_session_intersection"):
+        validate_phase2_session_isolation(boundary, supervised=unsafe_supervised)
+
+
+def test_phase2_isolation_blocks_calibration_diagnostics_and_crossing_sessions() -> None:
+    supervised, boundary, fold_manifest = _isolated_supervised_and_fold_manifest()
+    split = build_calibration_split(
+        supervised,
+        fold=fold_manifest.folds[0],
+        policy=CalibrationPolicy(
+            calibration_policy_id="phase3-sigmoid-platt-calibration-v1",
+            method="sigmoid",
+        ),
+    )
+    assert split is not None
+    validate_phase2_session_isolation(boundary, calibration_splits=(split,))
+    assert set(split.estimator_training_sessions).isdisjoint(
+        boundary.phase2_final_test_prediction_sessions
+    )
+    assert set(split.calibration_sessions).isdisjoint(
+        boundary.phase2_final_test_prediction_sessions
+    )
+
+    fold = fold_manifest.folds[0]
+    probabilities = (0.5,) * fold.assessment.row_count
+    metrics = calculate_research_classification_metrics(
+        model_name="constant",
+        fold_id=fold.fold_id,
+        targets=tuple(
+            int(value)
+            for value in supervised.labels.iloc[756 + 6 : 756 + 6 + fold.assessment.row_count][
+                "target"
+            ].to_list()
+        ),
+        probabilities=probabilities,
+    )
+    diagnostics = fold_drift_diagnostics(
+        supervised=supervised,
+        fold=fold,
+        feature_columns=("close_return_1d",),
+        probabilities=probabilities,
+        metrics=metrics,
+        config=ResearchCampaignConfig(),
+    )
+    assert diagnostics["fold_id"] == fold.fold_id
+    assert set(fold.assessment.prediction_sessions).isdisjoint(
+        boundary.phase2_final_test_prediction_sessions
+    )
+
+    with pytest.raises(ResearchRegistryError, match="phase2_final_test_session_intersection"):
+        validate_phase2_session_isolation(
+            boundary,
+            diagnostic_assessment_sessions=(boundary.phase2_final_test_first_prediction_session,),
+        )
+
+    unsafe_lineage = DatasetLineage(
+        dataset_id="unsafe-crossing-slice",
+        canonical_dataset_checksum=boundary.research_slice_checksum,
+        provider="alpaca",
+        feed="sip",
+        timeframe="1Day",
+        adjustment="all",
+        first_session=fold_manifest.dataset_lineage.first_session,
+        last_session=fold_manifest.dataset_lineage.last_session,
+    )
+    unsafe_fold_manifest = fold_manifest.model_copy(
+        update={"dataset_lineage": unsafe_lineage},
+    )
+    with pytest.raises(ResearchRegistryError, match="phase3_fold_dataset_lineage_mismatch"):
+        validate_phase2_session_isolation(boundary, fold_manifest=unsafe_fold_manifest)
+
+
 def test_development_model_grids_and_fixed_baselines_are_predeclared() -> None:
     registry = development_model_registry()
     assert len(LOGISTIC_RESEARCH_GRID) == 6
@@ -283,6 +520,46 @@ def test_development_model_grids_and_fixed_baselines_are_predeclared() -> None:
 
     searches = development_hyperparameter_searches()
     assert [search.trial_count for search in searches] == [6, 8, 12]
+
+
+def test_each_new_development_model_family_fits_and_predicts_on_synthetic_fold() -> None:
+    supervised = _research_supervised(900)
+    market_data = _market_data(900)
+    fold_manifest = construct_walk_forward_manifest(
+        supervised,
+        dataset_lineage=_dataset_lineage(market_data),
+        runtime_lineage=_runtime_lineage(),
+        policy=FoldPolicy(
+            feature_warmup_rows=60,
+            assessment_window_rows=63,
+            step_rows=63,
+            minimum_final_assessment_rows=63,
+        ),
+    )
+    registry = development_model_registry()
+    for model_family in (
+        "logistic_regression_research",
+        "hist_gradient_boosting",
+        "extra_trees",
+    ):
+        model_definition = next(
+            model for model in registry.models if model.model_family == model_family
+        )
+        result = evaluate_model_candidate(
+            supervised=supervised,
+            fold_manifest=fold_manifest,
+            config=ResearchCampaignConfig(),
+            feature_families=BASELINE_FAMILY_ORDER,
+            model_definition=model_definition,
+        )
+        failure_reasons = tuple(
+            (fold.fold_id, fold.failure_reason) for fold in result.fold_evaluations
+        )
+        assert {fold.status for fold in result.fold_evaluations} == {"completed"}, failure_reasons
+        assert all(
+            len(fold.probabilities) == fold_manifest.folds[index].assessment.row_count
+            for index, fold in enumerate(result.fold_evaluations)
+        )
 
 
 def test_research_campaign_config_identity_includes_selection_sensitive_values() -> None:

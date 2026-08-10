@@ -42,7 +42,9 @@ contains explicitly invoked Alpaca paper-only safeguards.
 and initial scaffolding. The current authorized branch is
 `review/v2-phase-03-development-research` for manual, offline, development-only
 classification experimentation. It starts from the completed `v2.0.0-alpha.2` real
-historical benchmark and must not tune against the already-opened Phase 2 final test.
+historical benchmark and must not tune against the already-opened Phase 2 final test. The
+development runner must derive a Phase 3 eligible research slice that excludes Phase 2
+final-test prediction sessions before labels are built.
 
 **Planned:** A responsible future path preserves Version 1, uses the accepted real SPY
 benchmark as baseline evidence, then adds stronger model research, shadow-mode operations,

@@ -214,14 +214,22 @@ def fit_development_estimator(
             "development estimator must expose fit.",
         )
     with warnings.catch_warnings(record=True) as captured_warnings:
+        warnings.filterwarnings(
+            "ignore",
+            message="Could not find the number of physical cores.*",
+            category=UserWarning,
+            module="joblib.externals.loky.backend.context",
+        )
         warnings.simplefilter("always", ConvergenceWarning)
         try:
             cast(Any, fit)(X, y)
         except Exception as exc:
+            detail = str(exc).strip()
+            suffix = f": {detail}" if detail else ""
             raise_research_error(
                 ResearchRegistryError,
                 "development_model_fit_failed",
-                f"{model_name} fit failed: {type(exc).__name__}.",
+                f"{model_name} fit failed: {type(exc).__name__}{suffix}.",
             )
     if any(issubclass(warning.category, ConvergenceWarning) for warning in captured_warnings):
         raise_research_error(

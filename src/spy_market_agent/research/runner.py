@@ -82,6 +82,11 @@ from spy_market_agent.research.models import (
     RuntimeLineage,
     WalkForwardManifest,
 )
+from spy_market_agent.research.phase2_isolation import (
+    Phase2FinalTestExclusionBoundary,
+    apply_phase2_final_test_session_isolation,
+    validate_phase2_session_isolation,
+)
 from spy_market_agent.research.registries import required_classification_baselines
 from spy_market_agent.research.selection import (
     NO_CANDIDATE_PROMOTION,
@@ -122,11 +127,16 @@ def run_development_campaign(
         )
     )
     config = load_research_campaign_config(_repo_relative_path(campaign_config_path, repo_root))
-    manifest, market_data = _load_verified_research_market_data(
+    manifest, parent_market_data = _load_verified_research_market_data(
         manifest_path=manifest_path,
         data_root=data_root,
         repository_root=repo_root,
         config=config,
+    )
+    market_data, phase2_exclusion_boundary = apply_phase2_final_test_session_isolation(
+        manifest=manifest,
+        market_data=parent_market_data,
+        global_feature_warmup_rows=config.global_feature_warmup_rows,
     )
     run_timestamp = (created_at or manifest.retrieval_timestamp).astimezone(UTC)
     research_runtime = _runtime_lineage()
@@ -149,12 +159,27 @@ def run_development_campaign(
         created_at=run_timestamp,
     )
     validate_supervised_leakage_contract(supervised)
-    dataset_lineage = _dataset_lineage_from_manifest(manifest, market_data)
+    validate_phase2_session_isolation(phase2_exclusion_boundary, supervised=supervised)
+    dataset_lineage = _dataset_lineage_from_manifest(
+        manifest,
+        market_data,
+        phase2_exclusion_boundary,
+    )
     fold_manifest = construct_walk_forward_manifest(
         supervised,
         dataset_lineage=dataset_lineage,
         runtime_lineage=research_runtime,
         policy=config.fold_policy(),
+    )
+    validate_phase2_session_isolation(
+        phase2_exclusion_boundary,
+        supervised=supervised,
+        fold_manifest=fold_manifest,
+        diagnostic_assessment_sessions=tuple(
+            session
+            for fold in fold_manifest.folds
+            for session in fold.assessment.prediction_sessions
+        ),
     )
     feature_registry = development_research_feature_registry(
         adjustment_policy=manifest.adjustment_mode
@@ -165,6 +190,7 @@ def run_development_campaign(
         config=config,
         manifest=manifest,
         dataset_lineage=dataset_lineage,
+        phase2_exclusion_boundary=phase2_exclusion_boundary,
         runtime_lineage=research_runtime,
         fold_manifest=fold_manifest,
         feature_registry=feature_registry,
@@ -227,6 +253,7 @@ def run_development_campaign(
         supervised=supervised,
         fold_manifest=fold_manifest,
         config=config,
+        phase2_exclusion_boundary=phase2_exclusion_boundary,
         model_results=model_results,
         top_uncalibrated_name=top_uncalibrated_name,
         selected_feature_families=selected_feature_result.feature_families,
@@ -288,6 +315,7 @@ def run_development_campaign(
         campaign_id=campaign_id,
         manifest=manifest,
         dataset_lineage=dataset_lineage,
+        phase2_exclusion_boundary=phase2_exclusion_boundary,
         config=config,
         fold_manifest=fold_manifest,
         selected_feature_result=selected_feature_result,
@@ -312,7 +340,8 @@ def run_development_campaign(
     )
     summary_lines = (
         f"campaign_id={campaign_id}",
-        f"dataset_id={manifest.dataset_id}",
+        f"parent_phase1_dataset_id={manifest.dataset_id}",
+        f"research_slice_id={phase2_exclusion_boundary.research_slice_id}",
         f"fold_count={len(fold_manifest.folds)}",
         f"selected_feature_set={selected_feature_result.candidate_name}",
         f"promotion_decision={final_selection.reason}",
@@ -399,16 +428,22 @@ def _load_verified_research_market_data(
 def _dataset_lineage_from_manifest(
     manifest: DatasetManifest,
     market_data: MarketDataBatch,
+    phase2_exclusion_boundary: Phase2FinalTestExclusionBoundary,
 ) -> DatasetLineage:
+    if market_data.metadata.dataset_checksum != phase2_exclusion_boundary.research_slice_checksum:
+        _raise_registry_error(
+            "research_slice_lineage_mismatch",
+            "research market-data checksum must match the Phase 2 exclusion boundary.",
+        )
     return DatasetLineage(
-        dataset_id=manifest.dataset_id,
+        dataset_id=phase2_exclusion_boundary.research_slice_id,
         canonical_dataset_checksum=market_data.metadata.dataset_checksum,
         provider=manifest.provider,
         feed=manifest.feed,
         timeframe=manifest.timeframe,
         adjustment=manifest.adjustment_mode,
-        first_session=manifest.actual_first_session,
-        last_session=manifest.actual_last_session,
+        first_session=market_data.metadata.first_session,
+        last_session=market_data.metadata.last_session,
     )
 
 
@@ -433,6 +468,7 @@ def _campaign_manifest_payload(
     config: ResearchCampaignConfig,
     manifest: DatasetManifest,
     dataset_lineage: DatasetLineage,
+    phase2_exclusion_boundary: Phase2FinalTestExclusionBoundary,
     runtime_lineage: RuntimeLineage,
     fold_manifest: WalkForwardManifest,
     feature_registry: FeatureRegistry,
@@ -446,7 +482,28 @@ def _campaign_manifest_payload(
         "phase_identifier": PHASE3_PHASE_ID,
         "campaign_config_id": config.campaign_config_id,
         "campaign_config_identity": campaign_config_identity(config),
-        "dataset_id": manifest.dataset_id,
+        "dataset_id": dataset_lineage.dataset_id,
+        "parent_phase1_dataset_id": manifest.dataset_id,
+        "parent_phase1_canonical_content_checksum": manifest.canonical_content_checksum,
+        "parent_canonical_market_data_checksum": (
+            phase2_exclusion_boundary.parent_canonical_market_data_checksum
+        ),
+        "phase2_final_test_exclusion_boundary": phase2_exclusion_boundary,
+        "phase3_development_eligibility": {
+            "research_slice_id": phase2_exclusion_boundary.research_slice_id,
+            "research_slice_checksum": phase2_exclusion_boundary.research_slice_checksum,
+            "eligible_source_session_range": {
+                "first": phase2_exclusion_boundary.eligible_source_first_session,
+                "last": phase2_exclusion_boundary.eligible_source_last_session,
+            },
+            "eligible_prediction_session_range": {
+                "first": phase2_exclusion_boundary.eligible_development_first_prediction_session,
+                "last": phase2_exclusion_boundary.eligible_development_last_prediction_session,
+            },
+            "excluded_source_session_count": (
+                phase2_exclusion_boundary.excluded_source_session_count
+            ),
+        },
         "dataset_lineage": dataset_lineage,
         "phase1_manifest_canonical_content_checksum": manifest.canonical_content_checksum,
         "phase1_manifest_artifact_checksum": manifest.manifest_artifact_checksum,
@@ -454,9 +511,13 @@ def _campaign_manifest_payload(
         "feed": manifest.feed,
         "timeframe": manifest.timeframe,
         "adjustment": manifest.adjustment_mode,
-        "session_range": {
+        "parent_session_range": {
             "first": manifest.actual_first_session,
             "last": manifest.actual_last_session,
+        },
+        "session_range": {
+            "first": dataset_lineage.first_session,
+            "last": dataset_lineage.last_session,
         },
         "feature_schema": RESEARCH_FEATURE_SCHEMA_VERSION,
         "feature_registry": feature_registry,
@@ -777,6 +838,7 @@ def _run_calibration_substudy(
     supervised: ResearchSupervisedDataset,
     fold_manifest: WalkForwardManifest,
     config: ResearchCampaignConfig,
+    phase2_exclusion_boundary: Phase2FinalTestExclusionBoundary,
     model_results: dict[str, CandidateEvaluation],
     top_uncalibrated_name: str | None,
     selected_feature_families: tuple[str, ...],
@@ -796,6 +858,7 @@ def _run_calibration_substudy(
             feature_families=selected_feature_families,
             model_definition=model_result.model_definition,
             policy=policy,
+            phase2_exclusion_boundary=phase2_exclusion_boundary,
         )
         raw[evaluation.candidate_name] = evaluation
     phase2_model_baselines = (
@@ -925,6 +988,7 @@ def _selection_report(
     campaign_id: str,
     manifest: DatasetManifest,
     dataset_lineage: DatasetLineage,
+    phase2_exclusion_boundary: Phase2FinalTestExclusionBoundary,
     config: ResearchCampaignConfig,
     fold_manifest: WalkForwardManifest,
     selected_feature_result: CandidateEvaluation,
@@ -938,12 +1002,25 @@ def _selection_report(
     lines = [
         "# Phase 3 Development Selection Report",
         "",
-        f"- dataset_id: `{manifest.dataset_id}`",
-        f"- canonical_ohlcv_checksum: `{dataset_lineage.canonical_dataset_checksum}`",
+        f"- parent_phase1_dataset_id: `{manifest.dataset_id}`",
+        f"- parent_phase1_canonical_content_checksum: `{manifest.canonical_content_checksum}`",
+        f"- research_slice_id: `{dataset_lineage.dataset_id}`",
+        f"- research_slice_checksum: `{dataset_lineage.canonical_dataset_checksum}`",
         f"- phase1_canonical_content_checksum: `{manifest.canonical_content_checksum}`",
         (
             f"- provider/feed/timeframe/adjustment: "
             f"`{manifest.provider}/{manifest.feed}/{manifest.timeframe}/{manifest.adjustment_mode}`"
+        ),
+        (
+            "- Phase 2 final-test exclusion: `"
+            f"{phase2_exclusion_boundary.exclusion_policy_id}`; excluded_source_sessions="
+            f"`{phase2_exclusion_boundary.excluded_source_session_count}`"
+        ),
+        (
+            "- eligible_development_prediction_range: `"
+            f"{phase2_exclusion_boundary.eligible_development_first_prediction_session}"
+            " to "
+            f"{phase2_exclusion_boundary.eligible_development_last_prediction_session}`"
         ),
         f"- campaign_id: `{campaign_id}`",
         f"- fold_count: `{len(fold_manifest.folds)}`",

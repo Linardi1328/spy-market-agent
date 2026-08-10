@@ -8,6 +8,10 @@
   scikit-learn candidate grids, calibration sub-study support, expected calibration error,
   regime/drift diagnostics, deterministic research artifacts, and a manual offline
   `run-development` CLI.
+- Hardened Phase 3 development research so the runner reconstructs the frozen Phase 2
+  final-test prediction-session boundary, truncates the research slice before label
+  construction, records slice lineage, and rejects any development surface that intersects
+  Phase 2 final-test prediction sessions.
 - Documented that PR #24 framework/scaffolding review is merged, development
   experimentation is now active, protected evaluation and strategy optimization remain
   unauthorized, Phase 4 remains unauthorized, and package/runtime version remains

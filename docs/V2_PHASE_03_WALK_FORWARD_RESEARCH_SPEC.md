@@ -25,6 +25,13 @@ the frozen Phase 2 benchmark. Phase 3 must not tune against the already-opened P
 test. Phase 3 must not add live-money trading, production paper operation, API write routes,
 dashboard execution controls, or automatic execution behavior.
 
+For development experimentation on the accepted Phase 1 lineage, the Phase 3 runner must
+mechanically reconstruct the frozen Phase 2 development/final-test split, truncate the
+eligible market-data slice before label construction, and ensure every Phase 3 training,
+boundary, assessment, calibration, diagnostic, and selection session precedes the Phase 2
+final-test prediction partition. The boundary and research-slice identity are
+lineage-defining campaign metadata.
+
 ## Table of Contents
 
 - [1. Purpose](#1-purpose)
@@ -148,6 +155,14 @@ Prohibited Phase 3 uses:
 Phase 3 research reports must include a clear statement that the Phase 2 final test has
 already been opened and is not available as a tuning or selection surface.
 
+When the Phase 3 development runner consumes the accepted Phase 1 dataset lineage used by
+Phase 2, it must derive the Phase 2 final-test prediction sessions from the frozen Phase 2
+split policy rather than from filenames alone. The eligible Phase 3 development source data
+must be truncated before `build_forward_label_set(...)`; the last eligible Phase 3
+prediction row must have its `t + 6` exit before the first Phase 2 final-test prediction
+session. Any attempted fold, calibration split, diagnostic assessment, or model-selection
+surface that intersects Phase 2 final-test prediction sessions must fail closed.
+
 ## 5. Dataset Eligibility
 
 The primary Phase 3 research dataset should use the same data-governance standard as Phase 2:
@@ -160,6 +175,9 @@ The primary Phase 3 research dataset should use the same data-governance standar
 - no mixing of raw and adjusted fields inside one calculation;
 - Phase 1 manifest verification passes;
 - canonical checksum and dataset ID are recorded;
+- when the input lineage corresponds to the accepted Phase 2 parent dataset, the recorded
+  Phase 3 research slice excludes the Phase 2 final-test prediction partition before labels
+  are built;
 - XNYS sessions validate;
 - duplicate sessions, future sessions, incomplete current-session candles, and OHLCV
   inconsistencies fail closed.
@@ -435,6 +453,11 @@ Each experiment record must include:
 - experiment ID;
 - phase identifier: `v2-phase-03`;
 - dataset ID and canonical checksum;
+- parent Phase 1 dataset ID and checksum when the campaign uses a derived development-only
+  research slice;
+- Phase 2 final-test exclusion policy, eligible Phase 3 development session range,
+  research-slice checksum/identity, and excluded-session count for development campaigns
+  derived from the accepted Phase 2 parent lineage;
 - provider, feed, timeframe, adjustment mode, and session range;
 - feature schema and enabled feature families;
 - label schema and forecast horizon;

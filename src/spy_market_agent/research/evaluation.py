@@ -41,6 +41,10 @@ from spy_market_agent.research.models import (
     ModelDefinition,
     WalkForwardManifest,
 )
+from spy_market_agent.research.phase2_isolation import (
+    Phase2FinalTestExclusionBoundary,
+    validate_phase2_session_isolation,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -202,6 +206,7 @@ def evaluate_calibration_variant(
     feature_families: tuple[str, ...],
     model_definition: ModelDefinition,
     policy: CalibrationPolicy,
+    phase2_exclusion_boundary: Phase2FinalTestExclusionBoundary | None = None,
 ) -> CandidateEvaluation:
     if policy.method == "none":
         return evaluate_model_candidate(
@@ -222,6 +227,11 @@ def evaluate_calibration_variant(
                     ResearchRegistryError,
                     "missing_calibration_split",
                     "calibrated variants require a calibration split.",
+                )
+            if phase2_exclusion_boundary is not None:
+                validate_phase2_session_isolation(
+                    phase2_exclusion_boundary,
+                    calibration_splits=(split,),
                 )
             estimator_X, estimator_y = _xy_for_sessions(
                 supervised,

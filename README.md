@@ -136,13 +136,16 @@ framework and initial research scaffolding. The active development-only branch i
 The `spy_market_agent.research` package now provides a manual, offline, classification-first
 development runner for verified local Phase 1 SPY manifests. It verifies lineage before
 loading canonical data, builds research-only OHLCV feature families, applies the shared
-60-session campaign warm-up, constructs deterministic expanding-window folds, reruns fixed
-Phase 2 model baselines, evaluates finite predeclared scikit-learn candidate grids, runs the
-predeclared calibration sub-study, records regime and drift diagnostics, and writes ignored
-research artifacts under `artifacts/research/<experiment_id>/`.
+60-session campaign warm-up, reconstructs the frozen Phase 2 final-test prediction-session
+boundary, truncates the eligible development source slice before Version 1 labels are built,
+constructs deterministic expanding-window folds, reruns fixed Phase 2 model baselines,
+evaluates finite predeclared scikit-learn candidate grids, runs the predeclared calibration
+sub-study, records regime and drift diagnostics, and writes ignored research artifacts under
+`artifacts/research/<experiment_id>/`.
 
-Phase 3 does not tune against the already-opened Phase 2 final test. The Phase 2 result may
-be cited only as frozen summary baseline evidence. This branch does not authorize protected
+Phase 3 does not tune against the already-opened Phase 2 final test and does not reconstruct
+Phase 2 final-test row-level labels for development research. The Phase 2 result may be
+cited only as frozen summary baseline evidence. This branch does not authorize protected
 evaluation, strategy-threshold optimization, strategy candidate selection, live trading,
 production paper execution, shadow mode, API write routes, dashboard execution controls,
 schedulers, automatic order submission, or broker communication. Package/runtime version

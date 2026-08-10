@@ -260,6 +260,15 @@ already-opened Phase 2 final test is frozen baseline evidence and must not be lo
 to choose Phase 3 features, models, hyperparameters, calibration, thresholds, or report
 framing.
 
+For development campaigns derived from the accepted Phase 2 parent dataset, reproducibility
+also includes the session-level final-test exclusion boundary. The runner reconstructs the
+frozen Phase 2 split from the verified Phase 1 lineage, truncates the eligible market-data
+slice before `build_forward_label_set(...)`, records the parent dataset ID/checksum, the
+research-slice ID/checksum, eligible development session range, exclusion policy, and
+excluded-session count, and makes those fields identity-defining. Any fold, calibration
+split, diagnostic assessment, or model-selection surface that intersects Phase 2 final-test
+prediction sessions fails closed.
+
 The committed development campaign configuration is
 `configs/research/phase3_development_campaign.json`. It predeclares the global 60-session
 feature warm-up, fold policy, diagnostic threshold, reliability bin count, candidate

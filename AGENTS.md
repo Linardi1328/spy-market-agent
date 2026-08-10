@@ -27,6 +27,9 @@ experimentation under `docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md` on
 `review/v2-phase-03-development-research`. Protected evaluation, Phase 4 shadow mode, and
 release preparation remain unauthorized until explicit owner approval. Version 2 Phase 3 is
 not accepted, complete, or released until owner acceptance gates are complete.
+Phase 3 development research must derive and apply the Phase 2 final-test
+prediction-session exclusion boundary before building labels from the accepted Phase 1
+parent dataset.
 Real-data-provider selection belongs to Version 2 Phase 1, not to an old Version 1 phase.
 
 If a user request conflicts with `PROJECT_SPEC.md`, `FUTURE_ROADMAP.md`, or the active phase
