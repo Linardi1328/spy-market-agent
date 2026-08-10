@@ -153,12 +153,12 @@ failed first access preserves the started record and requires explicit operator 
 any non-audit re-attempt; audit replay never creates a new access record or overwrites
 accepted final artifacts.
 
-The Version 2 Phase 3 research path is specification and research-scaffolding work first. It
-must not load Phase 2 final-test row-level labels, predictions, strategy rows, fills, or
-generated benchmark JSON for tuning. Phase 3 generated real-data research artifacts remain
-ignored under `artifacts/research/<experiment_id>/`. Any future Phase 3 CLI must be manual,
-offline for normal tests, credential-free, broker-free, and unable to submit paper or live
-orders.
+The Version 2 Phase 3 research path is framework and research-scaffolding work first. Its
+package-local scaffolding must not load Phase 2 final-test row-level labels, predictions,
+strategy rows, fills, or generated benchmark JSON for tuning. Phase 3 generated real-data
+research artifacts remain ignored under `artifacts/research/<experiment_id>/`. No Phase 3
+CLI is currently exposed. Any future Phase 3 CLI must be manual, offline for normal tests,
+credential-free, broker-free, and unable to submit paper or live orders.
 
 ## Historical Market-Data Safety
 

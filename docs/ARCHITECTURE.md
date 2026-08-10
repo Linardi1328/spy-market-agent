@@ -33,6 +33,10 @@ submission can proceed.
 - `spy_market_agent.benchmark` (`src/spy_market_agent/benchmark`): Version 2 Phase 2
   file-based real historical benchmark workflow, immutable locks, final-test access
   controls, baseline/regime diagnostics, and artifact verification.
+- `spy_market_agent.research` (`src/spy_market_agent/research`): Version 2 Phase 3
+  walk-forward fold construction, leakage guards, experiment/feature/model registries,
+  research metrics, baselines, candidate selection, protected-evaluation denial, and
+  ignored artifact schemas.
 - `spy_market_agent.persistence` (`src/spy_market_agent/persistence`): explicit SQLite initialization, schema validation, and
   artifact repositories.
 - `spy_market_agent.api` (`src/spy_market_agent/api`): read-only FastAPI application and response service.
@@ -51,6 +55,7 @@ flowchart TD
     Features --> Dataset[Supervised dataset]
     Labels --> Dataset
     Dataset --> Splits[Chronological train validation test splits]
+    Dataset --> Research[Phase 3 walk-forward research framework]
     Splits --> Modeling[Logistic regression and gradient boosting]
     Modeling --> Selection[Validation-only selection]
     Selection --> FinalTest[Locked final-test evaluation]
@@ -60,6 +65,7 @@ flowchart TD
     Manifest[Phase 1 dataset manifest] --> Benchmark[Phase 2 file-based benchmark locks]
     Benchmark --> Modeling
     Benchmark --> Backtest
+    Research --> ResearchArtifacts[Ignored artifacts/research manifests]
     Backtest --> Persistence[SQLite artifact repository]
     FinalTest --> Persistence
     Validation --> Persistence
@@ -145,21 +151,22 @@ predictive discrimination and must not be described as a proven market edge.
 
 ## Version 2 Phase 3 Research Framework
 
-**Active for specification and initial research scaffolding:** Phase 3 defines a
-walk-forward research framework for future model improvement work. It is governed by
+**Active for framework implementation and initial research scaffolding:** Phase 3 adds the
+`spy_market_agent.research` package for future model improvement work. It is governed by
 `docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md` and starts from the completed Phase 2
-benchmark evidence.
+benchmark evidence as sanitized baseline motivation only.
 
 The default Phase 3 protocol is expanding-window walk-forward validation with chronological
 assessment windows, a six-row boundary exclusion after each training window, explicit
-feature warm-up handling, and deterministic fold identities. The framework separates
-classification diagnostics from strategy diagnostics and requires experiment lineage before
-substantive real-data research.
+feature warm-up handling, deterministic fold identities, deterministic experiment
+identities, leakage validation, registry manifests, and ignored artifact schemas. The
+framework separates classification diagnostics from strategy diagnostics and requires
+experiment lineage before substantive real-data research.
 
 Phase 3 does not introduce a production runtime package, API mutation path, dashboard
 control, scheduler, broker connection, paper-execution change, live-execution behavior, or
-new asset support. The already-opened Phase 2 final test remains frozen evidence and must
-not be used for Phase 3 tuning.
+new asset support. No Phase 3 CLI is exposed in the current scaffolding. The already-opened
+Phase 2 final test remains frozen evidence and must not be used for Phase 3 tuning.
 
 ## Backtest Data Flow
 

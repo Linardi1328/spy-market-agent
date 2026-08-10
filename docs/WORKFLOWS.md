@@ -214,7 +214,7 @@ python -m spy_market_agent.benchmark.cli run-final-test \
 
 ## Prepare Phase 3 Walk-Forward Research
 
-Phase 3 is active for specification and initial research scaffolding under
+Phase 3 is active for framework implementation and initial research scaffolding under
 `docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md`. It starts from the completed
 `v2.0.0-alpha.2` benchmark evidence, but it must not tune against the already-opened Phase 2
 final test.
@@ -240,9 +240,12 @@ assessment window: 126 supervised rows
 step size: 63 supervised rows
 ```
 
-Phase 3 research commands are intentionally not added here until the scaffolding is
-implemented and reviewed. Any future command must be manual, offline for normal tests,
-credential-free, broker-free, and unable to submit paper or live orders.
+The current Phase 3 scaffolding is programmatic and package-local under
+`src/spy_market_agent/research`; it can construct and validate fold, registry, manifest,
+metric, baseline, calibration, threshold, and artifact records from offline inputs. No
+Phase 3 research CLI command is currently exposed. Any future command must be manual,
+offline for normal tests, credential-free, broker-free, and unable to submit paper or live
+orders.
 
 ## Inspect Model Evaluations
 

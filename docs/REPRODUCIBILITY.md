@@ -228,8 +228,9 @@ result showed weak predictive discrimination and must not be used for Phase 3 tu
 
 ## Version 2 Phase 3 Research Reproducibility
 
-**Active for specification and initial research scaffolding:** Phase 3 defines
-walk-forward research rules under `docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md`.
+**Active for framework implementation and initial research scaffolding:** Phase 3 defines
+walk-forward research rules under `docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md` and
+implements package-local scaffolding under `src/spy_market_agent/research`.
 Package/runtime version remains `2.0.0a2` until a later accepted release-preparation branch
 explicitly prepares `2.0.0a3`.
 
@@ -247,6 +248,9 @@ Phase 3 experiment records must capture dataset ID and checksum, provider/feed/t
 adjustment mode, feature schema, label schema, exact fold boundaries, model configuration,
 hyperparameter search space, calibration policy, threshold policy, metric definitions,
 selection rule, Git SHA, package/runtime version, Python version, and dependency versions.
+Fold and experiment identities are deterministic from stable dataset, feature, label,
+policy, boundary, configuration, and code-lineage inputs. Creation timestamps are metadata
+only and do not define experiment identity.
 
 Generated real-data research artifacts remain ignored under
 `artifacts/research/<experiment_id>/`. Normal tests must remain offline and synthetic. The

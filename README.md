@@ -16,8 +16,8 @@ profitability, and is not real-money trading infrastructure.
 - Active development target: `v2.0.0-alpha.3`.
 - V2 Phase 1: accepted and complete - Real SPY Data Foundation.
 - V2 Phase 2: accepted and released - Real Historical Benchmark.
-- V2 Phase 3: active specification and initial research scaffolding - Walk-Forward Model
-  Research.
+- V2 Phase 3: active framework implementation and initial research scaffolding -
+  Walk-Forward Model Research.
 - Owner-run real SIP benchmark and one controlled final-test execution completed.
 - Live-money readiness: not approved.
 
@@ -132,16 +132,17 @@ Version 2 Phase 3 begins the Walk-Forward Model Research phase. The active branc
 `review/v2-phase-03-walk-forward-research`, governed by
 [Version 2 Phase 3 Walk-Forward Model Research Specification](docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md).
 
-Phase 3 is specification and research-scaffolding work first. It defines expanding-window
-walk-forward evaluation, chronological fold gaps and purges, leakage protections, allowable
-feature and model research, feature ablation, hyperparameter research, calibration policy,
-threshold research policy, regime and drift analysis, experiment lineage, required metrics,
-baselines, and candidate-selection rules.
+Phase 3 is framework and research-scaffolding work first. The
+`spy_market_agent.research` package provides programmatic scaffolding for expanding-window
+walk-forward folds, chronological boundary exclusions and purges, leakage guards, feature
+and model registries, ablation definitions, finite hyperparameter-search manifests,
+calibration and threshold policy records, experiment lineage, metrics, baselines, candidate
+selection, protected-evaluation denial, and ignored research artifact schemas.
 
 Phase 3 does not tune against the already-opened Phase 2 final test. The Phase 2 result may
 be cited only as frozen summary baseline evidence. Phase 3 does not add live trading,
 production paper execution, shadow mode, API write routes, dashboard execution controls,
-schedulers, or automatic order submission.
+schedulers, automatic order submission, or unrestricted real-data model experimentation.
 
 ## Safety Boundaries
 
@@ -200,7 +201,7 @@ dataset. It does not include model research beyond the approved locked candidate
 not prove predictive market edge.
 
 Version 2 Phase 3 currently adds the governing walk-forward research framework and initial
-status documentation. It does not yet implement full model experimentation or promote a
+programmatic scaffolding. It does not yet run full model experimentation or promote a
 candidate model.
 
 Version 1.0.0 specifically did not include market-data downloading; the explicit SPY
