@@ -16,8 +16,8 @@ profitability, and is not real-money trading infrastructure.
 - Active development target: `v2.0.0-alpha.3`.
 - V2 Phase 1: accepted and complete - Real SPY Data Foundation.
 - V2 Phase 2: accepted and released - Real Historical Benchmark.
-- V2 Phase 3: active framework implementation and initial research scaffolding -
-  Walk-Forward Model Research.
+- V2 Phase 3: active development-only walk-forward experimentation - Walk-Forward Model
+  Research.
 - Owner-run real SIP benchmark and one controlled final-test execution completed.
 - Live-money readiness: not approved.
 
@@ -126,24 +126,36 @@ Scientific result:
 This is valid benchmark evidence and not an engineering failure. It does not establish a
 reliable predictive edge, trading readiness, profitability, or investment suitability.
 
-## Version 2 Phase 3 Active Research Framework
+## Version 2 Phase 3 Active Development Research
 
-Version 2 Phase 3 begins the Walk-Forward Model Research phase. The active branch is
-`review/v2-phase-03-walk-forward-research`, governed by
+Version 2 Phase 3 begins the Walk-Forward Model Research phase. PR #24 merged the approved
+framework and initial research scaffolding. The active development-only branch is
+`review/v2-phase-03-development-research`, governed by
 [Version 2 Phase 3 Walk-Forward Model Research Specification](docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md).
 
-Phase 3 is framework and research-scaffolding work first. The
-`spy_market_agent.research` package provides programmatic scaffolding for expanding-window
-walk-forward folds, chronological boundary exclusions and purges, leakage guards, feature
-and model registries, ablation definitions, finite hyperparameter-search manifests,
-calibration and threshold policy records, experiment lineage, metrics, baselines, candidate
-selection with predeclared identity-defining thresholds, protected-evaluation denial, and
-ignored research artifact schemas.
+The `spy_market_agent.research` package now provides a manual, offline, classification-first
+development runner for verified local Phase 1 SPY manifests. It verifies lineage before
+loading canonical data, builds research-only OHLCV feature families, applies the shared
+60-session campaign warm-up, constructs deterministic expanding-window folds, reruns fixed
+Phase 2 model baselines, evaluates finite predeclared scikit-learn candidate grids, runs the
+predeclared calibration sub-study, records regime and drift diagnostics, and writes ignored
+research artifacts under `artifacts/research/<experiment_id>/`.
 
 Phase 3 does not tune against the already-opened Phase 2 final test. The Phase 2 result may
-be cited only as frozen summary baseline evidence. Phase 3 does not add live trading,
+be cited only as frozen summary baseline evidence. This branch does not authorize protected
+evaluation, strategy-threshold optimization, strategy candidate selection, live trading,
 production paper execution, shadow mode, API write routes, dashboard execution controls,
-schedulers, automatic order submission, or unrestricted real-data model experimentation.
+schedulers, automatic order submission, or broker communication. Package/runtime version
+remains `2.0.0a2`; the future release target remains `v2.0.0-alpha.3`.
+
+Owner-run development research, when authorized locally, is launched manually with:
+
+```bash
+python -m spy_market_agent.research.cli run-development \
+  --manifest data/manifests/alpaca/SPY/1Day/sip/all/DATASET_ID.manifest.json \
+  --data-root ./data \
+  --campaign-config configs/research/phase3_development_campaign.json
+```
 
 ## Safety Boundaries
 
@@ -186,8 +198,8 @@ The current implemented system intentionally does not include:
 - real-time data feeds
 - investment recommendations
 - profitability claims
-- implemented probability calibration or threshold optimization
-- implemented hyperparameter tuning or model binary persistence
+- production probability calibration or strategy-threshold optimization
+- unrestricted hyperparameter tuning or model binary persistence
 - API write routes
 - dashboard execution controls
 - automatic broker communication
@@ -201,9 +213,9 @@ Version 2 Phase 2 includes completed historical benchmarking on one owner-run re
 dataset. It does not include model research beyond the approved locked candidates and does
 not prove predictive market edge.
 
-Version 2 Phase 3 currently adds the governing walk-forward research framework and initial
-programmatic scaffolding. It does not yet run full model experimentation or promote a
-candidate model.
+Version 2 Phase 3 currently adds development-only classification experimentation. It may
+produce `NO CANDIDATE PROMOTION`; it does not run protected evaluation, strategy
+optimization, or paper/live operation.
 
 Version 1.0.0 specifically did not include market-data downloading; the explicit SPY
 historical-data acquisition CLI begins in Version 2 Phase 1.

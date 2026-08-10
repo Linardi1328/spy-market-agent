@@ -5,9 +5,10 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from spy_market_agent.datasets.models import FORBIDDEN_MODEL_FEATURE_COLUMNS, SupervisedDataset
+from spy_market_agent.datasets.models import FORBIDDEN_MODEL_FEATURE_COLUMNS
 from spy_market_agent.research.errors import LeakageValidationError, raise_research_error
 from spy_market_agent.research.models import WalkForwardFold
+from spy_market_agent.research.types import ResearchSupervisedDatasetLike
 
 FUTURE_COLUMN_TOKENS = (
     "future",
@@ -24,6 +25,13 @@ PHASE2_FINAL_TEST_ARTIFACT_TOKENS = (
     "final_test_results.json",
     "final_test_access.json",
     "final_test_completion.json",
+    "final_test_predictions.json",
+    "final_test_prediction_rows.json",
+    "final_test_model_predictions.json",
+    "phase2_final_test_predictions.json",
+    "benchmark_strategy_rows.json",
+    "final_test_strategy_rows.json",
+    "phase2_final_test_strategy_rows.json",
     "backtest_results.json",
     "cost_sensitivity.json",
     "regime_results.json",
@@ -110,7 +118,7 @@ def validate_no_forbidden_feature_columns(columns: tuple[str, ...] | list[str]) 
         )
 
 
-def validate_supervised_leakage_contract(supervised: SupervisedDataset) -> None:
+def validate_supervised_leakage_contract(supervised: ResearchSupervisedDatasetLike) -> None:
     validate_no_forbidden_feature_columns(tuple(supervised.features.columns))
     labels = supervised.labels.reset_index(drop=True)
     for row_number, row in enumerate(labels.itertuples(index=False), start=1):

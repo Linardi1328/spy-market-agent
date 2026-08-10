@@ -1,12 +1,18 @@
 # Version 2 Phase 3 - Walk-Forward Model Research Specification
 
-Status: Active development for specification and initial research scaffolding
+Status: Active development-only walk-forward experimentation after PR #24 framework merge
 
 Target release identifier: `v2.0.0-alpha.3`
 
-Implementation branch: `review/v2-phase-03-walk-forward-research`
+Current implementation branch: `review/v2-phase-03-development-research`
 
 Package/runtime version during this branch: `2.0.0a2`
+
+PR #24 merged the approved Phase 3 framework and initial research scaffolding. The current
+authorized substage implements manual, offline, classification-first development
+experimentation against owner-verified local Phase 1 manifests. It does not authorize Phase
+3 protected evaluation, strategy-threshold optimization, Phase 4 shadow mode, Phase 5
+production paper operation, live trading, broker communication, or release preparation.
 
 Phase 3 begins after the completed `v2.0.0-alpha.2` release. Phase 2 established the first
 real SPY historical benchmark on a verified Alpaca SIP, `1Day`, adjustment `all` dataset.
@@ -88,9 +94,13 @@ Phase 3 may include:
 - synthetic offline tests for fold, lineage, registry, and leakage contracts;
 - owner-run research reports that use verified local data without committing provider data.
 
-Phase 3 implementation work should begin with specification and scaffolding. Full model
-experimentation is allowed only after the framework, leakage checks, artifact identity, and
-selection rules are reviewed.
+Phase 3 implementation began with specification and scaffolding in PR #24. The current
+authorized development substage may run only the predeclared classification-first
+walk-forward campaign: verified Phase 1 manifest input, baseline and research OHLCV
+features, feature ablations, fixed Phase 2 model baselines, finite scikit-learn model grids,
+the predeclared calibration sub-study, classification metrics, regime/drift diagnostics, and
+candidate selection. Strategy optimization and protected evaluation remain locked until a
+later explicit approval.
 
 ## 3. Explicit Non-Goals
 
@@ -365,6 +375,10 @@ when bins or classes are insufficient.
 
 Phase 3 may research decision thresholds, but threshold research must be separated from
 classifier discrimination.
+
+Current implementation-stage note: the development-research branch preserves threshold
+policy scaffolding but does not implement strategy-threshold optimization or use strategy
+returns for candidate selection.
 
 Rules:
 
@@ -718,9 +732,12 @@ Phase 3 must be rejected or held when:
 
 ## 27. Approval Boundary
 
-This specification is the governing Phase 3 document. It authorizes only walk-forward model
-research framework and initial research scaffolding on the approved review branch.
+This specification is the governing Phase 3 document. PR #24 delivered the approved
+walk-forward model-research framework and initial research scaffolding. The current
+authorized branch may add development-only, manual, offline classification experimentation
+under the same leakage, lineage, fold, artifact, and selection controls.
 
 It does not authorize Phase 4 shadow mode, Phase 5 production paper operation, live trading,
-new assets, or production execution behavior. Any expansion beyond this specification
-requires explicit owner approval and a new or amended governing specification.
+new assets, protected evaluation execution, strategy optimization in the current branch, or
+production execution behavior. Any expansion beyond this specification requires explicit
+owner approval and a new or amended governing specification.

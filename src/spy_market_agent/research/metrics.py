@@ -41,6 +41,11 @@ def calculate_research_classification_metrics(
     positive_count = sum(target_values)
     negative_count = row_count - positive_count
     predicted_positive_count = sum(predictions)
+    reliability_bins = _reliability_bins(
+        target_values,
+        probability_values,
+        bin_count=reliability_bin_count,
+    )
     confusion = confusion_matrix(target_values, predictions, labels=[0, 1]).tolist()
     true_negative = int(confusion[0][0])
     false_positive = int(confusion[0][1])
@@ -73,6 +78,7 @@ def calculate_research_classification_metrics(
         "brier_score": _defined(
             float(brier_score_loss(target_values, probability_values, pos_label=1))
         ),
+        "expected_calibration_error": _defined(_expected_calibration_error(reliability_bins)),
     }
     return ClassificationMetricSet(
         model_name=model_name,
@@ -90,11 +96,7 @@ def calculate_research_classification_metrics(
             "true_positive": true_positive,
         },
         metrics=metrics,
-        reliability_bins=_reliability_bins(
-            target_values,
-            probability_values,
-            bin_count=reliability_bin_count,
-        ),
+        reliability_bins=reliability_bins,
     )
 
 
@@ -259,17 +261,39 @@ def _reliability_bins(
         selected_targets = [target for target, _ in selected]
         selected_probabilities = [probability for _, probability in selected]
         row_count = len(selected)
+        mean_probability = statistics.fmean(selected_probabilities)
+        observed_prevalence = sum(selected_targets) / row_count
+        absolute_gap = abs(mean_probability - observed_prevalence)
         bins.append(
             {
                 "bin": f"{lower:.2f}-{upper:.2f}",
                 "lower_bound": lower,
                 "upper_bound": upper,
                 "row_count": row_count,
-                "mean_probability": statistics.fmean(selected_probabilities),
-                "observed_prevalence": sum(selected_targets) / row_count,
+                "mean_probability": mean_probability,
+                "observed_prevalence": observed_prevalence,
+                "absolute_calibration_gap": absolute_gap,
+                "weighted_contribution": absolute_gap * (row_count / len(targets)),
             }
         )
     return tuple(bins)
+
+
+def _expected_calibration_error(
+    reliability_bins: tuple[dict[str, float | int | str], ...],
+) -> float:
+    total = 0.0
+    for item in reliability_bins:
+        contribution = item["weighted_contribution"]
+        if not isinstance(contribution, float):
+            raise_research_error(
+                ResearchMetricError,
+                "invalid_reliability_bin_contribution",
+                "reliability bin weighted contributions must be floats.",
+            )
+        total += contribution
+    _ensure_finite(total, field_name="expected_calibration_error")
+    return total
 
 
 def _defined_values(per_fold: Sequence[MetricValue]) -> list[float]:

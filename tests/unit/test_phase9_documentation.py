@@ -263,7 +263,7 @@ def test_version_2_alpha_release_documents_are_consistent() -> None:
     assert "Active development target: `v2.0.0-alpha.3`" in readme
     assert "V2 Phase 1: accepted and complete - Real SPY Data Foundation" in readme
     assert "V2 Phase 2: accepted and released - Real Historical Benchmark" in readme
-    assert "V2 Phase 3: active framework implementation and initial research scaffolding" in readme
+    assert "V2 Phase 3: active development-only walk-forward experimentation" in readme
     assert phase2_completion in readme
     assert "Added the Version 2 Phase 3 Walk-Forward Model Research specification" in changelog
     assert "Implemented initial `spy_market_agent.research` scaffolding" in changelog
@@ -273,13 +273,10 @@ def test_version_2_alpha_release_documents_are_consistent() -> None:
     assert "Corresponding Python package version: `2.0.0a2`" in changelog
     assert "Status: Accepted for v2.0.0-alpha.1 release" in phase1_spec
     assert "Status: Engineering acceptance complete; release preparation in review" in phase2_spec
-    assert (
-        "Status: Active development for specification and initial research scaffolding"
-        in phase3_spec
-    )
+    assert "Status: Active development-only walk-forward experimentation" in phase3_spec
     assert "Accepted - Version 2 Real SPY Data Foundation" in roadmap
     assert "Accepted and released after owner-run real SIP benchmark" in roadmap
-    assert "Active framework implementation and initial research scaffolding" in roadmap
+    assert "Active development-only walk-forward experimentation" in roadmap
     assert "Git release identifier: `v2.0.0-alpha.1`" in phase1_release_notes
     assert "Git release identifier: `v2.0.0-alpha.2`" in phase2_release_notes
     assert "does not evaluate model accuracy" in phase1_release_notes
@@ -343,10 +340,10 @@ def test_version_2_phase2_release_preparation_status_is_documented() -> None:
     assert "Package version: `2.0.0a2`" in checklist
     assert "Package/runtime version is prepared as `2.0.0a2`" in review
     assert "does not authorize new model research, live execution, shadow" in normalized_combined
-    assert (
-        "version 2 phase 3 is authorized for walk-forward framework implementation"
-        in (ROOT / "AGENTS.md").read_text(encoding="utf-8").lower()
-    )
+    agents_lower = (ROOT / "AGENTS.md").read_text(encoding="utf-8").lower()
+    normalized_agents = " ".join(agents_lower.split())
+    assert "version 2 phase 3 pr #24 merged" in normalized_agents
+    assert "development-only walk-forward experimentation" in normalized_agents
     assert "phase 2 is accepted" not in combined
     assert "profitability is guaranteed" not in combined
     assert "live-money readiness: approved" not in combined
@@ -372,16 +369,16 @@ def test_version_2_phase3_walk_forward_research_framework_is_documented() -> Non
     combined_lower = combined.lower()
 
     assert "Target release identifier: `v2.0.0-alpha.3`" in spec
-    assert "Implementation branch: `review/v2-phase-03-walk-forward-research`" in spec
+    assert "Current implementation branch: `review/v2-phase-03-development-research`" in spec
     assert "Package/runtime version during this branch: `2.0.0a2`" in spec
     assert "Current released identifier: `v2.0.0-alpha.2`" in readme
     assert "Active development target: `v2.0.0-alpha.3`" in readme
     assert "Version 2 Phase 3 Walk-Forward Model Research Specification" in readme
-    assert "`spy_market_agent.research` package provides programmatic scaffolding" in readme
+    assert "`spy_market_agent.research` package now provides a manual, offline" in readme
     assert "src/spy_market_agent/research" in architecture
-    assert "No Phase 3 research CLI command is currently exposed" in normalized_workflows
+    assert "python -m spy_market_agent.research.cli run-development" in normalized_workflows
     assert "v2.0.0-alpha.3" in roadmap
-    assert "review/v2-phase-03-walk-forward-research" in roadmap
+    assert "review/v2-phase-03-development-research" in roadmap
     assert "docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md" in agents
 
     required_spec_sections = (
@@ -428,6 +425,8 @@ def test_version_2_phase3_walk_forward_research_framework_is_documented() -> Non
         "no automatic paper-order submission",
         "API write routes",
         "dashboard execution controls",
+        "protected evaluation",
+        "strategy optimization",
         "artifacts/research/<experiment_id>/",
     )
     for boundary in required_boundaries:

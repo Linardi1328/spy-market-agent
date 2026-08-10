@@ -212,25 +212,28 @@ python -m spy_market_agent.benchmark.cli run-final-test \
   --audit-replay
 ```
 
-## Prepare Phase 3 Walk-Forward Research
+## Run Phase 3 Development Walk-Forward Research
 
-Phase 3 is active for framework implementation and initial research scaffolding under
+Phase 3 PR #24 merged the approved framework and initial research scaffolding. The current
+authorized branch, `review/v2-phase-03-development-research`, adds manual, offline,
+development-only classification experimentation under
 `docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md`. It starts from the completed
 `v2.0.0-alpha.2` benchmark evidence, but it must not tune against the already-opened Phase 2
-final test.
+final test. Protected evaluation, Phase 4 shadow mode, strategy optimization, and
+paper/live/broker behavior remain unauthorized.
 
-The required planning workflow is:
+The required development workflow is:
 
-1. Confirm the active branch is `review/v2-phase-03-walk-forward-research`.
+1. Confirm the active branch is `review/v2-phase-03-development-research`.
 2. Read `AGENTS.md`, `PROJECT_SPEC.md`, `FUTURE_ROADMAP.md`, and the Phase 3 specification.
 3. Treat Phase 2 final-test row-level labels, predictions, strategy rows, fills, and
    generated benchmark JSON as unavailable for research.
 4. Define walk-forward folds chronologically with the six-row boundary exclusion before any
-   feature, model, calibration, threshold, or strategy research.
+   feature, model, or calibration research.
 5. Record experiment lineage and predeclared candidate-selection configuration before
    substantive real-data research.
 6. Keep generated research artifacts ignored under `artifacts/research/<experiment_id>/`.
-7. Report classification metrics separately from strategy metrics.
+7. Report classification metrics without using strategy return as selection evidence.
 
 The recommended default Phase 3 protocol is expanding-window walk-forward validation:
 
@@ -241,12 +244,36 @@ assessment window: 126 supervised rows
 step size: 63 supervised rows
 ```
 
-The current Phase 3 scaffolding is programmatic and package-local under
-`src/spy_market_agent/research`; it can construct and validate fold, registry, manifest,
-metric, baseline, calibration, threshold, and artifact records from offline inputs. No
-Phase 3 research CLI command is currently exposed. Any future command must be manual,
-offline for normal tests, credential-free, broker-free, and unable to submit paper or live
-orders.
+The current development campaign stages are:
+
+1. verify a local Phase 1 manifest deeply and load canonical SPY daily data only after
+   verification succeeds;
+2. construct unchanged Version 1 labels and research-only OHLCV features with a global
+   60-session feature warm-up;
+3. create deterministic folds shared by all feature-set and model candidates;
+4. run feature ablations with fixed Phase 2 logistic regression as comparator;
+5. select a development feature set using median ROC AUC, log loss, Brier score,
+   worst-quartile ROC AUC, and simplicity;
+6. rerun fixed Phase 2 model baselines and finite predeclared scikit-learn model grids;
+7. run the predeclared no-calibration, sigmoid, and isotonic calibration sub-study on the
+   highest-ranked rankable uncalibrated candidate;
+8. write classification, regime, drift, calibration, registry, fold, manifest, and
+   selection-report artifacts;
+9. emit `NO CANDIDATE PROMOTION` unless all predeclared promotion gates pass.
+
+Run the manual development command from the repository root:
+
+```bash
+python -m spy_market_agent.research.cli run-development \
+  --manifest data/manifests/alpaca/SPY/1Day/sip/all/DATASET_ID.manifest.json \
+  --data-root ./data \
+  --campaign-config configs/research/phase3_development_campaign.json
+```
+
+The command never acquires data, accesses the network, reads Alpaca keys, constructs broker
+clients, submits orders, loads Phase 2 final-test artifacts, or opens Phase 3 protected
+evaluation. Generated research outputs remain ignored under
+`artifacts/research/<experiment_id>/`.
 
 ## Inspect Model Evaluations
 

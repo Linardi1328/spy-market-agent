@@ -228,9 +228,10 @@ result showed weak predictive discrimination and must not be used for Phase 3 tu
 
 ## Version 2 Phase 3 Research Reproducibility
 
-**Active for framework implementation and initial research scaffolding:** Phase 3 defines
-walk-forward research rules under `docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md` and
-implements package-local scaffolding under `src/spy_market_agent/research`.
+**Active for development-only walk-forward experimentation:** Phase 3 defines walk-forward
+research rules under `docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md`. PR #24 merged the
+approved framework and initial scaffolding; the current branch adds a manual, offline,
+classification-first development campaign under `src/spy_market_agent/research`.
 Package/runtime version remains `2.0.0a2` until a later accepted release-preparation branch
 explicitly prepares `2.0.0a3`.
 
@@ -258,6 +259,13 @@ Generated real-data research artifacts remain ignored under
 already-opened Phase 2 final test is frozen baseline evidence and must not be loaded or used
 to choose Phase 3 features, models, hyperparameters, calibration, thresholds, or report
 framing.
+
+The committed development campaign configuration is
+`configs/research/phase3_development_campaign.json`. It predeclares the global 60-session
+feature warm-up, fold policy, diagnostic threshold, reliability bin count, candidate
+selection thresholds, calibration procedure, and regime/drift settings before execution.
+Changing selection-sensitive values creates a different stable campaign or experiment
+identity. The current branch does not execute protected evaluation or strategy optimization.
 
 ## Checksums and Schema Versions
 

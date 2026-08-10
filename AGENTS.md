@@ -21,10 +21,12 @@ currently authorized phase.
 Version 2 Phase 1 is accepted under `docs/V2_PHASE_01_REAL_SPY_DATA_SPEC.md`.
 Version 2 Phase 2 is accepted and released as `v2.0.0-alpha.2` under
 `docs/V2_PHASE_02_REAL_HISTORICAL_BENCHMARK_SPEC.md`.
-Version 2 Phase 3 is authorized for walk-forward framework implementation and initial
-research-scaffolding review under `docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md` on
-`review/v2-phase-03-walk-forward-research`. It is not accepted, complete, or released until
-owner acceptance gates are complete. Version 2 Phase 4 is not authorized.
+Version 2 Phase 3 PR #24 merged the approved walk-forward framework and initial research
+scaffolding. The current authorized Phase 3 substage is development-only walk-forward
+experimentation under `docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md` on
+`review/v2-phase-03-development-research`. Protected evaluation, Phase 4 shadow mode, and
+release preparation remain unauthorized until explicit owner approval. Version 2 Phase 3 is
+not accepted, complete, or released until owner acceptance gates are complete.
 Real-data-provider selection belongs to Version 2 Phase 1, not to an old Version 1 phase.
 
 If a user request conflicts with `PROJECT_SPEC.md`, `FUTURE_ROADMAP.md`, or the active phase

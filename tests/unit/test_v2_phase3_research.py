@@ -817,7 +817,7 @@ def test_research_schema_validators_fail_closed_for_unsafe_metadata() -> None:
             first_session=sessions[-1],
             last_session=sessions[0],
         ),
-        lambda: FoldPolicy(feature_warmup_rows=21),
+        lambda: FoldPolicy(feature_warmup_rows=19),
         lambda: FoldPolicy(fold_policy_id="other-policy"),
         lambda: FoldPolicy(minimum_initial_training_rows=755),
         lambda: FoldPolicy(assessment_window_rows=30),

@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- Added the Version 2 Phase 3 development-only walk-forward research runner and committed
+  data-free campaign configuration for `v2.0.0-alpha.3` development evidence.
+- Added research-only OHLCV feature families, feature ablation campaigns, finite
+  scikit-learn candidate grids, calibration sub-study support, expected calibration error,
+  regime/drift diagnostics, deterministic research artifacts, and a manual offline
+  `run-development` CLI.
+- Documented that PR #24 framework/scaffolding review is merged, development
+  experimentation is now active, protected evaluation and strategy optimization remain
+  unauthorized, Phase 4 remains unauthorized, and package/runtime version remains
+  `2.0.0a2`.
 - Added the Version 2 Phase 3 Walk-Forward Model Research specification.
 - Implemented initial `spy_market_agent.research` scaffolding for deterministic
   walk-forward fold manifests, leakage guards, research registries, metrics, baselines,
