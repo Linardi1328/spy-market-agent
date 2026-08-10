@@ -434,6 +434,8 @@ Each experiment record must include:
 - baseline definitions;
 - metric definitions;
 - candidate-selection rule;
+- candidate-selection configuration, including minimum valid fold count, material ROC-AUC
+  delta, and materially different tolerance;
 - protected-evaluation status;
 - Git commit SHA;
 - package/runtime version;
@@ -443,9 +445,9 @@ Each experiment record must include:
 - creation timestamp;
 - non-sensitive owner/operator notes.
 
-Experiment IDs must be deterministic from stable configuration and lineage inputs. They must
-not be random UUIDs alone and must exclude local absolute paths, usernames, hostnames,
-credentials, and raw provider data.
+Experiment IDs must be deterministic from stable configuration and lineage inputs, including
+the predeclared candidate-selection configuration. They must not be random UUIDs alone and
+must exclude local absolute paths, usernames, hostnames, credentials, and raw provider data.
 
 ## 17. Required Metrics
 
@@ -545,6 +547,10 @@ Default classification selection rule:
 A candidate should not be promoted to protected evaluation unless it beats the
 training-prevalence probability baseline on median log loss or Brier score and shows
 walk-forward discrimination that is materially better than the fixed Phase 2 model baselines.
+The material ROC-AUC improvement threshold must be predeclared before execution, must be
+greater than zero, and is part of the experiment identity. Changing the minimum valid fold
+count, material ROC-AUC delta, or materially different tolerance after reviewing assessment
+evidence creates a new experiment identity. A zero ROC-AUC delta is not materially better.
 If no candidate qualifies, Phase 3 should report that no model is promoted.
 
 Strategy selection, if performed, must use a separately declared strategy objective and must

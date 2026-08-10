@@ -29,6 +29,8 @@ PHASE2_FINAL_TEST_ARTIFACT_TOKENS = (
     "regime_results.json",
 )
 
+PHASE2_FINAL_TEST_ARTIFACT_NAMES = frozenset(PHASE2_FINAL_TEST_ARTIFACT_TOKENS)
+
 
 class FeatureGenerationPolicy(BaseModel):
     model_config = ConfigDict(frozen=True)
@@ -192,10 +194,7 @@ def validate_training_only_fit_scope(
 
 def validate_phase2_final_test_isolation(paths_or_names: tuple[str, ...] | list[str]) -> None:
     unsafe = tuple(
-        value
-        for value in paths_or_names
-        if "artifacts/benchmarks" in value.replace("\\", "/")
-        and any(token in value for token in PHASE2_FINAL_TEST_ARTIFACT_TOKENS)
+        value for value in paths_or_names if _is_phase2_final_test_artifact_reference(value)
     )
     if unsafe:
         raise_research_error(
@@ -203,3 +202,13 @@ def validate_phase2_final_test_isolation(paths_or_names: tuple[str, ...] | list[
             "phase2_final_test_artifact_rejected",
             "Phase 2 final-test artifacts must not be loaded for Phase 3 research.",
         )
+
+
+def _is_phase2_final_test_artifact_reference(value: str) -> bool:
+    normalized = value.replace("\\", "/").lower()
+    artifact_name = normalized.rsplit("/", maxsplit=1)[-1]
+    if artifact_name in PHASE2_FINAL_TEST_ARTIFACT_NAMES:
+        return True
+    return "artifacts/benchmarks" in normalized and any(
+        token in normalized for token in PHASE2_FINAL_TEST_ARTIFACT_TOKENS
+    )

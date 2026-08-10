@@ -137,7 +137,8 @@ Phase 3 is framework and research-scaffolding work first. The
 walk-forward folds, chronological boundary exclusions and purges, leakage guards, feature
 and model registries, ablation definitions, finite hyperparameter-search manifests,
 calibration and threshold policy records, experiment lineage, metrics, baselines, candidate
-selection, protected-evaluation denial, and ignored research artifact schemas.
+selection with predeclared identity-defining thresholds, protected-evaluation denial, and
+ignored research artifact schemas.
 
 Phase 3 does not tune against the already-opened Phase 2 final test. The Phase 2 result may
 be cited only as frozen summary baseline evidence. Phase 3 does not add live trading,

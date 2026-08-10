@@ -224,7 +224,8 @@ requires a matching human approval, and keeps uncertainty as local audit state.
 - Stage A benchmark services receive only training and validation row-level labels plus
   non-sensitive final-test boundary and aggregate eligibility counts.
 - Phase 3 experiment artifacts are untrusted until dataset, feature, label, fold, model,
-  calibration, threshold, metric, code, package, Python, and dependency lineage are verified.
+  calibration, threshold, metric, candidate-selection configuration, code, package, Python,
+  and dependency lineage are verified.
 - Models cannot access brokers. The modeling package imports no execution adapter, no
   Alpaca SDK, and no broker protocol.
 - Alpaca trading-client usage is isolated to `execution/alpaca_paper.py`.

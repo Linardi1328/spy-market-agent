@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
+from sklearn.metrics import average_precision_score
 
 from spy_market_agent.datasets.models import (
     LABEL_COLUMNS,
@@ -99,6 +100,7 @@ from spy_market_agent.research.thresholds import (
 ROOT = Path(__file__).resolve().parents[2]
 CHECKSUM = "a" * 64
 CREATED_AT = datetime(2026, 8, 10, 12, tzinfo=UTC)
+MATERIAL_ROC_AUC_DELTA = 0.01
 
 
 def _sessions(count: int) -> list[date]:
@@ -158,6 +160,16 @@ def _supervised_dataset(row_count: int = 950, *, single_class: bool = False) -> 
     )
 
 
+def _with_supervised_metadata_override(
+    supervised: SupervisedDataset,
+    *,
+    field_name: str,
+    value: object,
+) -> SupervisedDataset:
+    object.__setattr__(supervised.metadata, field_name, value)
+    return supervised
+
+
 def _dataset_lineage(row_count: int = 950) -> DatasetLineage:
     sessions = _sessions(row_count + 6)
     return DatasetLineage(
@@ -181,6 +193,19 @@ def _runtime_lineage(git_sha: str = "abc123") -> RuntimeLineage:
     )
 
 
+def _selection_config(
+    *,
+    minimum_valid_fold_count: int = 3,
+    material_roc_auc_delta: float = MATERIAL_ROC_AUC_DELTA,
+    materially_different_tolerance: float = 0.0,
+) -> CandidateSelectionConfig:
+    return CandidateSelectionConfig(
+        minimum_valid_fold_count=minimum_valid_fold_count,
+        material_roc_auc_delta=material_roc_auc_delta,
+        materially_different_tolerance=materially_different_tolerance,
+    )
+
+
 def _manifest(row_count: int = 950) -> WalkForwardManifest:
     return construct_walk_forward_manifest(
         _supervised_dataset(row_count),
@@ -200,6 +225,7 @@ def _experiment_manifest() -> ExperimentManifest:
         runtime_lineage=_runtime_lineage(),
         model_definition=logistic,
         created_at=CREATED_AT,
+        candidate_selection_config=_selection_config(),
     )
 
 
@@ -428,6 +454,50 @@ def test_phase2_final_test_artifact_paths_are_rejected_for_phase3_research() -> 
         validate_phase2_final_test_isolation(
             ("artifacts/benchmarks/spy-v2p2-id/final_test_results.json",)
         )
+    with pytest.raises(LeakageValidationError, match="phase2_final_test_artifact_rejected"):
+        validate_phase2_final_test_isolation(
+            ("ARTIFACTS\\BENCHMARKS\\SPY-V2P2-ID\\FINAL_TEST_ACCESS.JSON",)
+        )
+    with pytest.raises(LeakageValidationError, match="phase2_final_test_artifact_rejected"):
+        validate_phase2_final_test_isolation(("final_test_completion.json",))
+
+    with pytest.raises(LeakageValidationError, match="phase2_final_test_artifact_rejected"):
+        construct_walk_forward_manifest(
+            _supervised_dataset(),
+            dataset_lineage=_dataset_lineage().model_copy(
+                update={"dataset_id": "FINAL_TEST_RESULTS.JSON"}
+            ),
+            runtime_lineage=_runtime_lineage(),
+        )
+
+    manifest = _manifest()
+    model_registry = baseline_model_registry()
+    logistic = next(
+        model for model in model_registry.models if model.model_name == LOGISTIC_REGRESSION_MODEL
+    )
+    with pytest.raises(LeakageValidationError, match="phase2_final_test_artifact_rejected"):
+        build_experiment_manifest(
+            dataset_lineage=_dataset_lineage().model_copy(
+                update={"dataset_id": "final_test_results.json"}
+            ),
+            fold_manifest=manifest,
+            runtime_lineage=_runtime_lineage(),
+            model_definition=logistic,
+            created_at=CREATED_AT,
+            candidate_selection_config=_selection_config(),
+        )
+
+    unsafe_fold = manifest.folds[0].model_copy(update={"dataset_id": "final_test_access.json"})
+    with pytest.raises(LeakageValidationError, match="phase2_final_test_artifact_rejected"):
+        build_calibration_split(
+            _supervised_dataset(),
+            fold=unsafe_fold,
+            policy=CalibrationPolicy(
+                calibration_policy_id="phase3-sigmoid-calibration-v1",
+                method="sigmoid",
+                calibration_window_rows=126,
+            ),
+        )
 
 
 def test_feature_model_ablation_and_experiment_registries_are_complete() -> None:
@@ -444,6 +514,7 @@ def test_feature_model_ablation_and_experiment_registries_are_complete() -> None
         model_definition=logistic,
         created_at=CREATED_AT,
         feature_registry=feature_registry,
+        candidate_selection_config=_selection_config(),
     )
     same_identity_different_timestamp = build_experiment_manifest(
         dataset_lineage=_dataset_lineage(),
@@ -452,6 +523,7 @@ def test_feature_model_ablation_and_experiment_registries_are_complete() -> None
         model_definition=logistic,
         created_at=datetime(2026, 8, 11, 12, tzinfo=UTC),
         feature_registry=feature_registry,
+        candidate_selection_config=_selection_config(),
     )
     ablations = ablation_scaffold(feature_registry)
 
@@ -467,6 +539,201 @@ def test_feature_model_ablation_and_experiment_registries_are_complete() -> None
     assert experiment.protected_evaluation_status.state == "not_configured"
     assert any(ablation.mode == "remove_one_family" for ablation in ablations)
     assert {ablation.status for ablation in ablations} == {"planned"}
+
+
+def test_experiment_identity_freezes_candidate_selection_configuration() -> None:
+    model_registry = baseline_model_registry()
+    logistic = next(
+        model for model in model_registry.models if model.model_name == LOGISTIC_REGRESSION_MODEL
+    )
+    manifest = _manifest()
+
+    base = build_experiment_manifest(
+        dataset_lineage=_dataset_lineage(),
+        fold_manifest=manifest,
+        runtime_lineage=_runtime_lineage(),
+        model_definition=logistic,
+        created_at=CREATED_AT,
+        candidate_selection_config=_selection_config(),
+        owner_operator_notes="operator note one",
+    )
+    same_config = build_experiment_manifest(
+        dataset_lineage=_dataset_lineage(),
+        fold_manifest=manifest,
+        runtime_lineage=_runtime_lineage(),
+        model_definition=logistic,
+        created_at=datetime(2026, 8, 12, 12, tzinfo=UTC),
+        candidate_selection_config=_selection_config(),
+        owner_operator_notes="operator note two",
+    )
+    changed_minimum_folds = build_experiment_manifest(
+        dataset_lineage=_dataset_lineage(),
+        fold_manifest=manifest,
+        runtime_lineage=_runtime_lineage(),
+        model_definition=logistic,
+        created_at=CREATED_AT,
+        candidate_selection_config=_selection_config(minimum_valid_fold_count=4),
+    )
+    changed_material_delta = build_experiment_manifest(
+        dataset_lineage=_dataset_lineage(),
+        fold_manifest=manifest,
+        runtime_lineage=_runtime_lineage(),
+        model_definition=logistic,
+        created_at=CREATED_AT,
+        candidate_selection_config=_selection_config(material_roc_auc_delta=0.02),
+    )
+    changed_tolerance = build_experiment_manifest(
+        dataset_lineage=_dataset_lineage(),
+        fold_manifest=manifest,
+        runtime_lineage=_runtime_lineage(),
+        model_definition=logistic,
+        created_at=CREATED_AT,
+        candidate_selection_config=_selection_config(materially_different_tolerance=0.005),
+    )
+
+    assert base.experiment_id == same_config.experiment_id
+    assert changed_minimum_folds.experiment_id != base.experiment_id
+    assert changed_material_delta.experiment_id != base.experiment_id
+    assert changed_tolerance.experiment_id != base.experiment_id
+
+
+def test_experiment_manifest_builder_rejects_lineage_mismatches() -> None:
+    model_registry = baseline_model_registry()
+    logistic = next(
+        model for model in model_registry.models if model.model_name == LOGISTIC_REGRESSION_MODEL
+    )
+    manifest = _manifest()
+    dataset_b = _dataset_lineage().model_copy(update={"dataset_id": "synthetic-phase3-dataset-b"})
+    manifest_b = construct_walk_forward_manifest(
+        _supervised_dataset(),
+        dataset_lineage=dataset_b,
+        runtime_lineage=_runtime_lineage(),
+    )
+
+    with pytest.raises(ResearchRegistryError, match="experiment_dataset_id_mismatch"):
+        build_experiment_manifest(
+            dataset_lineage=_dataset_lineage(),
+            fold_manifest=manifest_b,
+            runtime_lineage=_runtime_lineage(),
+            model_definition=logistic,
+            created_at=CREATED_AT,
+            candidate_selection_config=_selection_config(),
+        )
+
+    with pytest.raises(ResearchRegistryError, match="experiment_dataset_checksum_mismatch"):
+        build_experiment_manifest(
+            dataset_lineage=_dataset_lineage().model_copy(
+                update={"canonical_dataset_checksum": "b" * 64}
+            ),
+            fold_manifest=manifest,
+            runtime_lineage=_runtime_lineage(),
+            model_definition=logistic,
+            created_at=CREATED_AT,
+            candidate_selection_config=_selection_config(),
+        )
+
+    bad_feature_registry = baseline_feature_registry().model_copy(
+        update={"feature_schema": "other-feature-schema"}
+    )
+    with pytest.raises(ResearchRegistryError, match="experiment_feature_schema_mismatch"):
+        build_experiment_manifest(
+            dataset_lineage=_dataset_lineage(),
+            fold_manifest=manifest,
+            runtime_lineage=_runtime_lineage(),
+            model_definition=logistic,
+            created_at=CREATED_AT,
+            feature_registry=bad_feature_registry,
+            candidate_selection_config=_selection_config(),
+        )
+
+    bad_label_fold = manifest.folds[0].model_copy(update={"label_schema": "other-label-schema"})
+    bad_label_manifest = manifest.model_copy(
+        update={"folds": (bad_label_fold, *manifest.folds[1:])}
+    )
+    with pytest.raises(ResearchRegistryError, match="experiment_fold_label_schema_mismatch"):
+        build_experiment_manifest(
+            dataset_lineage=_dataset_lineage(),
+            fold_manifest=bad_label_manifest,
+            runtime_lineage=_runtime_lineage(),
+            model_definition=logistic,
+            created_at=CREATED_AT,
+            candidate_selection_config=_selection_config(),
+        )
+
+    with pytest.raises(ResearchRegistryError, match="experiment_fold_runtime_lineage_mismatch"):
+        build_experiment_manifest(
+            dataset_lineage=_dataset_lineage(),
+            fold_manifest=manifest,
+            runtime_lineage=_runtime_lineage(git_sha="def456"),
+            model_definition=logistic,
+            created_at=CREATED_AT,
+            candidate_selection_config=_selection_config(),
+        )
+
+
+def test_ablation_scaffold_generates_add_one_family_from_expanded_registry() -> None:
+    baseline = baseline_feature_registry()
+    synthetic_feature = FeatureDefinition(
+        feature_name="synthetic_regime_flag",
+        feature_family="synthetic_regime",
+        schema_version=FEATURE_SCHEMA_VERSION,
+        lookback=3,
+        input_fields=("close",),
+        adjustment_policy="all",
+        warm_up_rows=3,
+        missing_value_policy="synthetic fixture only",
+        description="Synthetic test-only trailing regime feature.",
+        leakage_review=LeakageReviewMetadata(
+            uses_only_information_through_prediction_close=True,
+            uses_trailing_window_only=True,
+            notes="Synthetic trailing input used only for ablation scaffold tests.",
+        ),
+    )
+    expanded = FeatureRegistry(
+        feature_schema=FEATURE_SCHEMA_VERSION,
+        features=(*baseline.features, synthetic_feature),
+    )
+
+    first = ablation_scaffold(baseline, expanded_feature_registry=expanded)
+    second = ablation_scaffold(baseline, expanded_feature_registry=expanded)
+    add_one = next(ablation for ablation in first if ablation.mode == "add_one_family")
+
+    assert first == second
+    assert add_one.ablation_id == "add_synthetic_regime"
+    assert add_one.baseline_feature_families == baseline.enabled_feature_families
+    assert add_one.candidate_feature_families == tuple(
+        sorted((*baseline.enabled_feature_families, "synthetic_regime"))
+    )
+    assert any(ablation.mode == "remove_one_family" for ablation in first)
+    assert any(ablation.mode == "simpler_subset" for ablation in first)
+    failed = AblationExperimentDefinition(
+        ablation_id="status_failed",
+        mode="baseline",
+        baseline_feature_families=baseline.enabled_feature_families,
+        candidate_feature_families=baseline.enabled_feature_families,
+        fold_policy_id=WALK_FORWARD_FOLD_POLICY_ID,
+        comparator_model_family="regularized_logistic_regression",
+        status="failed",
+    )
+    neutral = AblationExperimentDefinition(
+        ablation_id="status_neutral",
+        mode="baseline",
+        baseline_feature_families=baseline.enabled_feature_families,
+        candidate_feature_families=baseline.enabled_feature_families,
+        fold_policy_id=WALK_FORWARD_FOLD_POLICY_ID,
+        comparator_model_family="regularized_logistic_regression",
+        status="neutral",
+    )
+    harmful = AblationExperimentDefinition(
+        ablation_id="status_harmful",
+        mode="baseline",
+        baseline_feature_families=baseline.enabled_feature_families,
+        candidate_feature_families=baseline.enabled_feature_families,
+        fold_policy_id=WALK_FORWARD_FOLD_POLICY_ID,
+        comparator_model_family="regularized_logistic_regression",
+        status="harmful",
+    )
+    assert {failed.status, neutral.status, harmful.status} == {"failed", "neutral", "harmful"}
 
 
 def test_model_registry_rejects_unauthorized_model_families() -> None:
@@ -840,7 +1107,11 @@ def test_research_schema_validators_fail_closed_for_unsafe_metadata() -> None:
             owner_acknowledged=False,
             protected_labels_loaded=True,
         ),
-        lambda: CandidateSelectionConfig(minimum_valid_fold_count=0),
+        lambda: CandidateSelectionConfig(
+            minimum_valid_fold_count=0,
+            material_roc_auc_delta=MATERIAL_ROC_AUC_DELTA,
+        ),
+        lambda: CandidateSelectionConfig(material_roc_auc_delta=0.0),
         lambda: CandidateSelectionConfig(material_roc_auc_delta=-0.1),
     )
 
@@ -901,6 +1172,111 @@ def test_calibration_split_uses_only_training_history_and_preserves_outer_gap() 
     assert split.estimator_training_sessions[-1] < split.inner_boundary_excluded_sessions[0]
     assert split.inner_boundary_excluded_sessions[-1] < split.calibration_sessions[0]
     assert split.calibration_sessions[-1] < split.outer_boundary_excluded_sessions[0]
+    assert (
+        supervised.labels.loc[
+            supervised.labels["session"] == split.estimator_training_sessions[-1],
+            "exit_session",
+        ].iloc[0]
+        == split.inner_boundary_excluded_sessions[-1]
+    )
+
+
+def test_calibration_split_accepts_isotonic_when_eligible() -> None:
+    split = build_calibration_split(
+        _supervised_dataset(),
+        fold=_manifest().folds[0],
+        policy=CalibrationPolicy(
+            calibration_policy_id="phase3-isotonic-calibration-v1",
+            method="isotonic",
+            calibration_window_rows=126,
+        ),
+    )
+
+    assert split is not None
+    assert len(split.calibration_sessions) == 126
+
+
+def test_calibration_split_rejects_lineage_and_inner_purge_mismatches() -> None:
+    fold = _manifest().folds[0]
+
+    wrong_checksum = _with_supervised_metadata_override(
+        _supervised_dataset(),
+        field_name="source_market_data_checksum",
+        value="b" * 64,
+    )
+    with pytest.raises(ResearchRegistryError, match="calibration_dataset_checksum_mismatch"):
+        build_calibration_split(
+            wrong_checksum,
+            fold=fold,
+            policy=CalibrationPolicy(
+                calibration_policy_id="phase3-sigmoid-calibration-v1",
+                method="sigmoid",
+                calibration_window_rows=126,
+            ),
+        )
+
+    wrong_feature_schema = _with_supervised_metadata_override(
+        _supervised_dataset(),
+        field_name="feature_schema_version",
+        value="other-feature-schema",
+    )
+    with pytest.raises(ResearchRegistryError, match="calibration_feature_schema_mismatch"):
+        build_calibration_split(
+            wrong_feature_schema,
+            fold=fold,
+            policy=CalibrationPolicy(
+                calibration_policy_id="phase3-sigmoid-calibration-v1",
+                method="sigmoid",
+                calibration_window_rows=126,
+            ),
+        )
+
+    wrong_label_schema = _with_supervised_metadata_override(
+        _supervised_dataset(),
+        field_name="label_schema_version",
+        value="other-label-schema",
+    )
+    with pytest.raises(ResearchRegistryError, match="calibration_label_schema_mismatch"):
+        build_calibration_split(
+            wrong_label_schema,
+            fold=fold,
+            policy=CalibrationPolicy(
+                calibration_policy_id="phase3-sigmoid-calibration-v1",
+                method="sigmoid",
+                calibration_window_rows=126,
+            ),
+        )
+
+    missing_training_session = _supervised_dataset()
+    missing_training_session.features.loc[0, "session"] = date(1999, 1, 1)
+    with pytest.raises(
+        ResearchRegistryError, match="calibration_feature_training_session_mismatch"
+    ):
+        build_calibration_split(
+            missing_training_session,
+            fold=fold,
+            policy=CalibrationPolicy(
+                calibration_policy_id="phase3-sigmoid-calibration-v1",
+                method="sigmoid",
+                calibration_window_rows=126,
+            ),
+        )
+
+    malformed_horizon = _supervised_dataset()
+    malformed_horizon.labels.loc[623, "exit_session"] = _sessions(956)[630]
+    with pytest.raises(
+        ResearchRegistryError,
+        match="calibration_inner_label_horizon_purge_mismatch",
+    ):
+        build_calibration_split(
+            malformed_horizon,
+            fold=fold,
+            policy=CalibrationPolicy(
+                calibration_policy_id="phase3-sigmoid-calibration-v1",
+                method="sigmoid",
+                calibration_window_rows=126,
+            ),
+        )
 
 
 def test_calibration_split_rejects_ineligible_training_history() -> None:
@@ -991,6 +1367,35 @@ def test_classification_metrics_and_aggregation_record_undefined_reasons() -> No
             targets=(0, 1),
             probabilities=(0.5, 1.5),
         )
+
+
+def test_average_precision_is_tie_order_invariant_and_matches_sklearn() -> None:
+    tied_targets = (
+        (1, 0, 1, 0),
+        (0, 1, 0, 1),
+        (1, 0, 0, 1),
+    )
+    for targets in tied_targets:
+        metrics = calculate_research_classification_metrics(
+            model_name="constant_probability_baseline",
+            fold_id="fold",
+            targets=targets,
+            probabilities=(0.5, 0.5, 0.5, 0.5),
+        )
+        assert metrics.metrics["average_precision"].value == pytest.approx(0.5)
+
+    representative_targets = (0, 1, 0, 1, 1)
+    representative_probabilities = (0.1, 0.8, 0.4, 0.7, 0.2)
+    metrics = calculate_research_classification_metrics(
+        model_name="candidate",
+        fold_id="fold",
+        targets=representative_targets,
+        probabilities=representative_probabilities,
+    )
+
+    assert metrics.metrics["average_precision"].value == pytest.approx(
+        average_precision_score(representative_targets, representative_probabilities)
+    )
 
 
 def test_metrics_and_baselines_fail_closed_for_invalid_inputs() -> None:
@@ -1122,17 +1527,17 @@ def test_candidate_selection_allows_no_promotion_and_does_not_assume_winner() ->
         phase2_baseline_roc_auc_delta=MetricValue(value=0.03),
     )
 
-    no_promotion = rank_classification_candidates((weak,))
+    no_promotion = rank_classification_candidates((weak,), config=_selection_config())
     promoted = rank_classification_candidates(
         (weak, strong),
-        config=CandidateSelectionConfig(minimum_valid_fold_count=3, material_roc_auc_delta=0.01),
+        config=_selection_config(),
     )
 
     assert no_promotion.selected_candidate_name is None
     assert no_promotion.reason == NO_CANDIDATE_PROMOTION
     assert promoted.selected_candidate_name == "strong_candidate"
     with pytest.raises(CandidateSelectionError, match="empty_candidate_set"):
-        rank_classification_candidates(())
+        rank_classification_candidates((), config=_selection_config())
 
 
 def test_candidate_selection_filters_invalid_candidates_and_prefers_simplicity() -> None:
@@ -1164,22 +1569,76 @@ def test_candidate_selection_filters_invalid_candidates_and_prefers_simplicity()
             candidate(
                 "invalid", roc_auc=0.6, log_loss=0.6, brier=0.2, simplicity_rank=1, valid=False
             ),
-        )
+        ),
+        config=_selection_config(),
     )
     selected = rank_classification_candidates(
         (
             candidate("complex", roc_auc=0.552, log_loss=0.61, brier=0.21, simplicity_rank=10),
             candidate("simple", roc_auc=0.551, log_loss=0.611, brier=0.211, simplicity_rank=1),
         ),
-        config=CandidateSelectionConfig(
-            minimum_valid_fold_count=3,
-            material_roc_auc_delta=0.01,
-            materially_different_tolerance=0.01,
-        ),
+        config=_selection_config(materially_different_tolerance=0.01),
     )
 
     assert no_eligible.reason == NO_CANDIDATE_PROMOTION
     assert selected.selected_candidate_name == "simple"
+
+
+def test_candidate_selection_requires_material_roc_and_probability_quality_gates() -> None:
+    def candidate(
+        name: str,
+        *,
+        roc_delta: float,
+        log_loss_delta: float,
+        brier_delta: float,
+    ) -> CandidateEvaluationSummary:
+        return CandidateEvaluationSummary(
+            candidate_name=name,
+            valid=True,
+            valid_fold_count=5,
+            median_roc_auc=MetricValue(value=0.55),
+            median_log_loss=MetricValue(value=0.64),
+            median_brier_score=MetricValue(value=0.22),
+            worst_quartile_roc_auc=MetricValue(value=0.52),
+            median_training_prevalence_log_loss_delta=MetricValue(value=log_loss_delta),
+            median_training_prevalence_brier_delta=MetricValue(value=brier_delta),
+            phase2_baseline_roc_auc_delta=MetricValue(value=roc_delta),
+        )
+
+    with pytest.raises(ValidationError, match="greater than zero"):
+        CandidateSelectionConfig(material_roc_auc_delta=0.0)
+    with pytest.raises(ValidationError, match="greater than zero"):
+        CandidateSelectionConfig(material_roc_auc_delta=-0.001)
+
+    equal_to_phase2 = rank_classification_candidates(
+        (candidate("equal_to_phase2", roc_delta=0.0, log_loss_delta=0.02, brier_delta=0.02),),
+        config=_selection_config(material_roc_auc_delta=0.01),
+    )
+    below_delta = rank_classification_candidates(
+        (candidate("below_delta", roc_delta=0.009, log_loss_delta=0.02, brier_delta=0.02),),
+        config=_selection_config(material_roc_auc_delta=0.01),
+    )
+    weak_probability_quality = rank_classification_candidates(
+        (
+            candidate(
+                "weak_probability_quality",
+                roc_delta=0.02,
+                log_loss_delta=0.0,
+                brier_delta=-0.001,
+            ),
+        ),
+        config=_selection_config(material_roc_auc_delta=0.01),
+    )
+    promoted = rank_classification_candidates(
+        (candidate("qualifying", roc_delta=0.02, log_loss_delta=0.001, brier_delta=0.0),),
+        config=_selection_config(material_roc_auc_delta=0.01),
+    )
+
+    assert equal_to_phase2.reason == NO_CANDIDATE_PROMOTION
+    assert below_delta.reason == NO_CANDIDATE_PROMOTION
+    assert weak_probability_quality.reason == NO_CANDIDATE_PROMOTION
+    assert promoted.selected_candidate_name == "qualifying"
+    assert promoted.promotion_allowed
 
 
 def test_experiment_manifest_rejects_invalid_outer_assessment_controls() -> None:

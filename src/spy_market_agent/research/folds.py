@@ -15,6 +15,7 @@ from spy_market_agent.research.errors import (
     raise_research_error,
 )
 from spy_market_agent.research.identity import fold_manifest_identity, research_fold_identity
+from spy_market_agent.research.leakage import validate_phase2_final_test_isolation
 from spy_market_agent.research.models import (
     DatasetLineage,
     FoldPolicy,
@@ -39,6 +40,7 @@ def construct_walk_forward_manifest(
     """
 
     fold_policy = policy or FoldPolicy()
+    validate_phase2_final_test_isolation((dataset_lineage.dataset_id,))
     labels = _validated_labels(supervised, dataset_lineage=dataset_lineage)
     row_count = len(labels)
     first_assessment_start = (

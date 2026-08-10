@@ -15,9 +15,8 @@ NO_CANDIDATE_PROMOTION = "NO CANDIDATE PROMOTION"
 def rank_classification_candidates(
     candidates: tuple[CandidateEvaluationSummary, ...],
     *,
-    config: CandidateSelectionConfig | None = None,
+    config: CandidateSelectionConfig,
 ) -> CandidateSelectionResult:
-    selection_config = config or CandidateSelectionConfig()
     if not candidates:
         raise_research_error(
             CandidateSelectionError,
@@ -27,9 +26,7 @@ def rank_classification_candidates(
     eligible = tuple(
         candidate
         for candidate in candidates
-        if _candidate_is_rankable(
-            candidate, minimum_folds=selection_config.minimum_valid_fold_count
-        )
+        if _candidate_is_rankable(candidate, minimum_folds=config.minimum_valid_fold_count)
     )
     if not eligible:
         return CandidateSelectionResult(
@@ -41,9 +38,9 @@ def rank_classification_candidates(
     ranked = tuple(sorted(eligible, key=cmp_to_key(_compare_candidates)))
     selected = _prefer_simpler_when_not_materially_different(
         ranked,
-        tolerance=selection_config.materially_different_tolerance,
+        tolerance=config.materially_different_tolerance,
     )
-    promotion_allowed = _promotion_allowed(selected, config=selection_config)
+    promotion_allowed = _promotion_allowed(selected, config=config)
     return CandidateSelectionResult(
         selected_candidate_name=selected.candidate_name if promotion_allowed else None,
         promotion_allowed=promotion_allowed,

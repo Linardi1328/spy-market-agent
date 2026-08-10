@@ -732,6 +732,25 @@ class ProtectedEvaluationStatus(ResearchArtifactModel):
         return self
 
 
+class CandidateSelectionConfig(ResearchArtifactModel):
+    minimum_valid_fold_count: int = 3
+    material_roc_auc_delta: float
+    materially_different_tolerance: float = 0.0
+
+    @model_validator(mode="after")
+    def _validate_config(self) -> CandidateSelectionConfig:
+        if self.minimum_valid_fold_count <= 0:
+            msg = "minimum_valid_fold_count must be positive."
+            raise ValueError(msg)
+        if self.material_roc_auc_delta <= 0.0:
+            msg = "material_roc_auc_delta must be predeclared and greater than zero."
+            raise ValueError(msg)
+        if self.materially_different_tolerance < 0:
+            msg = "selection deltas and tolerances must be non-negative."
+            raise ValueError(msg)
+        return self
+
+
 class ExperimentManifest(ResearchArtifactModel):
     experiment_id: str
     phase_identifier: str = PHASE3_PHASE_ID
@@ -754,6 +773,7 @@ class ExperimentManifest(ResearchArtifactModel):
     baseline_definitions: tuple[BaselineDefinition, ...]
     metric_definitions: tuple[str, ...]
     candidate_selection_rule: str = PHASE3_CLASSIFICATION_SELECTION_RULE_ID
+    candidate_selection_config: CandidateSelectionConfig
     protected_evaluation_status: ProtectedEvaluationStatus
     runtime_lineage: RuntimeLineage
     creation_timestamp: datetime
@@ -776,6 +796,25 @@ class ExperimentManifest(ResearchArtifactModel):
         if not self.fold_boundaries:
             msg = "experiment manifests must capture exact fold boundaries."
             raise ValueError(msg)
+        for fold in self.fold_boundaries:
+            if fold.dataset_id != self.dataset_lineage.dataset_id:
+                msg = "fold dataset_id must match experiment dataset lineage."
+                raise ValueError(msg)
+            if fold.canonical_dataset_checksum != self.dataset_lineage.canonical_dataset_checksum:
+                msg = "fold checksum must match experiment dataset lineage."
+                raise ValueError(msg)
+            if fold.feature_schema != self.feature_registry.feature_schema:
+                msg = "fold feature schema must match experiment feature registry."
+                raise ValueError(msg)
+            if fold.label_schema != self.label_schema:
+                msg = "fold label schema must match experiment label schema."
+                raise ValueError(msg)
+            if fold.fold_policy_id != self.fold_policy_id:
+                msg = "fold policy IDs must match experiment fold policy."
+                raise ValueError(msg)
+            if fold.runtime_lineage != self.runtime_lineage:
+                msg = "fold runtime lineage must match experiment runtime lineage."
+                raise ValueError(msg)
         if self.model_configuration.model_family != self.model_family:
             msg = "model_family must match model_configuration."
             raise ValueError(msg)
@@ -816,22 +855,6 @@ class CandidateEvaluationSummary(ResearchArtifactModel):
     median_training_prevalence_log_loss_delta: MetricValue
     median_training_prevalence_brier_delta: MetricValue
     phase2_baseline_roc_auc_delta: MetricValue
-
-
-class CandidateSelectionConfig(ResearchArtifactModel):
-    minimum_valid_fold_count: int = 3
-    material_roc_auc_delta: float = 0.0
-    materially_different_tolerance: float = 0.0
-
-    @model_validator(mode="after")
-    def _validate_config(self) -> CandidateSelectionConfig:
-        if self.minimum_valid_fold_count <= 0:
-            msg = "minimum_valid_fold_count must be positive."
-            raise ValueError(msg)
-        if self.material_roc_auc_delta < 0 or self.materially_different_tolerance < 0:
-            msg = "selection deltas and tolerances must be non-negative."
-            raise ValueError(msg)
-        return self
 
 
 class CandidateSelectionResult(ResearchArtifactModel):

@@ -227,7 +227,8 @@ The required planning workflow is:
    generated benchmark JSON as unavailable for research.
 4. Define walk-forward folds chronologically with the six-row boundary exclusion before any
    feature, model, calibration, threshold, or strategy research.
-5. Record experiment lineage before substantive real-data research.
+5. Record experiment lineage and predeclared candidate-selection configuration before
+   substantive real-data research.
 6. Keep generated research artifacts ignored under `artifacts/research/<experiment_id>/`.
 7. Report classification metrics separately from strategy metrics.
 

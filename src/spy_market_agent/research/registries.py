@@ -15,11 +15,14 @@ from spy_market_agent.research.constants import (
     PHASE3_PHASE_ID,
     WALK_FORWARD_FOLD_POLICY_ID,
 )
+from spy_market_agent.research.errors import ResearchRegistryError, raise_research_error
 from spy_market_agent.research.identity import experiment_identity
+from spy_market_agent.research.leakage import validate_phase2_final_test_isolation
 from spy_market_agent.research.models import (
     AblationExperimentDefinition,
     BaselineDefinition,
     CalibrationPolicy,
+    CandidateSelectionConfig,
     DatasetLineage,
     ExperimentManifest,
     FeatureDefinition,
@@ -122,9 +125,15 @@ def required_classification_baselines() -> tuple[BaselineDefinition, ...]:
 def ablation_scaffold(
     feature_registry: FeatureRegistry,
     *,
+    expanded_feature_registry: FeatureRegistry | None = None,
     comparator_model_family: str = "regularized_logistic_regression",
 ) -> tuple[AblationExperimentDefinition, ...]:
     baseline_families = feature_registry.enabled_feature_families
+    expanded_families = (
+        expanded_feature_registry.enabled_feature_families
+        if expanded_feature_registry is not None
+        else baseline_families
+    )
     definitions: list[AblationExperimentDefinition] = [
         AblationExperimentDefinition(
             ablation_id="baseline_feature_set",
@@ -139,14 +148,30 @@ def ablation_scaffold(
             ablation_id="all_feature_set",
             mode="all_features",
             baseline_feature_families=baseline_families,
-            candidate_feature_families=baseline_families,
+            candidate_feature_families=expanded_families,
             fold_policy_id=WALK_FORWARD_FOLD_POLICY_ID,
             comparator_model_family=comparator_model_family,
             notes="All currently registered approved SPY daily OHLCV features.",
         ),
     ]
-    for family in baseline_families:
-        remaining = tuple(item for item in baseline_families if item != family)
+    added_families = tuple(
+        family for family in expanded_families if family not in set(baseline_families)
+    )
+    for family in added_families:
+        candidate_families = tuple(sorted({*baseline_families, family}))
+        definitions.append(
+            AblationExperimentDefinition(
+                ablation_id=f"add_{family}",
+                mode="add_one_family",
+                baseline_feature_families=baseline_families,
+                candidate_feature_families=candidate_families,
+                fold_policy_id=WALK_FORWARD_FOLD_POLICY_ID,
+                comparator_model_family=comparator_model_family,
+                notes=f"Future add-one-family ablation for {family}.",
+            )
+        )
+    for family in expanded_families:
+        remaining = tuple(item for item in expanded_families if item != family)
         definitions.append(
             AblationExperimentDefinition(
                 ablation_id=f"remove_{family}",
@@ -158,6 +183,17 @@ def ablation_scaffold(
                 notes=f"Future remove-one-family ablation for {family}.",
             )
         )
+    definitions.append(
+        AblationExperimentDefinition(
+            ablation_id="simpler_subset_feature_set",
+            mode="simpler_subset",
+            baseline_feature_families=baseline_families,
+            candidate_feature_families=baseline_families[:1],
+            fold_policy_id=WALK_FORWARD_FOLD_POLICY_ID,
+            comparator_model_family=comparator_model_family,
+            notes="Predeclared simpler-subset comparison using shared folds.",
+        )
+    )
     return tuple(definitions)
 
 
@@ -168,6 +204,7 @@ def build_experiment_manifest(
     runtime_lineage: RuntimeLineage,
     model_definition: ModelDefinition,
     created_at: datetime,
+    candidate_selection_config: CandidateSelectionConfig,
     random_seeds: tuple[int, ...] = (DEFAULT_RANDOM_SEED,),
     feature_registry: FeatureRegistry | None = None,
     hyperparameter_search: HyperparameterSearchDefinition | None = None,
@@ -177,6 +214,12 @@ def build_experiment_manifest(
 ) -> ExperimentManifest:
     registry = feature_registry or baseline_feature_registry(
         adjustment_policy=dataset_lineage.adjustment
+    )
+    _validate_experiment_lineage_inputs(
+        dataset_lineage=dataset_lineage,
+        fold_manifest=fold_manifest,
+        feature_registry=registry,
+        runtime_lineage=runtime_lineage,
     )
     manifest = ExperimentManifest(
         experiment_id="pending",
@@ -214,6 +257,7 @@ def build_experiment_manifest(
             "reliability_bins",
         ),
         candidate_selection_rule=PHASE3_CLASSIFICATION_SELECTION_RULE_ID,
+        candidate_selection_config=candidate_selection_config,
         protected_evaluation_status=ProtectedEvaluationStatus(),
         runtime_lineage=runtime_lineage,
         creation_timestamp=created_at,
@@ -242,11 +286,86 @@ def build_experiment_manifest(
         baseline_definitions=manifest.baseline_definitions,
         metric_definitions=manifest.metric_definitions,
         candidate_selection_rule=manifest.candidate_selection_rule,
+        candidate_selection_config=manifest.candidate_selection_config,
         protected_evaluation_status=manifest.protected_evaluation_status,
         runtime_lineage=manifest.runtime_lineage,
         creation_timestamp=manifest.creation_timestamp,
         owner_operator_notes=manifest.owner_operator_notes,
     )
+
+
+def _validate_experiment_lineage_inputs(
+    *,
+    dataset_lineage: DatasetLineage,
+    fold_manifest: WalkForwardManifest,
+    feature_registry: FeatureRegistry,
+    runtime_lineage: RuntimeLineage,
+) -> None:
+    validate_phase2_final_test_isolation(
+        (
+            dataset_lineage.dataset_id,
+            fold_manifest.fold_manifest_id,
+            *tuple(fold.fold_id for fold in fold_manifest.folds),
+        )
+    )
+    if fold_manifest.dataset_lineage.dataset_id != dataset_lineage.dataset_id:
+        raise_research_error(
+            ResearchRegistryError,
+            "experiment_dataset_id_mismatch",
+            "experiment dataset_lineage must match fold manifest dataset_id.",
+        )
+    if (
+        fold_manifest.dataset_lineage.canonical_dataset_checksum
+        != dataset_lineage.canonical_dataset_checksum
+    ):
+        raise_research_error(
+            ResearchRegistryError,
+            "experiment_dataset_checksum_mismatch",
+            "experiment dataset_lineage must match fold manifest checksum.",
+        )
+    if fold_manifest.feature_schema != feature_registry.feature_schema:
+        raise_research_error(
+            ResearchRegistryError,
+            "experiment_feature_schema_mismatch",
+            "experiment feature registry schema must match fold manifest feature schema.",
+        )
+    for fold in fold_manifest.folds:
+        if fold.dataset_id != dataset_lineage.dataset_id:
+            raise_research_error(
+                ResearchRegistryError,
+                "experiment_fold_dataset_id_mismatch",
+                "all fold dataset IDs must match experiment dataset lineage.",
+            )
+        if fold.canonical_dataset_checksum != dataset_lineage.canonical_dataset_checksum:
+            raise_research_error(
+                ResearchRegistryError,
+                "experiment_fold_checksum_mismatch",
+                "all fold checksums must match experiment dataset lineage.",
+            )
+        if fold.feature_schema != feature_registry.feature_schema:
+            raise_research_error(
+                ResearchRegistryError,
+                "experiment_fold_feature_schema_mismatch",
+                "all fold feature schemas must match experiment feature registry.",
+            )
+        if fold.label_schema != fold_manifest.label_schema:
+            raise_research_error(
+                ResearchRegistryError,
+                "experiment_fold_label_schema_mismatch",
+                "all fold label schemas must match experiment label schema.",
+            )
+        if fold.fold_policy_id != fold_manifest.fold_policy.fold_policy_id:
+            raise_research_error(
+                ResearchRegistryError,
+                "experiment_fold_policy_mismatch",
+                "all fold policy IDs must match the fold manifest policy.",
+            )
+        if fold.runtime_lineage != runtime_lineage:
+            raise_research_error(
+                ResearchRegistryError,
+                "experiment_fold_runtime_lineage_mismatch",
+                "all fold runtime lineage must match experiment runtime lineage.",
+            )
 
 
 def _feature_definition(

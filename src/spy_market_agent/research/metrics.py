@@ -6,6 +6,7 @@ from collections.abc import Sequence
 
 from sklearn.metrics import (
     accuracy_score,
+    average_precision_score,
     brier_score_loss,
     confusion_matrix,
     f1_score,
@@ -229,17 +230,7 @@ def _average_precision_value(
 ) -> MetricValue:
     if not has_two_classes:
         return _undefined("average_precision_undefined_one_class")
-    ordered = sorted(
-        zip(probabilities, targets, strict=True), key=lambda item: item[0], reverse=True
-    )
-    positive_count = sum(targets)
-    cumulative_positive = 0
-    precision_sum = 0.0
-    for rank, (_, target) in enumerate(ordered, start=1):
-        if target == 1:
-            cumulative_positive += 1
-            precision_sum += cumulative_positive / rank
-    return _defined(precision_sum / positive_count)
+    return _defined(float(average_precision_score(targets, probabilities)))
 
 
 def _reliability_bins(
