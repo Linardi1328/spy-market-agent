@@ -143,6 +143,24 @@ The owner-run real SIP benchmark completed under this flow for `v2.0.0-alpha.2` 
 preparation. The engineering workflow passed, while the selected classifier showed weak
 predictive discrimination and must not be described as a proven market edge.
 
+## Version 2 Phase 3 Research Framework
+
+**Active for specification and initial research scaffolding:** Phase 3 defines a
+walk-forward research framework for future model improvement work. It is governed by
+`docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md` and starts from the completed Phase 2
+benchmark evidence.
+
+The default Phase 3 protocol is expanding-window walk-forward validation with chronological
+assessment windows, a six-row boundary exclusion after each training window, explicit
+feature warm-up handling, and deterministic fold identities. The framework separates
+classification diagnostics from strategy diagnostics and requires experiment lineage before
+substantive real-data research.
+
+Phase 3 does not introduce a production runtime package, API mutation path, dashboard
+control, scheduler, broker connection, paper-execution change, live-execution behavior, or
+new asset support. The already-opened Phase 2 final test remains frozen evidence and must
+not be used for Phase 3 tuning.
+
 ## Backtest Data Flow
 
 1. Locked final-test predictions produce fixed long-or-cash target positions.
@@ -198,6 +216,8 @@ requires a matching human approval, and keeps uncertainty as local audit state.
   dataset IDs, schema versions, split lineage, and lock references are verified.
 - Stage A benchmark services receive only training and validation row-level labels plus
   non-sensitive final-test boundary and aggregate eligibility counts.
+- Phase 3 experiment artifacts are untrusted until dataset, feature, label, fold, model,
+  calibration, threshold, metric, code, package, Python, and dependency lineage are verified.
 - Models cannot access brokers. The modeling package imports no execution adapter, no
   Alpaca SDK, and no broker protocol.
 - Alpaca trading-client usage is isolated to `execution/alpaca_paper.py`.
@@ -216,3 +236,6 @@ through `load_settings()` or direct `Settings(...)` construction. The package im
 designed to be safe for tests, documentation tooling, API startup, and dashboard rendering.
 Phase 2 benchmark commands are manually invoked CLI workflows; imports, API startup, and
 dashboard startup do not read ignored benchmark artifacts or access final-test data.
+Phase 3 research scaffolding must preserve the same import and startup behavior: no
+automatic acquisition, model experimentation, artifact loading, broker construction, or
+order submission.

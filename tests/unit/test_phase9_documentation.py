@@ -20,6 +20,7 @@ REQUIRED_DOCUMENTS = (
     "docs/V2_PHASE_02_REAL_HISTORICAL_BENCHMARK_SPEC.md",
     "docs/V2_PHASE_02_BENCHMARK_POLICY.md",
     "docs/V2_PHASE_02_DATA_CARD_TEMPLATE.md",
+    "docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md",
     "CHANGELOG.md",
     "RELEASE_NOTES_V1.0.0.md",
     "RELEASE_NOTES_V2.0.0_ALPHA_1.md",
@@ -222,6 +223,9 @@ def test_version_2_alpha_release_documents_are_consistent() -> None:
     phase2_spec = (ROOT / "docs/V2_PHASE_02_REAL_HISTORICAL_BENCHMARK_SPEC.md").read_text(
         encoding="utf-8"
     )
+    phase3_spec = (ROOT / "docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md").read_text(
+        encoding="utf-8"
+    )
     phase1_release_notes = (ROOT / "RELEASE_NOTES_V2.0.0_ALPHA_1.md").read_text(encoding="utf-8")
     phase2_release_notes = (ROOT / "RELEASE_NOTES_V2.0.0_ALPHA_2.md").read_text(encoding="utf-8")
     phase1_checklist = (ROOT / "VERSION_2_PHASE_01_RELEASE_CHECKLIST.md").read_text(
@@ -239,6 +243,7 @@ def test_version_2_alpha_release_documents_are_consistent() -> None:
             roadmap,
             phase1_spec,
             phase2_spec,
+            phase3_spec,
             phase1_release_notes,
             phase2_release_notes,
             phase1_checklist,
@@ -253,20 +258,26 @@ def test_version_2_alpha_release_documents_are_consistent() -> None:
     )
 
     assert "Current package/runtime version: `2.0.0a2`" in readme
-    assert "Current released identifier remains `v2.0.0-alpha.1`" in readme
-    assert "Release-preparation target: `v2.0.0-alpha.2`" in readme
+    assert "Current released identifier: `v2.0.0-alpha.2`" in readme
+    assert "Active development target: `v2.0.0-alpha.3`" in readme
     assert "V2 Phase 1: accepted and complete - Real SPY Data Foundation" in readme
-    assert "V2 Phase 2: engineering acceptance complete - Real Historical Benchmark" in readme
+    assert "V2 Phase 2: accepted and released - Real Historical Benchmark" in readme
+    assert "V2 Phase 3: active specification and initial research scaffolding" in readme
     assert phase2_completion in readme
-    assert "No Phase 3 implementation has begun" in readme
+    assert "Added the Version 2 Phase 3 Walk-Forward Model Research specification" in changelog
     assert "## [2.0.0-alpha.1] - 2026-08-05" in changelog
     assert "## [2.0.0-alpha.2] - 2026-08-09" in changelog
     assert "Corresponding Python package version: `2.0.0a1`" in changelog
     assert "Corresponding Python package version: `2.0.0a2`" in changelog
     assert "Status: Accepted for v2.0.0-alpha.1 release" in phase1_spec
     assert "Status: Engineering acceptance complete; release preparation in review" in phase2_spec
+    assert (
+        "Status: Active development for specification and initial research scaffolding"
+        in phase3_spec
+    )
     assert "Accepted - Version 2 Real SPY Data Foundation" in roadmap
-    assert "Engineering acceptance complete after owner-run real SIP benchmark" in roadmap
+    assert "Accepted and released after owner-run real SIP benchmark" in roadmap
+    assert "Active specification and initial research scaffolding" in roadmap
     assert "Git release identifier: `v2.0.0-alpha.1`" in phase1_release_notes
     assert "Git release identifier: `v2.0.0-alpha.2`" in phase2_release_notes
     assert "does not evaluate model accuracy" in phase1_release_notes
@@ -308,6 +319,8 @@ def test_version_2_phase2_release_preparation_status_is_documented() -> None:
     )
 
     assert "Current package/runtime version: `2.0.0a2`" in readme
+    assert "Current released identifier: `v2.0.0-alpha.2`" in readme
+    assert "Active development target: `v2.0.0-alpha.3`" in readme
     assert "v2.0.0-alpha.2" in spec
     assert "2.0.0a2" in spec
     assert "Status: Engineering acceptance complete; release preparation in review" in spec
@@ -320,7 +333,7 @@ def test_version_2_phase2_release_preparation_status_is_documented() -> None:
     assert "Release-preparation package/runtime version: `2.0.0a2`" in spec
     assert "owner-run real SIP benchmark acceptance gates completed" in spec
     assert "did not run or reopen the real Phase 2 benchmark or final test" in spec
-    assert "Engineering acceptance complete after owner-run real SIP benchmark" in roadmap
+    assert "Accepted and released after owner-run real SIP benchmark" in roadmap
     assert phase2_completion in readme
     assert "weak predictive discrimination" in release_lower
     assert "did not establish a reliable predictive edge" in release_lower
@@ -329,12 +342,94 @@ def test_version_2_phase2_release_preparation_status_is_documented() -> None:
     assert "Package/runtime version is prepared as `2.0.0a2`" in review
     assert "does not authorize new model research, live execution, shadow" in normalized_combined
     assert (
-        "version 2 phase 3 is not authorized"
+        "version 2 phase 3 is authorized for specification and initial research-scaffolding review"
         in (ROOT / "AGENTS.md").read_text(encoding="utf-8").lower()
     )
     assert "phase 2 is accepted" not in combined
     assert "profitability is guaranteed" not in combined
     assert "live-money readiness: approved" not in combined
+
+
+def test_version_2_phase3_walk_forward_research_framework_is_documented() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    roadmap = (ROOT / "FUTURE_ROADMAP.md").read_text(encoding="utf-8")
+    workflows = (ROOT / "docs/WORKFLOWS.md").read_text(encoding="utf-8")
+    architecture = (ROOT / "docs/ARCHITECTURE.md").read_text(encoding="utf-8")
+    reproducibility = (ROOT / "docs/REPRODUCIBILITY.md").read_text(encoding="utf-8")
+    safety = (ROOT / "docs/SECURITY_AND_SAFETY.md").read_text(encoding="utf-8")
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    spec = (ROOT / "docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md").read_text(encoding="utf-8")
+    normalized_spec = " ".join(spec.split())
+    combined = "\n".join(
+        (readme, roadmap, workflows, architecture, reproducibility, safety, changelog, agents, spec)
+    )
+    combined_lower = combined.lower()
+
+    assert "Target release identifier: `v2.0.0-alpha.3`" in spec
+    assert "Implementation branch: `review/v2-phase-03-walk-forward-research`" in spec
+    assert "Package/runtime version during this branch: `2.0.0a2`" in spec
+    assert "Current released identifier: `v2.0.0-alpha.2`" in readme
+    assert "Active development target: `v2.0.0-alpha.3`" in readme
+    assert "Version 2 Phase 3 Walk-Forward Model Research Specification" in readme
+    assert "v2.0.0-alpha.3" in roadmap
+    assert "review/v2-phase-03-walk-forward-research" in roadmap
+    assert "docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md" in agents
+
+    required_spec_sections = (
+        "## 6. Primary Walk-Forward Protocol",
+        "## 7. Fold Design and Chronology Rules",
+        "## 8. Leakage Protections",
+        "## 9. Allowable Feature Research",
+        "## 10. Feature Ablation Policy",
+        "## 11. Allowable Model Research",
+        "## 12. Hyperparameter Research Policy",
+        "## 13. Calibration Policy",
+        "## 14. Threshold Research Policy",
+        "## 15. Regime and Drift Analysis",
+        "## 16. Experiment Registry and Lineage",
+        "## 17. Required Metrics",
+        "## 18. Baselines",
+        "## 19. Candidate Selection Rules",
+        "## 20. Protected Evaluation Policy",
+        "## 21. Classification Versus Strategy Evaluation",
+        "## 24. Acceptance Criteria for Alpha 3",
+    )
+    for section in required_spec_sections:
+        assert section in spec
+
+    required_protocol_terms = (
+        "Minimum initial training rows: `756`",
+        "Default assessment window: `126` supervised rows",
+        "Default step size: `63` supervised rows",
+        "`BOUNDARY_EXCLUSION_SESSIONS = 6`",
+        "expanding-window walk-forward validation",
+        "six-row boundary exclusion",
+        "feature warm-up",
+        "deterministic fold identities",
+    )
+    for term in required_protocol_terms:
+        assert term in combined
+
+    required_boundaries = (
+        "must not tune against the already-opened Phase 2 final test",
+        "Phase 2 final-test row-level labels",
+        "must not be used for Phase 3 tuning",
+        "no live trading",
+        "no automatic paper-order submission",
+        "API write routes",
+        "dashboard execution controls",
+        "artifacts/research/<experiment_id>/",
+    )
+    for boundary in required_boundaries:
+        assert boundary.lower() in combined_lower
+
+    assert "strategy performance alone as evidence of a reliable predictive edge" in normalized_spec
+    assert (
+        "Alpha 3 acceptance does not require a candidate model to beat baselines" in normalized_spec
+    )
+    assert "live-money readiness: approved" not in combined_lower
+    assert "profitability is guaranteed" not in combined_lower
 
 
 def test_version_2_phase2_benchmark_integrity_governance_is_documented() -> None:
