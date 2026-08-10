@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import os
 import json
 import subprocess
 import sys
@@ -1165,6 +1166,11 @@ def test_cli_help_and_invalid_inputs_do_not_require_credentials() -> None:
 
 
 def test_cli_missing_credentials_fails_before_write(tmp_path: Path) -> None:
+
+    env = os.environ.copy()
+    env.pop("ALPACA_MARKET_DATA_API_KEY", None)
+    env.pop("ALPACA_MARKET_DATA_SECRET_KEY", None)
+
     result = subprocess.run(
         [
             sys.executable,
@@ -1191,6 +1197,7 @@ def test_cli_missing_credentials_fails_before_write(tmp_path: Path) -> None:
         check=False,
         capture_output=True,
         text=True,
+        env=env,
     )
 
     assert result.returncode == 1
