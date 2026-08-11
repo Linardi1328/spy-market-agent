@@ -22,14 +22,16 @@ Version 2 Phase 1 is accepted under `docs/V2_PHASE_01_REAL_SPY_DATA_SPEC.md`.
 Version 2 Phase 2 is accepted and released as `v2.0.0-alpha.2` under
 `docs/V2_PHASE_02_REAL_HISTORICAL_BENCHMARK_SPEC.md`.
 Version 2 Phase 3 PR #24 merged the approved walk-forward framework and initial research
-scaffolding. The current authorized Phase 3 substage is development-only walk-forward
-experimentation under `docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md` on
-`review/v2-phase-03-development-research`. Protected evaluation, Phase 4 shadow mode, and
-release preparation remain unauthorized until explicit owner approval. Version 2 Phase 3 is
-not accepted, complete, or released until owner acceptance gates are complete.
-Phase 3 development research must derive and apply the Phase 2 final-test
-prediction-session exclusion boundary before building labels from the accepted Phase 1
-parent dataset.
+scaffolding. PR #25 merged the manual, offline, classification-first development research
+implementation, and owner development testing has completed. The current authorized Phase 3
+substage is Alpha 3 release preparation under
+`docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md` on
+`review/v2-phase-03-alpha3-release-preparation`. Protected evaluation, Phase 4 shadow
+mode, production paper operation, live trading, and the public `v2.0.0-alpha.3` tag remain
+unauthorized until separate explicit owner approval. Version 2 Phase 3 is not released until
+owner acceptance gates and post-merge tag approval are complete. Phase 3 development
+research must derive and apply the Phase 2 final-test prediction-session exclusion boundary
+before building labels from the accepted Phase 1 parent dataset.
 Real-data-provider selection belongs to Version 2 Phase 1, not to an old Version 1 phase.
 
 If a user request conflicts with `PROJECT_SPEC.md`, `FUTURE_ROADMAP.md`, or the active phase

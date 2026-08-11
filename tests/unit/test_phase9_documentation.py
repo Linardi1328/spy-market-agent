@@ -258,13 +258,15 @@ def test_version_2_alpha_release_documents_are_consistent() -> None:
         "Owner-run real SIP benchmark and one controlled final-test execution completed"
     )
 
-    assert "Current package/runtime version: `2.0.0a2`" in readme
+    assert "Current package/runtime version: `2.0.0a3`" in readme
     assert "Current released identifier: `v2.0.0-alpha.2`" in readme
-    assert "Active development target: `v2.0.0-alpha.3`" in readme
+    assert "Active release-preparation target: `v2.0.0-alpha.3`" in readme
     assert "V2 Phase 1: accepted and complete - Real SPY Data Foundation" in readme
     assert "V2 Phase 2: accepted and released - Real Historical Benchmark" in readme
-    assert "V2 Phase 3: active development-only walk-forward experimentation" in readme
+    assert "V2 Phase 3: Alpha 3 release preparation active" in readme
+    assert "Public `v2.0.0-alpha.3` release/tag: not yet created" in readme
     assert phase2_completion in readme
+    assert "Prepared package/runtime version `2.0.0a3`" in changelog
     assert "Added the Version 2 Phase 3 Walk-Forward Model Research specification" in changelog
     assert "Implemented initial `spy_market_agent.research` scaffolding" in changelog
     assert "## [2.0.0-alpha.1] - 2026-08-05" in changelog
@@ -273,10 +275,10 @@ def test_version_2_alpha_release_documents_are_consistent() -> None:
     assert "Corresponding Python package version: `2.0.0a2`" in changelog
     assert "Status: Accepted for v2.0.0-alpha.1 release" in phase1_spec
     assert "Status: Engineering acceptance complete; release preparation in review" in phase2_spec
-    assert "Status: Active development-only walk-forward experimentation" in phase3_spec
+    assert "Status: Alpha 3 release preparation" in phase3_spec
     assert "Accepted - Version 2 Real SPY Data Foundation" in roadmap
     assert "Accepted and released after owner-run real SIP benchmark" in roadmap
-    assert "Active development-only walk-forward experimentation" in roadmap
+    assert "Alpha 3 release preparation active" in roadmap
     assert "Git release identifier: `v2.0.0-alpha.1`" in phase1_release_notes
     assert "Git release identifier: `v2.0.0-alpha.2`" in phase2_release_notes
     assert "does not evaluate model accuracy" in phase1_release_notes
@@ -317,9 +319,9 @@ def test_version_2_phase2_release_preparation_status_is_documented() -> None:
         "Owner-run real SIP benchmark and one controlled final-test execution completed"
     )
 
-    assert "Current package/runtime version: `2.0.0a2`" in readme
+    assert "Current package/runtime version: `2.0.0a3`" in readme
     assert "Current released identifier: `v2.0.0-alpha.2`" in readme
-    assert "Active development target: `v2.0.0-alpha.3`" in readme
+    assert "Active release-preparation target: `v2.0.0-alpha.3`" in readme
     assert "v2.0.0-alpha.2" in spec
     assert "2.0.0a2" in spec
     assert "Status: Engineering acceptance complete; release preparation in review" in spec
@@ -343,7 +345,8 @@ def test_version_2_phase2_release_preparation_status_is_documented() -> None:
     agents_lower = (ROOT / "AGENTS.md").read_text(encoding="utf-8").lower()
     normalized_agents = " ".join(agents_lower.split())
     assert "version 2 phase 3 pr #24 merged" in normalized_agents
-    assert "development-only walk-forward experimentation" in normalized_agents
+    assert "pr #25 merged" in normalized_agents
+    assert "alpha 3 release preparation" in normalized_agents
     assert "phase 2 is accepted" not in combined
     assert "profitability is guaranteed" not in combined
     assert "live-money readiness: approved" not in combined
@@ -369,16 +372,17 @@ def test_version_2_phase3_walk_forward_research_framework_is_documented() -> Non
     combined_lower = combined.lower()
 
     assert "Target release identifier: `v2.0.0-alpha.3`" in spec
-    assert "Current implementation branch: `review/v2-phase-03-development-research`" in spec
-    assert "Package/runtime version during this branch: `2.0.0a2`" in spec
+    assert "Current implementation branch: `review/v2-phase-03-alpha3-release-preparation`" in spec
+    assert "Release-preparation package/runtime version: `2.0.0a3`" in spec
     assert "Current released identifier: `v2.0.0-alpha.2`" in readme
-    assert "Active development target: `v2.0.0-alpha.3`" in readme
+    assert "Active release-preparation target: `v2.0.0-alpha.3`" in readme
     assert "Version 2 Phase 3 Walk-Forward Model Research Specification" in readme
     assert "`spy_market_agent.research` package now provides a manual, offline" in readme
     assert "src/spy_market_agent/research" in architecture
     assert "python -m spy_market_agent.research.cli run-development" in normalized_workflows
     assert "v2.0.0-alpha.3" in roadmap
     assert "review/v2-phase-03-development-research" in roadmap
+    assert "review/v2-phase-03-alpha3-release-preparation" in roadmap
     assert "docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md" in agents
 
     required_spec_sections = (
@@ -440,6 +444,65 @@ def test_version_2_phase3_walk_forward_research_framework_is_documented() -> Non
     assert "!artifacts/research/.gitkeep" in gitignore
     assert "live-money readiness: approved" not in combined_lower
     assert "profitability is guaranteed" not in combined_lower
+
+
+def test_version_2_phase3_alpha3_release_preparation_evidence_is_documented() -> None:
+    evidence = (ROOT / "docs/V2_PHASE_03_ALPHA3_RELEASE_EVIDENCE.md").read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    roadmap = (ROOT / "FUTURE_ROADMAP.md").read_text(encoding="utf-8")
+    spec = (ROOT / "docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md").read_text(encoding="utf-8")
+    workflows = (ROOT / "docs/WORKFLOWS.md").read_text(encoding="utf-8")
+    safety = (ROOT / "docs/SECURITY_AND_SAFETY.md").read_text(encoding="utf-8")
+    gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
+    combined = "\n".join((evidence, readme, changelog, roadmap, spec, workflows, safety))
+    combined_lower = combined.lower()
+    normalized_combined_lower = " ".join(combined_lower.split())
+    normalized_evidence = " ".join(evidence.split())
+
+    assert "Package/runtime version prepared by this branch: `2.0.0a3`" in evidence
+    assert "Public release identifier: `v2.0.0-alpha.3` is not yet tagged or released" in evidence
+    assert "campaign ID: `spy-v2p3-dev-3741349b8aa34020b8425af5`" in evidence
+    assert "parent Phase 1 dataset ID: `spy-v2p1-825930b0a2bcab20c733b867`" in evidence
+    assert "research-slice dataset ID: `spy-v2p3-dev-slice-d026d0f30a0e378b7c0b6b9d`" in evidence
+    assert "exclusion policy: `phase2-final-test-session-exclusion-v1`" in evidence
+    assert "Phase 2 final-test available for tuning: `false`" in evidence
+    assert "eligible development prediction range: 2018-03-29 through 2024-10-07" in evidence
+    assert "fold count: `13`" in evidence
+    assert "Selected development feature set: `baseline_plus_drawdown_position`" in evidence
+    assert "**NO CANDIDATE PROMOTION**" in evidence
+    assert "Protected evaluation status: `scaffolded_locked_no_access`" in evidence
+    assert "strategy_results_artifact` as `not_generated_classification_first_branch" in evidence
+    assert "all indexed SHA-256 checksums were recomputed and matched" in normalized_evidence
+    assert "artifact_index.json` checksum" in evidence
+
+    required_boundaries = (
+        "protected evaluation was not executed",
+        "strategy optimization was not authorized and was not executed",
+        "no predictive edge is claimed",
+        "public `v2.0.0-alpha.3` tag has not been created",
+        "phase 4 shadow mode",
+        "phase 2 final-test rows were unavailable for phase 3 tuning",
+    )
+    for boundary in required_boundaries:
+        assert boundary in normalized_combined_lower
+
+    prohibited_payload_markers = (
+        '"fold_evaluations"',
+        '"y_true"',
+        '"y_score"',
+        '"probabilities"',
+        '"prediction_sessions"',
+        "raw provider response",
+        "account id",
+        "api key",
+    )
+    evidence_lower = evidence.lower()
+    for marker in prohibited_payload_markers:
+        assert marker not in evidence_lower
+
+    assert "artifacts/research/*" in gitignore
+    assert "!artifacts/research/.gitkeep" in gitignore
 
 
 def test_version_2_phase2_benchmark_integrity_governance_is_documented() -> None:

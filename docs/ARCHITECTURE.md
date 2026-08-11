@@ -151,11 +151,12 @@ predictive discrimination and must not be described as a proven market edge.
 
 ## Version 2 Phase 3 Research Framework
 
-**Active for development-only walk-forward experimentation:** Phase 3 PR #24 merged the
-approved framework and initial research scaffolding. The current branch adds a manual,
-offline, classification-first research runner under `spy_market_agent.research`. It is
-governed by `docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md` and starts from the completed
-Phase 2 benchmark evidence as sanitized baseline motivation only.
+**Active for Alpha 3 release preparation:** Phase 3 PR #24 merged the approved framework
+and initial research scaffolding. PR #25 merged the manual, offline, classification-first
+research runner under `spy_market_agent.research`, and owner development testing completed
+locally. The current branch records sanitized release-preparation evidence and package
+metadata under `docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md`. It starts from the
+completed Phase 2 benchmark evidence as sanitized baseline motivation only.
 
 The default Phase 3 protocol is expanding-window walk-forward validation with chronological
 assessment windows, a six-row boundary exclusion after each training window, explicit
@@ -174,8 +175,9 @@ Phase 3 does not introduce a production runtime package, API mutation path, dash
 control, scheduler, broker connection, paper-execution change, live-execution behavior, or
 new asset support. The Phase 3 CLI is manual, local, offline after data acquisition, and has
 no acquisition or execution command. The already-opened Phase 2 final test remains frozen
-evidence and must not be used for Phase 3 tuning. Protected evaluation and strategy
-optimization remain unauthorized.
+evidence and must not be used for Phase 3 tuning. Protected evaluation, strategy
+optimization, Phase 4 shadow mode, production paper operation, live trading, and the public
+`v2.0.0-alpha.3` tag remain unauthorized.
 
 ## Backtest Data Flow
 

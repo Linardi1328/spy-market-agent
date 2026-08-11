@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- Began Version 2 Phase 3 Alpha 3 release preparation after PR #25 was owner-tested and
+  merged into `main` at `cc6ee4ee404659143a1ba633d3faf7fddbc63f9f`.
+- Added sanitized Alpha 3 release evidence for owner-run campaign
+  `spy-v2p3-dev-3741349b8aa34020b8425af5`, which ended with `NO CANDIDATE PROMOTION`.
+- Prepared package/runtime version `2.0.0a3` for the future public release identifier
+  `v2.0.0-alpha.3`; the public tag has not been created.
+- Documented that protected evaluation, strategy optimization, Phase 4 shadow mode,
+  production paper operation, live trading, broker communication, and real-data artifact
+  commits remain unauthorized.
 - Added the Version 2 Phase 3 development-only walk-forward research runner and committed
   data-free campaign configuration for `v2.0.0-alpha.3` development evidence.
 - Added research-only OHLCV feature families, feature ablation campaigns, finite
@@ -12,10 +21,10 @@
   final-test prediction-session boundary, truncates the research slice before label
   construction, records slice lineage, and rejects any development surface that intersects
   Phase 2 final-test prediction sessions.
-- Documented that PR #24 framework/scaffolding review is merged, development
-  experimentation is now active, protected evaluation and strategy optimization remain
-  unauthorized, Phase 4 remains unauthorized, and package/runtime version remains
-  `2.0.0a2`.
+- Documented that PR #24 framework/scaffolding review was merged, development
+  experimentation was authorized for PR #25, protected evaluation and strategy optimization
+  remained unauthorized, Phase 4 remained unauthorized, and package/runtime version remained
+  `2.0.0a2` during that development substage.
 - Added the Version 2 Phase 3 Walk-Forward Model Research specification.
 - Implemented initial `spy_market_agent.research` scaffolding for deterministic
   walk-forward fold manifests, leakage guards, research registries, metrics, baselines,

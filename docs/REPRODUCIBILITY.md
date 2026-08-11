@@ -228,12 +228,13 @@ result showed weak predictive discrimination and must not be used for Phase 3 tu
 
 ## Version 2 Phase 3 Research Reproducibility
 
-**Active for development-only walk-forward experimentation:** Phase 3 defines walk-forward
-research rules under `docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md`. PR #24 merged the
-approved framework and initial scaffolding; the current branch adds a manual, offline,
-classification-first development campaign under `src/spy_market_agent/research`.
-Package/runtime version remains `2.0.0a2` until a later accepted release-preparation branch
-explicitly prepares `2.0.0a3`.
+**Active for Alpha 3 release preparation:** Phase 3 defines walk-forward research rules
+under `docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md`. PR #24 merged the approved
+framework and initial scaffolding; PR #25 merged a manual, offline, classification-first
+development campaign under `src/spy_market_agent/research`, and owner development testing
+completed locally. The release-preparation branch prepares package/runtime version
+`2.0.0a3` for the future public identifier `v2.0.0-alpha.3`; the public tag has not been
+created.
 
 The recommended primary protocol is expanding-window walk-forward validation:
 
@@ -274,7 +275,9 @@ The committed development campaign configuration is
 feature warm-up, fold policy, diagnostic threshold, reliability bin count, candidate
 selection thresholds, calibration procedure, and regime/drift settings before execution.
 Changing selection-sensitive values creates a different stable campaign or experiment
-identity. The current branch does not execute protected evaluation or strategy optimization.
+identity. The owner-run development campaign remains under ignored local artifacts and is
+represented in tracked files only by sanitized aggregate release evidence. The current
+branch does not execute protected evaluation or strategy optimization.
 
 ## Checksums and Schema Versions
 

@@ -1,18 +1,20 @@
 # Version 2 Phase 3 - Walk-Forward Model Research Specification
 
-Status: Active development-only walk-forward experimentation after PR #24 framework merge
+Status: Alpha 3 release preparation after PR #24 framework merge, PR #25 development
+implementation merge, and owner development testing
 
 Target release identifier: `v2.0.0-alpha.3`
 
-Current implementation branch: `review/v2-phase-03-development-research`
+Current implementation branch: `review/v2-phase-03-alpha3-release-preparation`
 
-Package/runtime version during this branch: `2.0.0a2`
+Release-preparation package/runtime version: `2.0.0a3`
 
-PR #24 merged the approved Phase 3 framework and initial research scaffolding. The current
-authorized substage implements manual, offline, classification-first development
-experimentation against owner-verified local Phase 1 manifests. It does not authorize Phase
-3 protected evaluation, strategy-threshold optimization, Phase 4 shadow mode, Phase 5
-production paper operation, live trading, broker communication, or release preparation.
+PR #24 merged the approved Phase 3 framework and initial research scaffolding. PR #25
+merged the manual, offline, classification-first development experimentation runner, and
+owner development testing completed locally. The current authorized substage prepares Alpha
+3 acceptance/release evidence and package metadata. It does not authorize Phase 3 protected
+evaluation, strategy-threshold optimization, Phase 4 shadow mode, Phase 5 production paper
+operation, live trading, broker communication, or the public `v2.0.0-alpha.3` tag.
 
 Phase 3 begins after the completed `v2.0.0-alpha.2` release. Phase 2 established the first
 real SPY historical benchmark on a verified Alpaca SIP, `1Day`, adjustment `all` dataset.
@@ -101,13 +103,14 @@ Phase 3 may include:
 - synthetic offline tests for fold, lineage, registry, and leakage contracts;
 - owner-run research reports that use verified local data without committing provider data.
 
-Phase 3 implementation began with specification and scaffolding in PR #24. The current
-authorized development substage may run only the predeclared classification-first
-walk-forward campaign: verified Phase 1 manifest input, baseline and research OHLCV
-features, feature ablations, fixed Phase 2 model baselines, finite scikit-learn model grids,
-the predeclared calibration sub-study, classification metrics, regime/drift diagnostics, and
-candidate selection. Strategy optimization and protected evaluation remain locked until a
-later explicit approval.
+Phase 3 implementation began with specification and scaffolding in PR #24. PR #25 merged
+the authorized development substage for the predeclared classification-first walk-forward
+campaign: verified Phase 1 manifest input, baseline and research OHLCV features, feature
+ablations, fixed Phase 2 model baselines, finite scikit-learn model grids, the predeclared
+calibration sub-study, classification metrics, regime/drift diagnostics, and candidate
+selection. The current Alpha 3 release-preparation branch records sanitized acceptance
+evidence and release metadata. Strategy optimization and protected evaluation remain locked
+until a later explicit approval.
 
 ## 3. Explicit Non-Goals
 
@@ -744,7 +747,7 @@ Phase 3 must be rejected or held when:
 - The implementation branch starts at package/runtime version `2.0.0a2`.
 - Phase 3 specification and research-scaffolding work must not bump the package/runtime
   version at the start of implementation.
-- A future release-preparation branch may set:
+- The Alpha 3 release-preparation branch may set:
   - `pyproject.toml` package version to `2.0.0a3`;
   - `spy_market_agent.__version__` to `2.0.0a3`.
 - Public Git release identifier: `v2.0.0-alpha.3`.
@@ -756,11 +759,12 @@ Phase 3 must be rejected or held when:
 ## 27. Approval Boundary
 
 This specification is the governing Phase 3 document. PR #24 delivered the approved
-walk-forward model-research framework and initial research scaffolding. The current
-authorized branch may add development-only, manual, offline classification experimentation
-under the same leakage, lineage, fold, artifact, and selection controls.
+walk-forward model-research framework and initial research scaffolding. PR #25 delivered the
+development-only, manual, offline classification experimentation runner under the same
+leakage, lineage, fold, artifact, and selection controls. The current authorized branch may
+prepare sanitized Alpha 3 acceptance evidence and release metadata only.
 
 It does not authorize Phase 4 shadow mode, Phase 5 production paper operation, live trading,
-new assets, protected evaluation execution, strategy optimization in the current branch, or
-production execution behavior. Any expansion beyond this specification requires explicit
-owner approval and a new or amended governing specification.
+new assets, protected evaluation execution, strategy optimization in the current branch,
+production execution behavior, or the public `v2.0.0-alpha.3` tag. Any expansion beyond this
+specification requires explicit owner approval and a new or amended governing specification.

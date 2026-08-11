@@ -215,16 +215,18 @@ python -m spy_market_agent.benchmark.cli run-final-test \
 ## Run Phase 3 Development Walk-Forward Research
 
 Phase 3 PR #24 merged the approved framework and initial research scaffolding. The current
-authorized branch, `review/v2-phase-03-development-research`, adds manual, offline,
-development-only classification experimentation under
-`docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md`. It starts from the completed
-`v2.0.0-alpha.2` benchmark evidence, but it must not tune against the already-opened Phase 2
-final test. Protected evaluation, Phase 4 shadow mode, strategy optimization, and
-paper/live/broker behavior remain unauthorized.
+Phase 3 release preparation is active after PR #25 merged the manual, offline,
+development-only classification experimentation runner under
+`docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md` and owner development testing completed
+locally. It starts from the completed `v2.0.0-alpha.2` benchmark evidence, but it must not
+tune against the already-opened Phase 2 final test. Protected evaluation, Phase 4 shadow
+mode, strategy optimization, production paper operation, live trading, and paper/live/broker
+behavior remain unauthorized.
 
-The required development workflow is:
+For any future authorized local development run, the required workflow is:
 
-1. Confirm the active branch is `review/v2-phase-03-development-research`.
+1. Confirm the working tree is a reviewed Phase 3 development or release-preparation branch,
+   not `main` with unreviewed edits.
 2. Read `AGENTS.md`, `PROJECT_SPEC.md`, `FUTURE_ROADMAP.md`, and the Phase 3 specification.
 3. Treat Phase 2 final-test row-level labels, predictions, strategy rows, fills, and
    generated benchmark JSON as unavailable for research.
@@ -247,7 +249,7 @@ assessment window: 126 supervised rows
 step size: 63 supervised rows
 ```
 
-The current development campaign stages are:
+The implemented classification-first development campaign stages are:
 
 1. verify a local Phase 1 manifest deeply and load canonical SPY daily data only after
    verification succeeds;
@@ -278,7 +280,9 @@ python -m spy_market_agent.research.cli run-development \
 The command never acquires data, accesses the network, reads Alpaca keys, constructs broker
 clients, submits orders, loads Phase 2 final-test artifacts, reconstructs Phase 2 final-test
 row-level labels for development research, or opens Phase 3 protected evaluation. Generated
-research outputs remain ignored under `artifacts/research/<experiment_id>/`.
+research outputs remain ignored under `artifacts/research/<experiment_id>/`. Alpha 3 release
+preparation records only sanitized aggregate acceptance evidence and does not rerun the real
+owner campaign.
 
 ## Inspect Model Evaluations
 
