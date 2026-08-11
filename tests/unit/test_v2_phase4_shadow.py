@@ -177,15 +177,19 @@ def test_phase4_specification_and_release_status_are_documented() -> None:
     combined = "\n".join((spec, readme, roadmap, safety, changelog))
     combined_lower = combined.lower()
 
-    assert "Status: Active specification and infrastructure-first scaffolding" in spec
+    assert "Status: Active - observation-only operational pipeline development" in spec
     assert "Target release identifier: `v2.0.0-beta.1`" in spec
-    assert "Current package/runtime version during specification/scaffolding: `2.0.0a3`" in spec
+    assert (
+        "Current package/runtime version during observation-pipeline development: `2.0.0a3`"
+    ) in spec
     assert "Current released identifier: `v2.0.0-alpha.3`" in readme
     assert "V2 Phase 3 model outcome: `NO CANDIDATE PROMOTION`" in readme
     assert "Public `v2.0.0-beta.1` release/tag: not yet created" in readme
     assert "Phase 5 production paper operation: not authorized" in readme
     assert "Gate A infrastructure entry is authorized" in roadmap
     assert "Gate B model-connected inference remains blocked" in roadmap
+    assert "python -m spy_market_agent.shadow.cli run-observation" in readme
+    assert "shadow.sqlite3" in gitignore
     assert "Protected evaluation: not executed" in readme
     assert "live trading" in combined_lower
     assert "prohibited" in combined_lower or "not approved" in combined_lower

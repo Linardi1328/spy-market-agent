@@ -284,68 +284,52 @@ research outputs remain ignored under `artifacts/research/<experiment_id>/`. The
 release record contains only sanitized aggregate acceptance evidence and does not authorize
 rerunning or retuning the real owner campaign.
 
-## Inspect Phase 4 Shadow-Mode Readiness Scaffolding
+## Run Phase 4 Observation-Only Shadow Readiness
 
-Phase 4 is active only for specification and infrastructure-first Real-Time Shadow Mode
-scaffolding under
+Phase 4 is active for manual observation-only Real-Time Shadow Mode operation under
 `docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md`. The target future release is
 `v2.0.0-beta.1`; package/runtime version remains `2.0.0a3`, and no beta tag exists.
 
-This first substage has no real-data shadow inference CLI, no scheduler, no daemon, no API
-write route, no dashboard execution control, and no broker path. The initial
-`spy_market_agent.shadow` package supports observation-only policy functions that can be
-used from synthetic tests or a local Python shell to inspect readiness state:
+This substage has a manual observation-only CLI, no model inference, no scheduler, no
+daemon, no API write route, no dashboard execution control, and no broker path. It consumes
+only verified local Phase 1 manifests and never performs acquisition.
 
-```python
-from datetime import UTC, date, datetime
+First verify the local Phase 1 manifest through the existing offline verifier:
 
-from spy_market_agent.shadow import (
-    DailyMarketDataStatus,
-    DataSnapshotLineage,
-    ShadowMode,
-    ShadowRunConfiguration,
-    ShadowRunRequest,
-    evaluate_market_data_freshness,
-    evaluate_shadow_run,
-)
-
-lineage = DataSnapshotLineage(
-    dataset_id="synthetic-shadow-dataset",
-    canonical_dataset_checksum="0" * 64,
-    provider="synthetic",
-    feed="synthetic",
-    adjustment="all",
-    session=date(2025, 1, 2),
-    row_count=1,
-)
-configuration = ShadowRunConfiguration(
-    configuration_version="phase4-shadow-scaffold-v1",
-    provider_finalization_policy_id="synthetic-provider-finalized-v1",
-    mode=ShadowMode.OBSERVATION_ONLY_NO_MODEL,
-)
-request = ShadowRunRequest(
-    configuration=configuration,
-    data_lineage=lineage,
-    signal_session=date(2025, 1, 2),
-    feature_schema="synthetic-shadow-feature-schema-v1",
-    as_of=datetime(2025, 1, 3, 0, 0, tzinfo=UTC),
-)
-freshness = evaluate_market_data_freshness(
-    DailyMarketDataStatus(
-        adjustment="all",
-        session=date(2025, 1, 2),
-        as_of=datetime(2025, 1, 3, 0, 0, tzinfo=UTC),
-        provider_finalized=True,
-    )
-)
-decision = evaluate_shadow_run(request, freshness)
+```bash
+python -m spy_market_agent.market_data.cli verify \
+  --manifest data/manifests/alpaca/SPY/1Day/sip/all/DATASET_ID.manifest.json \
+  --data-root ./data
 ```
 
-Observation-only mode can report readiness and the explicit
-`blocked_no_approved_model` inference state. It cannot generate predictions, model-based
-`LONG` or `CASH` proposals from real market data, broker orders, paper orders, approvals, or
-execution requests. Model-connected shadow inference remains locked until a future
-separately approved model-admission record exists.
+Then run one explicit observation-only readiness check:
+
+```bash
+python -m spy_market_agent.shadow.cli run-observation \
+  --manifest data/manifests/alpaca/SPY/1Day/sip/all/DATASET_ID.manifest.json \
+  --data-root ./data \
+  --shadow-db ./shadow.sqlite3 \
+  --session YYYY-MM-DD \
+  --as-of YYYY-MM-DDTHH:MM:SSZ \
+  --provider-finalized \
+  --provider-finalization-policy-id operator-confirmed-daily-final-v1
+```
+
+Inspect the persisted run without mutating state:
+
+```bash
+python -m spy_market_agent.shadow.cli show-run \
+  --shadow-db ./shadow.sqlite3 \
+  --run-id SHADOW_RUN_ID
+```
+
+Rerunning the same logical command must fail closed as `duplicate_run`. A prior incomplete
+reservation must surface `recovery_required` and must not be automatically overwritten.
+Observation-only mode records `blocked_no_approved_model` as the model-gate state without
+failing an otherwise healthy data-readiness run. It cannot generate predictions, operational
+`ShadowProposal` records, model-based `LONG` or `CASH` proposals from real market data,
+broker orders, paper orders, approvals, or execution requests. Model-connected shadow
+inference remains locked until a future separately approved model-admission record exists.
 
 ## Inspect Model Evaluations
 

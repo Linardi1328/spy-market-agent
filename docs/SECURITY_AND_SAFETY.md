@@ -170,17 +170,22 @@ Protected evaluation, strategy optimization, production paper operation, and liv
 remain unauthorized. The Phase 3 scientific outcome was `NO CANDIDATE PROMOTION`, so no
 model is approved for shadow or paper operation.
 
-The Version 2 Phase 4 shadow scaffold is governed by
-`docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md`. It is infrastructure-first and starts in
-`observation_only_no_model` mode. It may evaluate synthetic or local session readiness,
-freshness, completeness, deterministic run identity, duplicate-run state, model-admission
-state, and monitoring state. It must not generate model predictions from real data,
-construct model-based `LONG` or `CASH` proposals, submit orders, create risk approvals,
-initialize paper execution, construct Alpaca `TradingClient`, use broker credentials, expose
-API write routes, add dashboard execution controls, or start a scheduler. Model-connected
-shadow inference is locked with machine-readable status `blocked_no_approved_model` until a
-future separately approved immutable model-admission record exists. Phase 5 production paper
-operation and live trading remain unauthorized.
+The Version 2 Phase 4 shadow pipeline is governed by
+`docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md`. PR #27 merged the specification/scaffold;
+the current authorized substage is manual `observation_only_no_model` operation. It may
+consume a verified local Phase 1 manifest, check SPY daily XNYS session readiness,
+freshness, completeness, explicit provider finalization evidence, deterministic run
+identity, durable duplicate-run state, model-admission state, monitoring events, and local
+alerts. It writes only sanitized shadow audit state to a dedicated shadow SQLite database
+with `shadow_` tables and does not reuse the paper-execution ledger. It must not acquire
+market data, require market-data or trading credentials, generate model predictions from
+real data, construct model-based `LONG` or `CASH` proposals, create operational
+`ShadowProposal` records, submit orders, create risk approvals, initialize paper execution,
+construct Alpaca `TradingClient`, use broker credentials, expose API write routes, add
+dashboard execution controls, or start a scheduler. Model-connected shadow inference is
+locked with machine-readable status `blocked_no_approved_model` until a future separately
+approved immutable model-admission record exists. Phase 5 production paper operation and
+live trading remain unauthorized.
 
 ## Historical Market-Data Safety
 

@@ -13,19 +13,20 @@ profitability, and is not real-money trading infrastructure.
 - Current stable historical baseline: `v1.0.0`.
 - Current package/runtime version: `2.0.0a3`.
 - Current released identifier: `v2.0.0-alpha.3`.
-- Active specification/scaffolding target: `v2.0.0-beta.1`.
+- Active Phase 4 target: `v2.0.0-beta.1`.
 - V2 Phase 1: accepted and complete - Real SPY Data Foundation.
 - V2 Phase 2: accepted and released - Real Historical Benchmark.
 - V2 Phase 3: accepted and released as `v2.0.0-alpha.3` - Walk-Forward Model Research.
 - V2 Phase 3 model outcome: `NO CANDIDATE PROMOTION`.
-- V2 Phase 4: active specification and infrastructure-first shadow-mode scaffolding.
+- V2 Phase 4: active observation-only operational pipeline development.
 - V2 Phase 4 model admission: blocked - no approved shadow model.
 - Owner-run real SIP benchmark and one controlled final-test execution completed.
 - Owner-run Phase 3 development campaign completed locally with generated artifacts ignored.
 - Public `v2.0.0-beta.1` release/tag: not yet created.
 - Protected evaluation: not executed.
+- Scheduled shadow operation: not authorized.
 - Phase 5 production paper operation: not authorized.
-- Live-money readiness: not approved.
+- Live trading: prohibited.
 
 Version 2 Phase 1 uses package version `2.0.0a1` and release identifier
 `v2.0.0-alpha.1`. Version 2 Phase 2 uses package version `2.0.0a2` and release identifier
@@ -156,12 +157,12 @@ sub-study, records regime and drift diagnostics, and writes ignored research art
 Phase 3 does not tune against the already-opened Phase 2 final test and does not reconstruct
 Phase 2 final-test row-level labels for development research. The Phase 2 result may be
 cited only as frozen summary baseline evidence. The owner-run development campaign produced
-`NO CANDIDATE PROMOTION`; this is valid Phase 3 evidence and does not authorize protected
-evaluation, paper research, shadow mode, or live trading. This branch does not authorize
-protected evaluation, strategy-threshold optimization, strategy candidate selection, live
-trading, production paper execution, shadow mode, API write routes, dashboard execution
-controls, schedulers, automatic order submission, or broker communication. Package/runtime
-version remains `2.0.0a3`.
+`NO CANDIDATE PROMOTION`; this is valid Phase 3 evidence and did not authorize protected
+evaluation, paper research, model-connected shadow inference, or live trading. Phase 4 Gate
+B remains locked. Current work does not authorize protected evaluation, strategy-threshold
+optimization, strategy candidate selection, live trading, production paper execution, model
+inference, API write routes, dashboard execution controls, schedulers, automatic order
+submission, or broker communication. Package/runtime version remains `2.0.0a3`.
 
 Owner-run development research, when authorized locally, is launched manually with:
 
@@ -172,10 +173,10 @@ python -m spy_market_agent.research.cli run-development \
   --campaign-config configs/research/phase3_development_campaign.json
 ```
 
-## Version 2 Phase 4 Shadow-Mode Specification
+## Version 2 Phase 4 Observation-Only Shadow Pipeline
 
-Version 2 Phase 4 is active only for specification and infrastructure-first Real-Time
-Shadow Mode scaffolding. The governing document is
+Version 2 Phase 4 is active for the manual observation-only operational pipeline under the
+Real-Time Shadow Mode specification. The governing document is
 [Version 2 Phase 4 Real-Time Shadow Mode Specification](docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md).
 The target future release is `v2.0.0-beta.1`, but the package/runtime version remains
 `2.0.0a3` and no beta tag exists.
@@ -188,13 +189,32 @@ current state is `NO APPROVED SHADOW MODEL`, and `model_connected` shadow infere
 raise `blocked_no_approved_model` unless a future separately approved model-admission record
 exists.
 
-The initial `spy_market_agent.shadow` package supports `observation_only_no_model` mode.
-This mode can inspect synthetic or local session readiness, compute deterministic run
-identity, and report why inference is unavailable. It cannot generate predictions,
-model-based `LONG` or `CASH` proposals from real market data, broker orders, paper orders,
-risk approvals, or execution requests. Phase 4 does not add intraday data, a scheduler,
-strategy optimization, protected evaluation, Phase 5 production paper operation, live
-trading, broker communication, API write routes, or dashboard execution controls.
+The `spy_market_agent.shadow` package supports `observation_only_no_model` mode and a
+manual run-once CLI that consumes verified local Phase 1 manifests only:
+
+```bash
+python -m spy_market_agent.shadow.cli run-observation \
+  --manifest data/manifests/alpaca/SPY/1Day/sip/all/DATASET_ID.manifest.json \
+  --data-root ./data \
+  --shadow-db ./shadow.sqlite3 \
+  --session YYYY-MM-DD \
+  --as-of YYYY-MM-DDTHH:MM:SSZ \
+  --provider-finalized \
+  --provider-finalization-policy-id operator-confirmed-daily-final-v1
+
+python -m spy_market_agent.shadow.cli show-run \
+  --shadow-db ./shadow.sqlite3 \
+  --run-id SHADOW_RUN_ID
+```
+
+The observation pipeline verifies Phase 1 lineage before loading canonical bars, enforces
+SPY/`1Day`/XNYS/adjustment `all`, checks target-session completeness, freshness, provider
+finalization, and OHLCV validity, then writes sanitized run, input-snapshot, health-event,
+and local-alert records to a dedicated shadow SQLite database. It cannot generate
+predictions, model-based `LONG` or `CASH` proposals from real market data, broker orders,
+paper orders, risk approvals, or execution requests. Phase 4 does not add intraday data, a
+scheduler, strategy optimization, protected evaluation, Phase 5 production paper operation,
+live trading, broker communication, API write routes, or dashboard execution controls.
 
 ## Safety Boundaries
 
@@ -256,9 +276,9 @@ Version 2 Phase 3 is released as `v2.0.0-alpha.3`. The completed development cam
 produced `NO CANDIDATE PROMOTION`; it did not run protected evaluation, strategy
 optimization, shadow inference, or paper/live operation.
 
-Version 2 Phase 4 currently includes only specification and infrastructure-first shadow
-scaffolding. Model-connected shadow inference remains locked because no approved shadow
-model exists.
+Version 2 Phase 4 currently includes the manual observation-only operational pipeline and
+dedicated local shadow audit persistence. Model-connected shadow inference remains locked
+because no approved shadow model exists.
 
 Version 1.0.0 specifically did not include market-data downloading; the explicit SPY
 historical-data acquisition CLI begins in Version 2 Phase 1.

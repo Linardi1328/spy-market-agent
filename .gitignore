@@ -42,6 +42,8 @@ Thumbs.db
 # Downloaded data and generated artifacts
 demo.sqlite3
 spy_market_agent.sqlite3
+shadow.sqlite3
+shadow-*.sqlite3
 data/raw/*
 !data/raw/.gitkeep
 data/canonical/*

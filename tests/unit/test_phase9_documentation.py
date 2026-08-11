@@ -263,12 +263,12 @@ def test_version_2_alpha_release_documents_are_consistent() -> None:
 
     assert "Current package/runtime version: `2.0.0a3`" in readme
     assert "Current released identifier: `v2.0.0-alpha.3`" in readme
-    assert "Active specification/scaffolding target: `v2.0.0-beta.1`" in readme
+    assert "Active Phase 4 target: `v2.0.0-beta.1`" in readme
     assert "V2 Phase 1: accepted and complete - Real SPY Data Foundation" in readme
     assert "V2 Phase 2: accepted and released - Real Historical Benchmark" in readme
     assert "V2 Phase 3: accepted and released as `v2.0.0-alpha.3`" in readme
     assert "V2 Phase 3 model outcome: `NO CANDIDATE PROMOTION`" in readme
-    assert "V2 Phase 4: active specification and infrastructure-first" in readme
+    assert "V2 Phase 4: active observation-only operational pipeline development" in readme
     assert "Public `v2.0.0-beta.1` release/tag: not yet created" in readme
     assert phase2_completion in readme
     assert "Began Version 2 Phase 4 Real-Time Shadow Mode" in changelog
@@ -285,7 +285,7 @@ def test_version_2_alpha_release_documents_are_consistent() -> None:
     assert "Status: Accepted and released as `v2.0.0-alpha.3`" in phase3_spec
     assert "Accepted - Version 2 Real SPY Data Foundation" in roadmap
     assert "Accepted and released after owner-run real SIP benchmark" in roadmap
-    assert "V2 Phase 4 / `v2.0.0-beta.1`: Active specification" in roadmap
+    assert "V2 Phase 4 / `v2.0.0-beta.1`: Active observation-only" in roadmap
     assert "Git release identifier: `v2.0.0-alpha.1`" in phase1_release_notes
     assert "Git release identifier: `v2.0.0-alpha.2`" in phase2_release_notes
     assert "does not evaluate model accuracy" in phase1_release_notes
@@ -328,7 +328,7 @@ def test_version_2_phase2_release_preparation_status_is_documented() -> None:
 
     assert "Current package/runtime version: `2.0.0a3`" in readme
     assert "Current released identifier: `v2.0.0-alpha.3`" in readme
-    assert "Active specification/scaffolding target: `v2.0.0-beta.1`" in readme
+    assert "Active Phase 4 target: `v2.0.0-beta.1`" in readme
     assert "v2.0.0-alpha.2" in spec
     assert "2.0.0a2" in spec
     assert "Status: Accepted and released as `v2.0.0-alpha.2`" in spec
@@ -353,7 +353,8 @@ def test_version_2_phase2_release_preparation_status_is_documented() -> None:
     normalized_agents = " ".join(agents_lower.split())
     assert "version 2 phase 3 pr #24 merged" in normalized_agents
     assert "pr #25 merged" in normalized_agents
-    assert "version 2 phase 4 is authorized only for specification" in normalized_agents
+    assert "version 2 phase 4 is active under" in normalized_agents
+    assert "observation-only operational pipeline development" in normalized_agents
     assert "phase 2 is accepted" not in combined
     assert "profitability is guaranteed" not in combined
     assert "live-money readiness: approved" not in combined
@@ -382,7 +383,7 @@ def test_version_2_phase3_walk_forward_research_framework_is_documented() -> Non
     assert "Release-preparation branch: `review/v2-phase-03-alpha3-release-preparation`" in spec
     assert "Released package/runtime version: `2.0.0a3`" in spec
     assert "Current released identifier: `v2.0.0-alpha.3`" in readme
-    assert "Active specification/scaffolding target: `v2.0.0-beta.1`" in readme
+    assert "Active Phase 4 target: `v2.0.0-beta.1`" in readme
     assert "Version 2 Phase 3 Walk-Forward Model Research Specification" in readme
     assert "`spy_market_agent.research` package now provides a manual, offline" in readme
     assert "`spy_market_agent.shadow` package supports `observation_only_no_model`" in readme

@@ -38,9 +38,10 @@ submission can proceed.
   research metrics, baselines, candidate selection, protected-evaluation denial, and
   ignored artifact schemas.
 - `spy_market_agent.shadow` (`src/spy_market_agent/shadow`): Version 2 Phase 4
-  infrastructure-first shadow-mode scaffold for observation-only readiness checks,
+  observation-only shadow operational pipeline for verified local Phase 1 manifests,
   deterministic shadow run identity, model-admission locks, freshness/schedule policy
-  functions, and monitoring state. It has no order-submission capability.
+  functions, dedicated shadow SQLite audit persistence, monitoring events, local alerts,
+  and read-only inspection. It has no model-inference or order-submission capability.
 - `spy_market_agent.persistence` (`src/spy_market_agent/persistence`): explicit SQLite initialization, schema validation, and
   artifact repositories.
 - `spy_market_agent.api` (`src/spy_market_agent/api`): read-only FastAPI application and response service.
@@ -185,11 +186,11 @@ evidence and must not be used for tuning. Protected evaluation, strategy optimiz
 production paper operation, and live trading remain unauthorized. Phase 3 produced
 `NO CANDIDATE PROMOTION`, so no model is approved for shadow or paper operation.
 
-## Version 2 Phase 4 Shadow Scaffold
+## Version 2 Phase 4 Observation-Only Shadow Pipeline
 
-**Active specification and infrastructure-first scaffold:** Phase 4 is governed by
+**Active observation-only operational pipeline development:** Phase 4 is governed by
 `docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md` and targets `v2.0.0-beta.1`. The package
-version remains `2.0.0a3` during this scaffold.
+version remains `2.0.0a3` during this substage.
 
 The initial `spy_market_agent.shadow` package is separate from research and execution:
 
@@ -205,12 +206,22 @@ The initial `spy_market_agent.shadow` package is separate from research and exec
 6. `policy.py` combines freshness and admission decisions for observation-only or future
    model-connected run eligibility.
 7. `monitoring.py` summarizes health events as `healthy`, `degraded`, or `blocked`.
+8. `persistence.py` owns a dedicated shadow SQLite schema, `spy-v2-phase4-shadow-db-v1`,
+   with `shadow_schema_metadata`, `shadow_runs`, `shadow_input_snapshots`,
+   `shadow_health_events`, and `shadow_alerts`.
+9. `runner.py` orchestrates manual observation-only execution from verified Phase 1
+   manifest, through target-session/freshness checks, durable reservation, health/alert
+   writes, and terminal lifecycle update.
+10. `cli.py` exposes `run-observation` and read-only `show-run`.
 
 `observation_only_no_model` mode can report readiness and why inference is unavailable. It
-cannot generate predictions, produce model-based `LONG` or `CASH` proposals from real
-market data, submit paper orders, contact brokers, modify SQLite paper-execution state, or
-run Phase 5 production paper behavior. `model_connected` mode raises a model-admission error
-in this scaffold even when caller-supplied metadata self-declares approval. A future
+consumes verified local Phase 1 manifests only and persists sanitized shadow audit state in
+a separate SQLite database supplied explicitly by the operator. It cannot generate
+predictions, produce model-based `LONG` or `CASH` proposals from real market data, create
+`ShadowProposal` runtime outputs, submit paper orders, contact brokers, modify SQLite
+paper-execution state, or run Phase 5 production paper behavior. `model_connected` mode
+raises a model-admission error in this scaffold even when caller-supplied metadata
+self-declares approval. A future
 separately approved immutable model-admission registry or artifact is required before Gate B
 can unlock.
 
@@ -272,9 +283,9 @@ requires a matching human approval, and keeps uncertainty as local audit state.
 - Phase 3 experiment artifacts are untrusted until dataset, feature, label, fold, model,
   calibration, threshold, metric, candidate-selection configuration, code, package, Python,
   and dependency lineage are verified.
-- Phase 4 shadow inputs are untrusted until session, freshness, completeness, data-lineage,
-  duplicate-run, and model-admission checks pass. Observation-only readiness is not model
-  approval.
+- Phase 4 shadow inputs are untrusted until Phase 1 manifest verification, session,
+  freshness, completeness, data-lineage, duplicate-run, and model-admission checks pass.
+  Observation-only readiness is not model approval.
 - Models cannot access brokers. The modeling package imports no execution adapter, no
   Alpaca SDK, and no broker protocol.
 - The shadow package imports no execution adapter, paper service, order approval service,
@@ -298,6 +309,8 @@ dashboard startup do not read ignored benchmark artifacts or access final-test d
 Phase 3 research scaffolding must preserve the same import and startup behavior: no
 automatic acquisition, model experimentation, artifact loading, broker construction, or
 order submission.
-Phase 4 shadow scaffolding also preserves side-effect-free imports: no scheduler startup,
-broker construction, credential reads, data acquisition, model inference, artifact loading,
-database migration, or order submission occurs on import.
+Phase 4 shadow code also preserves side-effect-free imports: no scheduler startup, broker
+construction, credential reads, data acquisition, model inference, artifact loading,
+database migration, or order submission occurs on import. Shadow SQLite initialization and
+run persistence occur only through explicit `run-observation` or repository calls and never
+reuse the paper-execution ledger.

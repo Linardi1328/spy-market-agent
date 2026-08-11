@@ -280,12 +280,14 @@ execute protected evaluation or strategy optimization and did not promote a mode
 
 ## Version 2 Phase 4 Shadow Reproducibility
 
-**Active specification and infrastructure-first scaffold:** Phase 4 is governed by
+**Active observation-only operational pipeline development:** Phase 4 is governed by
 `docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md` and targets `v2.0.0-beta.1`. The package
 version remains `2.0.0a3`; no beta tag exists.
 
-The initial shadow scaffold records deterministic identity policy before model-connected
-operation is authorized. A shadow run identity is derived from stable inputs:
+The observation-only shadow pipeline records deterministic identity policy before
+model-connected operation is authorized. It consumes verified local Phase 1 manifests only;
+canonical bars are loaded after deep manifest verification succeeds. A shadow run identity is
+derived from stable inputs:
 
 - symbol `SPY`;
 - signal session;
@@ -298,11 +300,16 @@ operation is authorized. A shadow run identity is derived from stable inputs:
 
 Shadow run identity excludes clock time, usernames, hostnames, absolute local paths,
 credentials, random UUIDs, and raw provider payloads. Duplicate logical runs must fail
-closed.
+closed. The dedicated shadow SQLite database uses schema version
+`spy-v2-phase4-shadow-db-v1`, enforces unique `shadow_run_id`, records sanitized
+`shadow_runs`, `shadow_input_snapshots`, `shadow_health_events`, and `shadow_alerts`, and
+rejects completed, blocked, failed, reserved, incomplete, or unknown prior records rather
+than silently overwriting them.
 
 Current model-admission state is `NO APPROVED SHADOW MODEL`. Observation-only mode may
-evaluate daily SPY/XNYS session readiness and monitoring state, but it cannot generate model
-predictions or real-data `LONG`/`CASH` proposals. Model-connected mode requires a future
+evaluate daily SPY/XNYS session readiness, provider finalization evidence, monitoring state,
+and local alerts, but it cannot generate model predictions, real-data `LONG`/`CASH`
+proposals, or operational `ShadowProposal` records. Model-connected mode requires a future
 separately approved immutable model-admission record and otherwise raises
 `blocked_no_approved_model`.
 
@@ -325,6 +332,7 @@ Validated data and downstream artifacts retain explicit schema and checksum line
 - SQLite schema: `spy-sqlite-persistence-v2`
 - benchmark artifact schema: `spy-v2-phase2-benchmark-artifacts-v1`
 - shadow artifact schema: `spy-v2-phase4-shadow-v1`
+- shadow SQLite schema: `spy-v2-phase4-shadow-db-v1`
 
 Market-data checksums are deterministic over canonical rows, column order, session order,
 prices, and volume. Backtest results also retain source market data and execution-price
