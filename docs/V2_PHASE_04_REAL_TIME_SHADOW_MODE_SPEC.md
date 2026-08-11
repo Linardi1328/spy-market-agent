@@ -244,10 +244,13 @@ Model-connected shadow mode requires immutable metadata:
 - approval status;
 - `approved_for_shadow = true`.
 
-The current state is `NO APPROVED SHADOW MODEL`. A model-connected request without approved
-metadata must raise a typed error with machine-readable status
-`blocked_no_approved_model`. Synthetic tests may use fake approved metadata to exercise the
-contract; no real model is admitted by this branch.
+The current state is `NO APPROVED SHADOW MODEL`. During this specification/scaffolding
+substage, every runtime model-connected request must raise a typed error with
+machine-readable status `blocked_no_approved_model`, even if caller-supplied metadata is
+structurally valid and self-declares `approved_for_shadow = true`. Synthetic tests may
+validate the shape of future approved metadata, but structural metadata validity is not
+runtime authorization. A future separately approved PR must add a trusted immutable
+model-admission registry or artifact before Gate B can unlock.
 
 ## 18. Observation-Only Mode
 
@@ -426,8 +429,9 @@ Required coverage includes:
 - `v2.0.0-alpha.3` documented as released;
 - `v2.0.0-beta.1` documented only as a target;
 - observation-only mode permitted;
-- model-connected inference rejected without approval;
-- synthetic approved metadata passes the admission contract;
+- model-connected inference rejected even with self-declared approved metadata;
+- synthetic approved metadata passes structural validation without granting runtime
+  inference;
 - SPY daily XNYS policy;
 - incomplete and stale sessions rejected;
 - duplicate run rejected;
@@ -466,7 +470,8 @@ This substage may be accepted when:
 - Phase 3 release status and `NO CANDIDATE PROMOTION` are documented accurately;
 - Phase 4 Gate A and Gate B are documented;
 - observation-only mode is implemented and tested;
-- model-connected shadow inference is mechanically locked without approved metadata;
+- model-connected shadow inference is mechanically locked because there is no trusted
+  approved model-admission registry or artifact;
 - deterministic shadow run identity is implemented and tested;
 - freshness, completeness, and schedule policy functions fail closed;
 - shadow modules have no broker/execution imports or side effects;

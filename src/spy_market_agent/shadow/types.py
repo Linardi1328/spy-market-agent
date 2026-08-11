@@ -337,6 +337,12 @@ class ShadowRunRequest(ShadowBaseModel):
             msg = "signal_session must match data_lineage.session."
             raise ValueError(msg)
         if (
+            self.configuration.mode == ShadowMode.OBSERVATION_ONLY_NO_MODEL
+            and self.model_metadata is not None
+        ):
+            msg = "observation-only shadow requests must not carry model metadata."
+            raise ValueError(msg)
+        if (
             self.model_metadata is not None
             and self.model_metadata.feature_schema != self.feature_schema
         ):
@@ -355,6 +361,53 @@ class ShadowRunDecision(ShadowBaseModel):
     freshness_status: FreshnessStatus
     monitoring_status: ShadowHealthStatus
     refusal_reasons: tuple[str, ...] = ()
+
+    @field_validator("shadow_run_id")
+    @classmethod
+    def _safe_text(cls, value: str) -> str:
+        return _require_safe_identifier(value, field_name="shadow_run_id")
+
+    @model_validator(mode="after")
+    def _validate_consistency(self) -> ShadowRunDecision:
+        if self.run_status == ShadowRunStatus.MODEL_INFERENCE_READY:
+            if self.mode != ShadowMode.MODEL_CONNECTED:
+                msg = "MODEL_INFERENCE_READY requires model-connected mode."
+                raise ValueError(msg)
+            if not self.model_inference_allowed:
+                msg = "MODEL_INFERENCE_READY requires model_inference_allowed=true."
+                raise ValueError(msg)
+            if self.admission_status != ModelAdmissionStatus.APPROVED_FOR_SHADOW:
+                msg = "MODEL_INFERENCE_READY requires approved model admission."
+                raise ValueError(msg)
+            if self.freshness_status != FreshnessStatus.FRESH:
+                msg = "MODEL_INFERENCE_READY requires fresh market data."
+                raise ValueError(msg)
+            if self.monitoring_status != ShadowHealthStatus.HEALTHY:
+                msg = "MODEL_INFERENCE_READY requires healthy monitoring."
+                raise ValueError(msg)
+            if self.refusal_reasons:
+                msg = "MODEL_INFERENCE_READY must not include refusal reasons."
+                raise ValueError(msg)
+        if self.run_status == ShadowRunStatus.OBSERVATION_READY:
+            if self.mode != ShadowMode.OBSERVATION_ONLY_NO_MODEL:
+                msg = "OBSERVATION_READY requires observation-only mode."
+                raise ValueError(msg)
+            if not self.observation_allowed:
+                msg = "OBSERVATION_READY requires observation_allowed=true."
+                raise ValueError(msg)
+            if self.model_inference_allowed:
+                msg = "OBSERVATION_READY must not allow model inference."
+                raise ValueError(msg)
+        if self.run_status == ShadowRunStatus.BLOCKED and self.model_inference_allowed:
+            msg = "BLOCKED shadow decisions must not allow model inference."
+            raise ValueError(msg)
+        if (
+            self.model_inference_allowed
+            and self.run_status != ShadowRunStatus.MODEL_INFERENCE_READY
+        ):
+            msg = "model_inference_allowed requires MODEL_INFERENCE_READY."
+            raise ValueError(msg)
+        return self
 
 
 class ShadowMonitoringEvent(ShadowBaseModel):
@@ -427,3 +480,48 @@ class ShadowProposal(ShadowBaseModel):
             msg = "predicted_probability must be within [0, 1]."
             raise ValueError(msg)
         return value
+
+    @model_validator(mode="after")
+    def _validate_consistency(self) -> ShadowProposal:
+        if self.mode == ShadowMode.OBSERVATION_ONLY_NO_MODEL:
+            if self.model_id is not None:
+                msg = "observation-only proposals must not include model_id."
+                raise ValueError(msg)
+            if self.model_checksum is not None:
+                msg = "observation-only proposals must not include model_checksum."
+                raise ValueError(msg)
+            if self.predicted_probability is not None:
+                msg = "observation-only proposals must not include predicted_probability."
+                raise ValueError(msg)
+            if self.score is not None:
+                msg = "observation-only proposals must not include model score."
+                raise ValueError(msg)
+            if self.hypothetical_target_state is not None:
+                msg = "observation-only proposals must not include a LONG/CASH target."
+                raise ValueError(msg)
+            if self.admission_status == ModelAdmissionStatus.APPROVED_FOR_SHADOW:
+                msg = "observation-only proposals must not claim approved model admission."
+                raise ValueError(msg)
+            if self.proposal_status != ProposalStatus.NOT_GENERATED_OBSERVATION_ONLY:
+                msg = "observation-only proposals must use NOT_GENERATED_OBSERVATION_ONLY."
+                raise ValueError(msg)
+        if self.mode == ShadowMode.MODEL_CONNECTED:
+            if self.model_id is None:
+                msg = "model-connected proposals require model_id."
+                raise ValueError(msg)
+            if self.model_checksum is None:
+                msg = "model-connected proposals require model_checksum."
+                raise ValueError(msg)
+            if self.admission_status != ModelAdmissionStatus.APPROVED_FOR_SHADOW:
+                msg = "model-connected proposals require approved model admission."
+                raise ValueError(msg)
+            if self.freshness_status != FreshnessStatus.FRESH:
+                msg = "model-connected proposals require fresh market data."
+                raise ValueError(msg)
+            if self.monitoring_status != ShadowHealthStatus.HEALTHY:
+                msg = "model-connected proposals require healthy monitoring."
+                raise ValueError(msg)
+            if self.proposal_status != ProposalStatus.SCAFFOLDED_NOT_EXECUTABLE:
+                msg = "model-connected proposals must remain scaffolded and non-executable."
+                raise ValueError(msg)
+        return self

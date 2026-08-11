@@ -25,8 +25,10 @@ from spy_market_agent.shadow import (
     ShadowModelAdmissionError,
     ShadowModelMetadata,
     ShadowMonitoringEvent,
+    ShadowPolicyError,
     ShadowProposal,
     ShadowRunConfiguration,
+    ShadowRunDecision,
     ShadowRunRequest,
     ShadowRunStatus,
     build_monitoring_state,
@@ -37,6 +39,7 @@ from spy_market_agent.shadow import (
     monitoring_event,
     require_model_admission,
     shadow_run_identity,
+    validate_shadow_model_metadata,
 )
 from spy_market_agent.shadow.schedule import ShadowScheduleInput, evaluate_shadow_schedule
 
@@ -248,6 +251,11 @@ def test_observation_only_mode_is_permitted_without_model_inference() -> None:
     assert decision.refusal_reasons == (BLOCKED_NO_APPROVED_MODEL,)
 
 
+def test_observation_only_request_cannot_carry_model_metadata() -> None:
+    with pytest.raises(ValidationError, match="observation-only shadow requests"):
+        _request(model_metadata=_approved_model_metadata())
+
+
 def test_model_connected_inference_is_rejected_without_approval() -> None:
     with pytest.raises(ShadowModelAdmissionError, match=NO_APPROVED_SHADOW_MODEL):
         evaluate_model_admission(ShadowMode.MODEL_CONNECTED, None)
@@ -255,16 +263,31 @@ def test_model_connected_inference_is_rejected_without_approval() -> None:
     with pytest.raises(ShadowModelAdmissionError, match=NO_APPROVED_SHADOW_MODEL):
         require_model_admission(None)
 
+    with pytest.raises(ShadowModelAdmissionError, match=BLOCKED_NO_APPROVED_MODEL):
+        evaluate_shadow_run(
+            _request(mode=ShadowMode.MODEL_CONNECTED),
+            evaluate_market_data_freshness(_fresh_status()),
+        )
 
-def test_synthetic_approved_metadata_can_pass_model_admission_contract() -> None:
+
+def test_model_connected_runtime_remains_locked_with_self_declared_approved_metadata() -> None:
     metadata = _approved_model_metadata()
 
-    decision = evaluate_model_admission(ShadowMode.MODEL_CONNECTED, metadata)
+    with pytest.raises(ShadowModelAdmissionError, match=BLOCKED_NO_APPROVED_MODEL):
+        evaluate_model_admission(ShadowMode.MODEL_CONNECTED, metadata)
 
-    assert decision.status == ModelAdmissionStatus.APPROVED_FOR_SHADOW
-    assert decision.inference_allowed is True
-    assert decision.model_id == metadata.model_id
-    assert decision.reasons == ()
+    with pytest.raises(ShadowModelAdmissionError, match=BLOCKED_NO_APPROVED_MODEL):
+        require_model_admission(metadata)
+
+
+def test_synthetic_approved_metadata_can_pass_structural_validation_only() -> None:
+    metadata = _approved_model_metadata()
+
+    validated = validate_shadow_model_metadata(metadata)
+
+    assert validated == metadata
+    with pytest.raises(ShadowModelAdmissionError, match=BLOCKED_NO_APPROVED_MODEL):
+        evaluate_model_admission(ShadowMode.MODEL_CONNECTED, validated)
 
 
 def test_daily_spy_xnys_policy_rejects_unsupported_symbol_timeframe_or_calendar() -> None:
@@ -436,18 +459,43 @@ def test_observation_policy_wrapper_blocks_when_freshness_fails() -> None:
     assert decision.refusal_reasons == ("stale_data", BLOCKED_NO_APPROVED_MODEL)
 
 
-def test_model_connected_synthetic_request_is_ready_only_with_approved_metadata() -> None:
+def test_observation_policy_wrapper_rejects_model_connected_requests() -> None:
     request = _request(
         mode=ShadowMode.MODEL_CONNECTED,
         model_metadata=_approved_model_metadata(),
     )
 
-    decision = evaluate_shadow_run(request, evaluate_market_data_freshness(_fresh_status()))
+    with pytest.raises(ShadowPolicyError, match="observation_only_mode_required"):
+        evaluate_observation_only_run(request, _fresh_status())
 
-    assert decision.run_status == ShadowRunStatus.MODEL_INFERENCE_READY
-    assert decision.observation_allowed is True
-    assert decision.model_inference_allowed is True
-    assert decision.refusal_reasons == ()
+
+def test_model_connected_synthetic_request_remains_blocked_with_approved_metadata() -> None:
+    request = _request(
+        mode=ShadowMode.MODEL_CONNECTED,
+        model_metadata=_approved_model_metadata(),
+    )
+
+    with pytest.raises(ShadowModelAdmissionError, match=BLOCKED_NO_APPROVED_MODEL):
+        evaluate_shadow_run(request, evaluate_market_data_freshness(_fresh_status()))
+
+
+def test_no_runtime_path_returns_model_inference_ready() -> None:
+    runtime_decisions = (
+        evaluate_shadow_run(_request(), evaluate_market_data_freshness(_fresh_status())),
+        evaluate_observation_only_run(_request(), _fresh_status()),
+    )
+
+    for decision in runtime_decisions:
+        assert decision.run_status != ShadowRunStatus.MODEL_INFERENCE_READY
+
+    with pytest.raises(ShadowModelAdmissionError, match=BLOCKED_NO_APPROVED_MODEL):
+        evaluate_shadow_run(
+            _request(
+                mode=ShadowMode.MODEL_CONNECTED,
+                model_metadata=_approved_model_metadata(),
+            ),
+            evaluate_market_data_freshness(_fresh_status()),
+        )
 
 
 def test_model_connected_request_rejects_feature_schema_mismatch() -> None:
@@ -455,6 +503,45 @@ def test_model_connected_request_rejects_feature_schema_mismatch() -> None:
 
     with pytest.raises(ValidationError, match=r"model_metadata\.feature_schema"):
         _request(mode=ShadowMode.MODEL_CONNECTED, model_metadata=metadata)
+
+
+def test_contradictory_shadow_run_decision_states_are_rejected() -> None:
+    with pytest.raises(ValidationError, match="MODEL_INFERENCE_READY"):
+        ShadowRunDecision(
+            shadow_run_id=shadow_run_identity(_request()),
+            mode=ShadowMode.OBSERVATION_ONLY_NO_MODEL,
+            run_status=ShadowRunStatus.MODEL_INFERENCE_READY,
+            observation_allowed=True,
+            model_inference_allowed=True,
+            admission_status=ModelAdmissionStatus.APPROVED_FOR_SHADOW,
+            freshness_status=FreshnessStatus.FRESH,
+            monitoring_status=ShadowHealthStatus.HEALTHY,
+            refusal_reasons=(),
+        )
+    with pytest.raises(ValidationError, match="OBSERVATION_READY"):
+        ShadowRunDecision(
+            shadow_run_id=shadow_run_identity(_request()),
+            mode=ShadowMode.OBSERVATION_ONLY_NO_MODEL,
+            run_status=ShadowRunStatus.OBSERVATION_READY,
+            observation_allowed=True,
+            model_inference_allowed=True,
+            admission_status=ModelAdmissionStatus.NOT_REQUIRED_OBSERVATION_ONLY,
+            freshness_status=FreshnessStatus.FRESH,
+            monitoring_status=ShadowHealthStatus.HEALTHY,
+            refusal_reasons=(BLOCKED_NO_APPROVED_MODEL,),
+        )
+    with pytest.raises(ValidationError, match="BLOCKED"):
+        ShadowRunDecision(
+            shadow_run_id=shadow_run_identity(_request()),
+            mode=ShadowMode.OBSERVATION_ONLY_NO_MODEL,
+            run_status=ShadowRunStatus.BLOCKED,
+            observation_allowed=False,
+            model_inference_allowed=True,
+            admission_status=ModelAdmissionStatus.NOT_REQUIRED_OBSERVATION_ONLY,
+            freshness_status=FreshnessStatus.BLOCKED,
+            monitoring_status=ShadowHealthStatus.BLOCKED,
+            refusal_reasons=(BLOCKED_NO_APPROVED_MODEL,),
+        )
 
 
 def test_monitoring_state_uses_most_severe_event_status() -> None:
@@ -488,6 +575,41 @@ def test_monitoring_state_uses_most_severe_event_status() -> None:
     assert blocked.status == ShadowHealthStatus.BLOCKED
     with pytest.raises(ValidationError, match="message"):
         monitoring_event("bad_event", "", ShadowHealthStatus.BLOCKED)
+
+
+def test_observation_only_shadow_proposal_rejects_model_outputs() -> None:
+    valid_observation_proposal = ShadowProposal(
+        shadow_run_id=shadow_run_identity(_request()),
+        signal_session=date(2025, 1, 2),
+        generated_at=datetime(2025, 1, 3, 0, 0, tzinfo=UTC),
+        mode=ShadowMode.OBSERVATION_ONLY_NO_MODEL,
+        feature_schema="synthetic-shadow-feature-schema-v1",
+        data_lineage=_lineage(),
+        admission_status=ModelAdmissionStatus.NOT_REQUIRED_OBSERVATION_ONLY,
+        freshness_status=FreshnessStatus.FRESH,
+        monitoring_status=ShadowHealthStatus.HEALTHY,
+        proposal_status=ProposalStatus.NOT_GENERATED_OBSERVATION_ONLY,
+    )
+
+    assert valid_observation_proposal.model_id is None
+    assert valid_observation_proposal.predicted_probability is None
+    with pytest.raises(ValidationError, match="observation-only proposals"):
+        ShadowProposal(
+            shadow_run_id=shadow_run_identity(_request()),
+            signal_session=date(2025, 1, 2),
+            generated_at=datetime(2025, 1, 3, 0, 0, tzinfo=UTC),
+            mode=ShadowMode.OBSERVATION_ONLY_NO_MODEL,
+            model_id="synthetic-approved-shadow-model",
+            model_checksum="a" * 64,
+            feature_schema="synthetic-shadow-feature-schema-v1",
+            data_lineage=_lineage(),
+            predicted_probability=0.51,
+            hypothetical_target_state=HypotheticalTargetState.LONG,
+            admission_status=ModelAdmissionStatus.APPROVED_FOR_SHADOW,
+            freshness_status=FreshnessStatus.FRESH,
+            monitoring_status=ShadowHealthStatus.HEALTHY,
+            proposal_status=ProposalStatus.SCAFFOLDED_NOT_EXECUTABLE,
+        )
 
 
 def test_shadow_proposal_is_non_executable_and_validates_probability_and_checksum() -> None:

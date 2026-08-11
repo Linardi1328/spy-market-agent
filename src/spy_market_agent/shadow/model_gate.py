@@ -32,6 +32,11 @@ def evaluate_model_admission(
     metadata: ShadowModelMetadata | None,
 ) -> ModelAdmissionDecision:
     if mode == ShadowMode.OBSERVATION_ONLY_NO_MODEL:
+        if metadata is not None:
+            _raise_model_gate_error(
+                "observation_only_model_metadata_not_allowed",
+                "observation-only shadow requests must not carry model metadata.",
+            )
         return ModelAdmissionDecision(
             status=ModelAdmissionStatus.NOT_REQUIRED_OBSERVATION_ONLY,
             inference_allowed=False,
@@ -39,28 +44,29 @@ def evaluate_model_admission(
             reasons=(BLOCKED_NO_APPROVED_MODEL,),
         )
 
-    if metadata is None:
-        _raise_model_gate_error(
-            BLOCKED_NO_APPROVED_MODEL,
-            NO_APPROVED_SHADOW_MODEL,
-        )
-
-    if metadata.approval_status != "approved" or not metadata.approved_for_shadow:
-        _raise_model_gate_error(
-            "model_not_approved_for_shadow",
-            "model metadata is not explicitly approved for shadow operation.",
-        )
-
-    return ModelAdmissionDecision(
-        status=ModelAdmissionStatus.APPROVED_FOR_SHADOW,
-        inference_allowed=True,
-        model_id=metadata.model_id,
-        reasons=(),
+    _ = metadata
+    _raise_model_gate_error(
+        BLOCKED_NO_APPROVED_MODEL,
+        (
+            f"{NO_APPROVED_SHADOW_MODEL}; Gate B is mechanically locked until a "
+            "separately approved immutable model-admission registry or artifact exists."
+        ),
     )
 
 
 def require_model_admission(metadata: ShadowModelMetadata | None) -> ModelAdmissionDecision:
     return evaluate_model_admission(ShadowMode.MODEL_CONNECTED, metadata)
+
+
+def validate_shadow_model_metadata(metadata: ShadowModelMetadata) -> ShadowModelMetadata:
+    """Validate the future model-admission metadata contract without authorizing runtime use."""
+
+    if metadata.approval_status != "approved" or not metadata.approved_for_shadow:
+        _raise_model_gate_error(
+            "model_not_approved_for_shadow",
+            "model metadata is not structurally approved for shadow operation.",
+        )
+    return metadata
 
 
 def _raise_model_gate_error(code: str, message: str) -> NoReturn:

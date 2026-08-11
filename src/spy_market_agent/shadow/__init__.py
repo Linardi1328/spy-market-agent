@@ -6,6 +6,7 @@ from spy_market_agent.shadow.model_gate import (
     ShadowModelAdmissionError,
     evaluate_model_admission,
     require_model_admission,
+    validate_shadow_model_metadata,
 )
 from spy_market_agent.shadow.monitoring import build_monitoring_state, monitoring_event
 from spy_market_agent.shadow.policy import (
@@ -90,4 +91,5 @@ __all__ = [
     "require_model_admission",
     "shadow_run_identity",
     "shadow_run_identity_payload",
+    "validate_shadow_model_metadata",
 ]

@@ -210,7 +210,9 @@ The initial `spy_market_agent.shadow` package is separate from research and exec
 cannot generate predictions, produce model-based `LONG` or `CASH` proposals from real
 market data, submit paper orders, contact brokers, modify SQLite paper-execution state, or
 run Phase 5 production paper behavior. `model_connected` mode raises a model-admission error
-unless a future separately approved model record sets `approved_for_shadow = true`.
+in this scaffold even when caller-supplied metadata self-declares approval. A future
+separately approved immutable model-admission registry or artifact is required before Gate B
+can unlock.
 
 ## Backtest Data Flow
 

@@ -100,6 +100,12 @@ def evaluate_observation_only_run(
     *,
     existing_run_ids: tuple[str, ...] = (),
 ) -> ShadowRunDecision:
+    if request.configuration.mode != ShadowMode.OBSERVATION_ONLY_NO_MODEL:
+        _raise_shadow_policy_error(
+            ShadowPolicyError,
+            "observation_only_mode_required",
+            "evaluate_observation_only_run requires observation-only mode.",
+        )
     freshness = evaluate_market_data_freshness(market_data_status)
     return evaluate_shadow_run(request, freshness, existing_run_ids=existing_run_ids)
 
