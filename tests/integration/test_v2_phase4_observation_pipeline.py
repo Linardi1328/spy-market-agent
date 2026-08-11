@@ -142,6 +142,7 @@ def test_phase4_duplicate_pipeline_run_fails_closed_durably(tmp_path: Path) -> N
             repository_root=tmp_path,
             clock=FixedClock(),
         )
+    stored = ShadowSQLiteRepository(tmp_path / "shadow.sqlite3").get_run(first.shadow_run_id)
 
     with sqlite3.connect(tmp_path / "shadow.sqlite3") as connection:
         count = connection.execute(
@@ -149,6 +150,9 @@ def test_phase4_duplicate_pipeline_run_fails_closed_durably(tmp_path: Path) -> N
             (first.shadow_run_id,),
         ).fetchone()[0]
     assert count == 1
+    assert stored.run.run_status == ShadowOperationalRunStatus.COMPLETED
+    assert "duplicate_run" in {event.event_code for event in stored.health_events}
+    assert "duplicate_run" in {alert.alert_code for alert in stored.alerts}
 
 
 def test_phase4_incomplete_reservation_requires_recovery_without_overwrite(
@@ -201,6 +205,8 @@ def test_phase4_incomplete_reservation_requires_recovery_without_overwrite(
     stored = repository.get_run(run_id)
     assert stored.run.run_status == ShadowOperationalRunStatus.RESERVED
     assert stored.input_snapshot is None
+    assert "recovery_required" in {event.event_code for event in stored.health_events}
+    assert "recovery_required" in {alert.alert_code for alert in stored.alerts}
 
 
 def test_phase4_lineage_failure_does_not_create_healthy_shadow_record(tmp_path: Path) -> None:

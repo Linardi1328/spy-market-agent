@@ -16,7 +16,10 @@ from spy_market_agent.shadow import (
     SHADOW_OPERATION_FEATURE_SCHEMA,
     FreshnessStatus,
     ModelAdmissionStatus,
+    ShadowAlertRecord,
+    ShadowHealthEventRecord,
     ShadowHealthStatus,
+    ShadowInputSnapshotRecord,
     ShadowMode,
     ShadowModelMetadata,
     ShadowObservationResult,
@@ -39,6 +42,7 @@ from unit.phase4_shadow_helpers import SyntheticPhase1Dataset, write_synthetic_p
 ROOT = Path(__file__).resolve().parents[2]
 FIXED_CREATED = datetime(2025, 1, 3, 0, 1, tzinfo=UTC)
 FIXED_COMPLETED = datetime(2025, 1, 3, 0, 2, tzinfo=UTC)
+FIXED_RETRY = datetime(2025, 1, 3, 0, 3, tzinfo=UTC)
 
 
 class FixedClock:
@@ -78,6 +82,106 @@ def _run_healthy(tmp_path: Path) -> tuple[SyntheticPhase1Dataset, ShadowObservat
         clock=FixedClock(),
     )
     return dataset, result
+
+
+def _run_row_count(database_path: Path, shadow_run_id: str) -> int:
+    with sqlite3.connect(database_path) as connection:
+        return int(
+            connection.execute(
+                "SELECT COUNT(*) FROM shadow_runs WHERE shadow_run_id = ?",
+                (shadow_run_id,),
+            ).fetchone()[0]
+        )
+
+
+def _reserve_synthetic_run(
+    *,
+    tmp_path: Path,
+    dataset: SyntheticPhase1Dataset,
+    database_path: Path,
+) -> str:
+    run = _synthetic_reserved_run_record(dataset)
+    repository = initialize_shadow_database(database_path)
+    repository.reserve_run(run)
+    assert tmp_path.exists()
+    return run.shadow_run_id
+
+
+def _synthetic_reserved_run_record(dataset: SyntheticPhase1Dataset) -> ShadowRunRecord:
+    snapshot = build_operational_snapshot(
+        manifest=dataset.manifest,
+        canonical_bars=dataset.canonical_bars,
+        session=date(2025, 1, 2),
+        as_of=datetime(2025, 1, 3, 0, 0, tzinfo=UTC),
+        provider_finalized=True,
+        provider_finalization_policy_id="synthetic-provider-finalized-v1",
+    )
+    run_id = shadow_run_identity(snapshot.request)
+    return ShadowRunRecord(
+        shadow_run_id=run_id,
+        configuration_version=SHADOW_OPERATION_CONFIGURATION_VERSION,
+        mode=ShadowMode.OBSERVATION_ONLY_NO_MODEL,
+        symbol="SPY",
+        timeframe="1Day",
+        signal_session="2025-01-02",
+        as_of="2025-01-03T00:00:00Z",
+        parent_dataset_id=dataset.manifest.dataset_id,
+        canonical_dataset_checksum=dataset.manifest.canonical_content_checksum,
+        provider_finalization_policy_id="synthetic-provider-finalized-v1",
+        run_status=ShadowOperationalRunStatus.RESERVED,
+        freshness_status=FreshnessStatus.BLOCKED,
+        monitoring_status=ShadowHealthStatus.BLOCKED,
+        model_gate_status=ModelAdmissionStatus.BLOCKED_NO_APPROVED_MODEL,
+        created_at=datetime_to_text(FIXED_CREATED),
+    )
+
+
+def _synthetic_snapshot_record(
+    *,
+    shadow_run_id: str,
+    dataset: SyntheticPhase1Dataset,
+) -> ShadowInputSnapshotRecord:
+    return ShadowInputSnapshotRecord(
+        shadow_run_id=shadow_run_id,
+        parent_dataset_id=dataset.manifest.dataset_id,
+        canonical_dataset_checksum=dataset.manifest.canonical_content_checksum,
+        symbol="SPY",
+        timeframe="1Day",
+        provider=dataset.manifest.provider,
+        feed=dataset.manifest.feed,
+        adjustment=dataset.manifest.adjustment_mode,
+        first_session="2025-01-02",
+        latest_session="2025-01-02",
+        target_session="2025-01-02",
+        row_count=len(dataset.canonical_bars),
+        provider_finalization_policy_id="synthetic-provider-finalized-v1",
+        manifest_artifact_checksum=dataset.manifest.manifest_artifact_checksum,
+        snapshot_created_at=datetime_to_text(FIXED_COMPLETED),
+    )
+
+
+def _audit_event(
+    shadow_run_id: str, event_code: str = "unexpected_configuration"
+) -> ShadowHealthEventRecord:
+    return ShadowHealthEventRecord(
+        shadow_run_id=shadow_run_id,
+        event_code=event_code,
+        status=ShadowHealthStatus.BLOCKED,
+        message=f"synthetic {event_code}",
+        event_timestamp=datetime_to_text(FIXED_RETRY),
+    )
+
+
+def _audit_alert(
+    shadow_run_id: str, alert_code: str = "unexpected_configuration"
+) -> ShadowAlertRecord:
+    return ShadowAlertRecord(
+        shadow_run_id=shadow_run_id,
+        alert_code=alert_code,
+        status=ShadowHealthStatus.BLOCKED,
+        message=f"synthetic {alert_code}",
+        created_at=datetime_to_text(FIXED_RETRY),
+    )
 
 
 def test_shadow_database_initializes_with_dedicated_schema(tmp_path: Path) -> None:
@@ -148,8 +252,10 @@ def test_deterministic_run_id_survives_persistence_reload(tmp_path: Path) -> Non
     )
 
 
-def test_completed_and_blocked_runs_block_duplicate_retry(tmp_path: Path) -> None:
+def test_completed_duplicate_retry_persists_audit_without_lifecycle_change(tmp_path: Path) -> None:
     dataset, result = _run_healthy(tmp_path)
+    repository = ShadowSQLiteRepository(tmp_path / "shadow.sqlite3")
+    before = repository.get_run(result.shadow_run_id)
 
     with pytest.raises(ShadowDuplicateRunError, match="duplicate_run"):
         run_observation(
@@ -163,8 +269,17 @@ def test_completed_and_blocked_runs_block_duplicate_retry(tmp_path: Path) -> Non
             repository_root=tmp_path,
             clock=FixedClock(),
         )
-    assert result.run_status == ShadowOperationalRunStatus.COMPLETED
+    after = repository.get_run(result.shadow_run_id)
 
+    assert _run_row_count(tmp_path / "shadow.sqlite3", result.shadow_run_id) == 1
+    assert after.run.run_status == ShadowOperationalRunStatus.COMPLETED
+    assert after.input_snapshot == before.input_snapshot
+    assert "duplicate_run" in {event.event_code for event in after.health_events}
+    assert "duplicate_run" in {alert.alert_code for alert in after.alerts}
+    assert after.health_events[-1].event_timestamp == datetime_to_text(FIXED_COMPLETED)
+
+
+def test_blocked_duplicate_retry_persists_audit_without_lifecycle_change(tmp_path: Path) -> None:
     blocked_dataset = write_synthetic_phase1_dataset(
         tmp_path / "blocked",
         start_session=date(2025, 1, 2),
@@ -182,6 +297,8 @@ def test_completed_and_blocked_runs_block_duplicate_retry(tmp_path: Path) -> Non
         repository_root=tmp_path / "blocked",
         clock=FixedClock(),
     )
+    repository = ShadowSQLiteRepository(shadow_db)
+    before = repository.get_run(blocked_result.shadow_run_id)
     with pytest.raises(ShadowDuplicateRunError, match="duplicate_run"):
         run_observation(
             manifest_path=blocked_dataset.manifest_path,
@@ -194,40 +311,52 @@ def test_completed_and_blocked_runs_block_duplicate_retry(tmp_path: Path) -> Non
             repository_root=tmp_path / "blocked",
             clock=FixedClock(),
         )
-    assert blocked_result.run_status == ShadowOperationalRunStatus.BLOCKED
+    after = repository.get_run(blocked_result.shadow_run_id)
+
+    assert _run_row_count(shadow_db, blocked_result.shadow_run_id) == 1
+    assert after.run.run_status == ShadowOperationalRunStatus.BLOCKED
+    assert after.input_snapshot == before.input_snapshot
+    assert "duplicate_run" in {event.event_code for event in after.health_events}
+    assert "duplicate_run" in {alert.alert_code for alert in after.alerts}
+
+
+def test_repeated_duplicate_attempts_append_audit_without_new_run_rows(tmp_path: Path) -> None:
+    dataset, result = _run_healthy(tmp_path)
+    repository = ShadowSQLiteRepository(tmp_path / "shadow.sqlite3")
+
+    for _ in range(2):
+        with pytest.raises(ShadowDuplicateRunError, match="duplicate_run"):
+            run_observation(
+                manifest_path=dataset.manifest_path,
+                data_root=dataset.data_root,
+                shadow_db=tmp_path / "shadow.sqlite3",
+                session=date(2025, 1, 2),
+                as_of=datetime(2025, 1, 3, 0, 0, tzinfo=UTC),
+                provider_finalized=True,
+                provider_finalization_policy_id="synthetic-provider-finalized-v1",
+                repository_root=tmp_path,
+                clock=FixedClock(),
+            )
+    stored = repository.get_run(result.shadow_run_id)
+    duplicate_events = [
+        event for event in stored.health_events if event.event_code == "duplicate_run"
+    ]
+    duplicate_alerts = [alert for alert in stored.alerts if alert.alert_code == "duplicate_run"]
+
+    assert _run_row_count(tmp_path / "shadow.sqlite3", result.shadow_run_id) == 1
+    assert stored.run.run_status == ShadowOperationalRunStatus.COMPLETED
+    assert len(duplicate_events) == 2
+    assert len(duplicate_alerts) == 2
 
 
 def test_incomplete_reserved_run_requires_recovery_review(tmp_path: Path) -> None:
     dataset = write_synthetic_phase1_dataset(tmp_path)
-    snapshot = build_operational_snapshot(
-        manifest=dataset.manifest,
-        canonical_bars=dataset.canonical_bars,
-        session=date(2025, 1, 2),
-        as_of=datetime(2025, 1, 3, 0, 0, tzinfo=UTC),
-        provider_finalized=True,
-        provider_finalization_policy_id="synthetic-provider-finalized-v1",
+    run_id = _reserve_synthetic_run(
+        tmp_path=tmp_path,
+        dataset=dataset,
+        database_path=tmp_path / "shadow.sqlite3",
     )
-    run_id = shadow_run_identity(snapshot.request)
-    repository = initialize_shadow_database(tmp_path / "shadow.sqlite3")
-    repository.reserve_run(
-        ShadowRunRecord(
-            shadow_run_id=run_id,
-            configuration_version=SHADOW_OPERATION_CONFIGURATION_VERSION,
-            mode=ShadowMode.OBSERVATION_ONLY_NO_MODEL,
-            symbol="SPY",
-            timeframe="1Day",
-            signal_session="2025-01-02",
-            as_of="2025-01-03T00:00:00Z",
-            parent_dataset_id=dataset.manifest.dataset_id,
-            canonical_dataset_checksum=dataset.manifest.canonical_content_checksum,
-            provider_finalization_policy_id="synthetic-provider-finalized-v1",
-            run_status=ShadowOperationalRunStatus.RESERVED,
-            freshness_status=FreshnessStatus.BLOCKED,
-            monitoring_status=ShadowHealthStatus.BLOCKED,
-            model_gate_status=ModelAdmissionStatus.BLOCKED_NO_APPROVED_MODEL,
-            created_at=datetime_to_text(FIXED_CREATED),
-        )
-    )
+    repository = ShadowSQLiteRepository(tmp_path / "shadow.sqlite3")
 
     with pytest.raises(ShadowRecoveryRequiredError, match="recovery_required"):
         run_observation(
@@ -241,6 +370,148 @@ def test_incomplete_reserved_run_requires_recovery_review(tmp_path: Path) -> Non
             repository_root=tmp_path,
             clock=FixedClock(),
         )
+    stored = repository.get_run(run_id)
+
+    assert _run_row_count(tmp_path / "shadow.sqlite3", run_id) == 1
+    assert stored.run.run_status == ShadowOperationalRunStatus.RESERVED
+    assert stored.input_snapshot is None
+    assert "recovery_required" in {event.event_code for event in stored.health_events}
+    assert "recovery_required" in {alert.alert_code for alert in stored.alerts}
+
+
+@pytest.mark.parametrize("mismatched_child", ["snapshot", "event", "alert"])
+def test_child_run_id_mismatch_during_finalize_fails_closed(
+    tmp_path: Path,
+    mismatched_child: str,
+) -> None:
+    root = tmp_path / mismatched_child
+    dataset = write_synthetic_phase1_dataset(root)
+    database_path = root / "shadow.sqlite3"
+    run_id = _reserve_synthetic_run(tmp_path=root, dataset=dataset, database_path=database_path)
+    wrong_run_id = f"{run_id}-other"
+    snapshot_run_id = wrong_run_id if mismatched_child == "snapshot" else run_id
+    event_run_id = wrong_run_id if mismatched_child == "event" else run_id
+    alert_run_id = wrong_run_id if mismatched_child == "alert" else run_id
+    repository = ShadowSQLiteRepository(database_path)
+
+    with pytest.raises(ShadowPersistenceError, match="audit_identity_mismatch"):
+        repository.finalize_run(
+            shadow_run_id=run_id,
+            terminal_status=ShadowOperationalRunStatus.COMPLETED,
+            freshness_status=FreshnessStatus.FRESH,
+            monitoring_status=ShadowHealthStatus.HEALTHY,
+            model_gate_status=ModelAdmissionStatus.BLOCKED_NO_APPROVED_MODEL,
+            completed_at=FIXED_COMPLETED,
+            input_snapshot=_synthetic_snapshot_record(
+                shadow_run_id=snapshot_run_id,
+                dataset=dataset,
+            ),
+            health_events=(_audit_event(event_run_id, "fresh_data"),),
+            alerts=(_audit_alert(alert_run_id, "duplicate_run"),),
+        )
+    stored = repository.get_run(run_id)
+
+    assert stored.run.run_status == ShadowOperationalRunStatus.RESERVED
+    assert stored.input_snapshot is None
+    assert stored.health_events == ()
+    assert stored.alerts == ()
+
+
+def test_child_run_id_mismatch_during_failure_and_retry_audit_fails_closed(
+    tmp_path: Path,
+) -> None:
+    failure_root = tmp_path / "failure"
+    failure_dataset = write_synthetic_phase1_dataset(failure_root)
+    failure_db = failure_root / "shadow.sqlite3"
+    failure_run_id = _reserve_synthetic_run(
+        tmp_path=failure_root,
+        dataset=failure_dataset,
+        database_path=failure_db,
+    )
+    failure_repository = ShadowSQLiteRepository(failure_db)
+    with pytest.raises(ShadowPersistenceError, match="audit_identity_mismatch"):
+        failure_repository.mark_failed(
+            shadow_run_id=failure_run_id,
+            completed_at=FIXED_COMPLETED,
+            event=_audit_event(f"{failure_run_id}-other"),
+            alert=_audit_alert(failure_run_id),
+        )
+    failure_stored = failure_repository.get_run(failure_run_id)
+    assert failure_stored.run.run_status == ShadowOperationalRunStatus.RESERVED
+    assert failure_stored.health_events == ()
+    assert failure_stored.alerts == ()
+
+    retry_root = tmp_path / "retry"
+    retry_dataset = write_synthetic_phase1_dataset(retry_root)
+    retry_db = retry_root / "shadow.sqlite3"
+    retry_run_id = _reserve_synthetic_run(
+        tmp_path=retry_root,
+        dataset=retry_dataset,
+        database_path=retry_db,
+    )
+    retry_repository = ShadowSQLiteRepository(retry_db)
+    with pytest.raises(ShadowPersistenceError, match="audit_identity_mismatch"):
+        retry_repository.record_retry_rejection(
+            shadow_run_id=retry_run_id,
+            event=_audit_event(retry_run_id, "recovery_required"),
+            alert=_audit_alert(f"{retry_run_id}-other", "recovery_required"),
+        )
+    retry_stored = retry_repository.get_run(retry_run_id)
+    assert retry_stored.run.run_status == ShadowOperationalRunStatus.RESERVED
+    assert retry_stored.health_events == ()
+    assert retry_stored.alerts == ()
+
+
+def test_sqlite_operational_failure_is_typed_and_cli_fails_closed(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    bad_database_path = tmp_path / "not-a-database.sqlite3"
+    bad_database_path.mkdir()
+
+    with pytest.raises(ShadowPersistenceError) as exc_info:
+        ShadowSQLiteRepository(bad_database_path).get_run("synthetic-run")
+    assert exc_info.value.code == "shadow_database_unavailable"
+    assert isinstance(exc_info.value, ShadowPersistenceError)
+
+    from spy_market_agent.shadow.cli import main
+
+    exit_code = main(
+        [
+            "show-run",
+            "--shadow-db",
+            str(bad_database_path),
+            "--run-id",
+            "synthetic-run",
+        ]
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "status=failed_closed" in output
+    assert "reason=shadow_database_unavailable" in output
+
+
+def test_competing_reservation_fails_closed_without_duplicate_rows(tmp_path: Path) -> None:
+    dataset = write_synthetic_phase1_dataset(tmp_path)
+    database_path = tmp_path / "shadow.sqlite3"
+    repository = initialize_shadow_database(database_path)
+    run = _synthetic_reserved_run_record(dataset)
+    locking_connection = sqlite3.connect(database_path)
+    try:
+        locking_connection.execute("BEGIN IMMEDIATE")
+        with pytest.raises(ShadowPersistenceError) as exc_info:
+            repository.reserve_run(run)
+        assert exc_info.value.code == "persistence_failure"
+    finally:
+        locking_connection.rollback()
+        locking_connection.close()
+
+    assert _run_row_count(database_path, run.shadow_run_id) == 0
+    repository.reserve_run(run)
+    with pytest.raises(ShadowRecoveryRequiredError, match="recovery_required"):
+        repository.reserve_run(run)
+    assert _run_row_count(database_path, run.shadow_run_id) == 1
 
 
 def test_target_contract_rejects_wrong_lineage_scope_and_sessions(tmp_path: Path) -> None:

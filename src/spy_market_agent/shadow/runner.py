@@ -22,9 +22,11 @@ from spy_market_agent.shadow.freshness import evaluate_market_data_freshness
 from spy_market_agent.shadow.identity import shadow_run_identity
 from spy_market_agent.shadow.persistence import (
     ShadowAlertRecord,
+    ShadowDuplicateRunError,
     ShadowHealthEventRecord,
     ShadowInputSnapshotRecord,
     ShadowOperationalRunStatus,
+    ShadowRecoveryRequiredError,
     ShadowRunRecord,
     ShadowSQLiteRepository,
 )
@@ -164,13 +166,26 @@ def run_observation(
 
     repository = ShadowSQLiteRepository(shadow_db)
     repository.initialize()
-    repository.reserve_run(
-        ShadowRunRecordBuilder.reserved(
-            snapshot=snapshot,
-            shadow_run_id=shadow_run_id,
-            created_at=created_at,
+    try:
+        repository.reserve_run(
+            ShadowRunRecordBuilder.reserved(
+                snapshot=snapshot,
+                shadow_run_id=shadow_run_id,
+                created_at=created_at,
+            )
         )
-    )
+    except (ShadowDuplicateRunError, ShadowRecoveryRequiredError) as exc:
+        retry_rejected_at = require_explicit_utc_datetime(
+            clock(),
+            field_name="retry_rejected_at",
+        )
+        _record_retry_rejection(
+            repository=repository,
+            shadow_run_id=shadow_run_id,
+            code=exc.code,
+            timestamp=retry_rejected_at,
+        )
+        raise
 
     try:
         freshness = evaluate_market_data_freshness(snapshot.market_data_status)
@@ -630,6 +645,39 @@ def _alerts_from_events(
             )
         )
     return tuple(alerts)
+
+
+def _record_retry_rejection(
+    *,
+    repository: ShadowSQLiteRepository,
+    shadow_run_id: str,
+    code: str,
+    timestamp: datetime,
+) -> None:
+    event_timestamp = datetime_to_text(timestamp)
+    message = f"shadow observation retry rejected by {code}."
+    event = ShadowHealthEventRecord(
+        shadow_run_id=shadow_run_id,
+        event_code=code,
+        status=ShadowHealthStatus.BLOCKED,
+        message=message,
+        event_timestamp=event_timestamp,
+    )
+    alert_code = _alert_code_for_event(code)
+    if alert_code is None:
+        alert_code = "unexpected_configuration"
+    alert = ShadowAlertRecord(
+        shadow_run_id=shadow_run_id,
+        alert_code=alert_code,
+        status=ShadowHealthStatus.BLOCKED,
+        message=message,
+        created_at=event_timestamp,
+    )
+    repository.record_retry_rejection(
+        shadow_run_id=shadow_run_id,
+        event=event,
+        alert=alert,
+    )
 
 
 def _alert_code_for_event(event_code: str) -> str | None:

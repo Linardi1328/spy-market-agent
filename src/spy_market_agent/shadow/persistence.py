@@ -138,8 +138,16 @@ class ShadowSQLiteRepository:
         self.database_path = Path(database_path)
 
     def initialize(self) -> None:
-        with closing(self._connect(create=True)) as connection, connection:
-            _validate_or_initialize_schema(connection)
+        try:
+            with closing(self._connect(create=True)) as connection, connection:
+                _validate_or_initialize_schema(connection)
+        except ShadowPersistenceError:
+            raise
+        except sqlite3.Error as exc:
+            raise ShadowPersistenceError(
+                "persistence_failure",
+                "shadow database initialization failed.",
+            ) from exc
 
     def reserve_run(self, run: ShadowRunRecord) -> None:
         validate_run_id(run.shadow_run_id)
@@ -149,12 +157,14 @@ class ShadowSQLiteRepository:
                 "shadow run reservation must use reserved status.",
             )
 
-        with closing(self._connect(create=True)) as connection, connection:
-            _validate_or_initialize_schema(connection)
-            existing = _fetch_run_row(connection, run.shadow_run_id)
-            if existing is not None:
-                _raise_existing_run(existing["run_status"])
+        with closing(self._connect(create=True)) as connection:
             try:
+                _validate_or_initialize_schema(connection)
+                connection.commit()
+                _begin_immediate(connection)
+                existing = _fetch_run_row(connection, run.shadow_run_id)
+                if existing is not None:
+                    _raise_existing_run(existing["run_status"])
                 connection.execute(
                     """
                     INSERT INTO shadow_runs (
@@ -181,10 +191,87 @@ class ShadowSQLiteRepository:
                     """,
                     _run_values(run),
                 )
+                connection.commit()
+            except ShadowPersistenceError:
+                _rollback_quietly(connection)
+                raise
             except sqlite3.IntegrityError as exc:
+                _rollback_quietly(connection)
                 raise ShadowDuplicateRunError(
                     "duplicate_run",
                     "shadow run identity has already been reserved.",
+                ) from exc
+            except sqlite3.Error as exc:
+                _rollback_quietly(connection)
+                raise ShadowPersistenceError(
+                    "persistence_failure",
+                    "shadow run reservation failed.",
+                ) from exc
+
+    def record_retry_rejection(
+        self,
+        *,
+        shadow_run_id: str,
+        event: ShadowHealthEventRecord,
+        alert: ShadowAlertRecord,
+    ) -> None:
+        validate_run_id(shadow_run_id)
+        _validate_child_run_ids(
+            shadow_run_id=shadow_run_id,
+            health_events=(event,),
+            alerts=(alert,),
+        )
+
+        with closing(self._connect(create=False)) as connection:
+            try:
+                _validate_or_initialize_schema(connection)
+                connection.commit()
+                _begin_immediate(connection)
+                row = _fetch_run_row(connection, shadow_run_id)
+                if row is None:
+                    raise ShadowRunNotFoundError(
+                        "shadow_run_not_found",
+                        "shadow run does not exist for retry-rejection audit.",
+                    )
+                connection.execute(
+                    """
+                    INSERT INTO shadow_health_events (
+                        shadow_run_id,
+                        event_code,
+                        status,
+                        message,
+                        event_timestamp
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    _health_event_values(event),
+                )
+                connection.execute(
+                    """
+                    INSERT INTO shadow_alerts (
+                        shadow_run_id,
+                        alert_code,
+                        status,
+                        message,
+                        created_at
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    _alert_values(alert),
+                )
+                connection.commit()
+            except ShadowPersistenceError:
+                _rollback_quietly(connection)
+                raise
+            except sqlite3.IntegrityError as exc:
+                _rollback_quietly(connection)
+                raise ShadowPersistenceError(
+                    "persistence_failure",
+                    "shadow retry-rejection audit failed integrity checks.",
+                ) from exc
+            except sqlite3.Error as exc:
+                _rollback_quietly(connection)
+                raise ShadowPersistenceError(
+                    "persistence_failure",
+                    "shadow retry-rejection audit failed.",
                 ) from exc
 
     def finalize_run(
@@ -210,18 +297,26 @@ class ShadowSQLiteRepository:
                 "terminal shadow run status must be completed, blocked, or failed.",
             )
         validate_run_id(shadow_run_id)
-        with closing(self._connect(create=True)) as connection, connection:
-            _validate_or_initialize_schema(connection)
-            row = _fetch_run_row(connection, shadow_run_id)
-            if row is None:
-                raise ShadowRunNotFoundError(
-                    "shadow_run_not_found",
-                    "shadow run reservation does not exist.",
-                )
-            if row["run_status"] != ShadowOperationalRunStatus.RESERVED.value:
-                _raise_existing_run(row["run_status"])
-
+        _validate_input_snapshot_run_id(shadow_run_id, input_snapshot)
+        _validate_child_run_ids(
+            shadow_run_id=shadow_run_id,
+            health_events=health_events,
+            alerts=alerts,
+        )
+        with closing(self._connect(create=True)) as connection:
             try:
+                _validate_or_initialize_schema(connection)
+                connection.commit()
+                _begin_immediate(connection)
+                row = _fetch_run_row(connection, shadow_run_id)
+                if row is None:
+                    raise ShadowRunNotFoundError(
+                        "shadow_run_not_found",
+                        "shadow run reservation does not exist.",
+                    )
+                if row["run_status"] != ShadowOperationalRunStatus.RESERVED.value:
+                    _raise_existing_run(row["run_status"])
+
                 connection.execute(
                     """
                     INSERT INTO shadow_input_snapshots (
@@ -287,12 +382,18 @@ class ShadowSQLiteRepository:
                         shadow_run_id,
                     ),
                 )
+                connection.commit()
+            except ShadowPersistenceError:
+                _rollback_quietly(connection)
+                raise
             except sqlite3.IntegrityError as exc:
+                _rollback_quietly(connection)
                 raise ShadowPersistenceError(
                     "shadow_run_finalize_failed",
                     "shadow run finalization failed integrity checks.",
                 ) from exc
             except sqlite3.Error as exc:
+                _rollback_quietly(connection)
                 raise ShadowPersistenceError(
                     "shadow_run_finalize_failed",
                     "shadow run finalization failed.",
@@ -307,89 +408,123 @@ class ShadowSQLiteRepository:
         alert: ShadowAlertRecord,
     ) -> None:
         validate_run_id(shadow_run_id)
-        with closing(self._connect(create=True)) as connection, connection:
-            _validate_or_initialize_schema(connection)
-            row = _fetch_run_row(connection, shadow_run_id)
-            if row is None:
-                return
-            if row["run_status"] != ShadowOperationalRunStatus.RESERVED.value:
-                return
-            connection.execute(
-                """
-                INSERT INTO shadow_health_events (
-                    shadow_run_id,
-                    event_code,
-                    status,
-                    message,
-                    event_timestamp
-                ) VALUES (?, ?, ?, ?, ?)
-                """,
-                _health_event_values(event),
-            )
-            connection.execute(
-                """
-                INSERT INTO shadow_alerts (
-                    shadow_run_id,
-                    alert_code,
-                    status,
-                    message,
-                    created_at
-                ) VALUES (?, ?, ?, ?, ?)
-                """,
-                _alert_values(alert),
-            )
-            connection.execute(
-                """
-                UPDATE shadow_runs
-                SET run_status = ?,
-                    monitoring_status = ?,
-                    completed_at = ?
-                WHERE shadow_run_id = ?
-                """,
-                (
-                    ShadowOperationalRunStatus.FAILED.value,
-                    ShadowHealthStatus.BLOCKED.value,
-                    datetime_to_text(completed_at),
-                    shadow_run_id,
-                ),
-            )
+        _validate_child_run_ids(
+            shadow_run_id=shadow_run_id,
+            health_events=(event,),
+            alerts=(alert,),
+        )
+        with closing(self._connect(create=True)) as connection:
+            try:
+                _validate_or_initialize_schema(connection)
+                connection.commit()
+                _begin_immediate(connection)
+                row = _fetch_run_row(connection, shadow_run_id)
+                if row is None:
+                    connection.rollback()
+                    return
+                if row["run_status"] != ShadowOperationalRunStatus.RESERVED.value:
+                    connection.rollback()
+                    return
+                connection.execute(
+                    """
+                    INSERT INTO shadow_health_events (
+                        shadow_run_id,
+                        event_code,
+                        status,
+                        message,
+                        event_timestamp
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    _health_event_values(event),
+                )
+                connection.execute(
+                    """
+                    INSERT INTO shadow_alerts (
+                        shadow_run_id,
+                        alert_code,
+                        status,
+                        message,
+                        created_at
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    _alert_values(alert),
+                )
+                connection.execute(
+                    """
+                    UPDATE shadow_runs
+                    SET run_status = ?,
+                        monitoring_status = ?,
+                        completed_at = ?
+                    WHERE shadow_run_id = ?
+                    """,
+                    (
+                        ShadowOperationalRunStatus.FAILED.value,
+                        ShadowHealthStatus.BLOCKED.value,
+                        datetime_to_text(completed_at),
+                        shadow_run_id,
+                    ),
+                )
+                connection.commit()
+            except ShadowPersistenceError:
+                _rollback_quietly(connection)
+                raise
+            except sqlite3.IntegrityError as exc:
+                _rollback_quietly(connection)
+                raise ShadowPersistenceError(
+                    "persistence_failure",
+                    "shadow run failure audit failed integrity checks.",
+                ) from exc
+            except sqlite3.Error as exc:
+                _rollback_quietly(connection)
+                raise ShadowPersistenceError(
+                    "persistence_failure",
+                    "shadow run failure audit failed.",
+                ) from exc
 
     def get_run(self, shadow_run_id: str) -> ShadowStoredRun:
         validate_run_id(shadow_run_id)
-        with closing(self._connect(create=False)) as connection, connection:
-            _validate_or_initialize_schema(connection)
-            row = _fetch_run_row(connection, shadow_run_id)
-            if row is None:
-                raise ShadowRunNotFoundError(
-                    "shadow_run_not_found",
-                    "shadow run does not exist.",
-                )
-            snapshot_row = connection.execute(
-                """
-                SELECT *
-                FROM shadow_input_snapshots
-                WHERE shadow_run_id = ?
-                """,
-                (shadow_run_id,),
-            ).fetchone()
-            event_rows = connection.execute(
-                """
-                SELECT *
-                FROM shadow_health_events
-                WHERE shadow_run_id = ?
-                ORDER BY id ASC
-                """,
-                (shadow_run_id,),
-            ).fetchall()
-            alert_rows = connection.execute(
-                """
-                SELECT *
-                FROM shadow_alerts
-                WHERE shadow_run_id = ?
-                ORDER BY id ASC
-                """,
-                (shadow_run_id,),
-            ).fetchall()
+        try:
+            with closing(self._connect(create=False)) as connection, connection:
+                _validate_or_initialize_schema(connection)
+                row = _fetch_run_row(connection, shadow_run_id)
+                if row is None:
+                    raise ShadowRunNotFoundError(
+                        "shadow_run_not_found",
+                        "shadow run does not exist.",
+                    )
+                snapshot_row = connection.execute(
+                    """
+                    SELECT *
+                    FROM shadow_input_snapshots
+                    WHERE shadow_run_id = ?
+                    """,
+                    (shadow_run_id,),
+                ).fetchone()
+                event_rows = connection.execute(
+                    """
+                    SELECT *
+                    FROM shadow_health_events
+                    WHERE shadow_run_id = ?
+                    ORDER BY id ASC
+                    """,
+                    (shadow_run_id,),
+                ).fetchall()
+                alert_rows = connection.execute(
+                    """
+                    SELECT *
+                    FROM shadow_alerts
+                    WHERE shadow_run_id = ?
+                    ORDER BY id ASC
+                    """,
+                    (shadow_run_id,),
+                ).fetchall()
+        except ShadowPersistenceError:
+            raise
+        except sqlite3.Error as exc:
+            raise ShadowPersistenceError(
+                "persistence_failure",
+                "shadow run inspection failed.",
+            ) from exc
         return ShadowStoredRun(
             run=_run_record_from_row(row),
             input_snapshot=_input_snapshot_from_row(snapshot_row) if snapshot_row else None,
@@ -400,17 +535,25 @@ class ShadowSQLiteRepository:
     def list_runs(self, *, limit: int = 20) -> tuple[ShadowRunRecord, ...]:
         if limit <= 0:
             raise ShadowPersistenceError("invalid_list_limit", "list limit must be positive.")
-        with closing(self._connect(create=False)) as connection, connection:
-            _validate_or_initialize_schema(connection)
-            rows = connection.execute(
-                """
-                SELECT *
-                FROM shadow_runs
-                ORDER BY created_at DESC, shadow_run_id ASC
-                LIMIT ?
-                """,
-                (limit,),
-            ).fetchall()
+        try:
+            with closing(self._connect(create=False)) as connection, connection:
+                _validate_or_initialize_schema(connection)
+                rows = connection.execute(
+                    """
+                    SELECT *
+                    FROM shadow_runs
+                    ORDER BY created_at DESC, shadow_run_id ASC
+                    LIMIT ?
+                    """,
+                    (limit,),
+                ).fetchall()
+        except ShadowPersistenceError:
+            raise
+        except sqlite3.Error as exc:
+            raise ShadowPersistenceError(
+                "persistence_failure",
+                "shadow run listing failed.",
+            ) from exc
         return tuple(_run_record_from_row(row) for row in rows)
 
     def _connect(self, *, create: bool) -> sqlite3.Connection:
@@ -421,15 +564,18 @@ class ShadowSQLiteRepository:
             )
         if create:
             self.database_path.parent.mkdir(parents=True, exist_ok=True)
+        connection: sqlite3.Connection | None = None
         try:
-            connection = sqlite3.connect(self.database_path)
+            connection = sqlite3.connect(self.database_path, timeout=1.0)
+            connection.row_factory = sqlite3.Row
+            connection.execute("PRAGMA foreign_keys = ON")
         except sqlite3.Error as exc:
+            if connection is not None:
+                connection.close()
             raise ShadowPersistenceError(
                 "shadow_database_unavailable",
                 "shadow database cannot be opened.",
             ) from exc
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys = ON")
         return connection
 
 
@@ -571,6 +717,60 @@ def _application_table_names(connection: sqlite3.Connection) -> set[str]:
         """
     ).fetchall()
     return {row["name"] for row in rows if not str(row["name"]).startswith(_SQLITE_INTERNAL_PREFIX)}
+
+
+def _begin_immediate(connection: sqlite3.Connection) -> None:
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+    except sqlite3.Error as exc:
+        raise ShadowPersistenceError(
+            "persistence_failure",
+            "shadow database write reservation failed.",
+        ) from exc
+
+
+def _rollback_quietly(connection: sqlite3.Connection) -> None:
+    try:
+        connection.rollback()
+    except sqlite3.Error:
+        return
+
+
+def _validate_input_snapshot_run_id(
+    shadow_run_id: str,
+    input_snapshot: ShadowInputSnapshotRecord,
+) -> None:
+    if input_snapshot.shadow_run_id != shadow_run_id:
+        raise ShadowPersistenceError(
+            "audit_identity_mismatch",
+            "input snapshot run identity must match the shadow run being finalized.",
+        )
+
+
+def _validate_child_run_ids(
+    *,
+    shadow_run_id: str,
+    health_events: tuple[ShadowHealthEventRecord, ...],
+    alerts: tuple[ShadowAlertRecord, ...],
+) -> None:
+    mismatched_event = next(
+        (event for event in health_events if event.shadow_run_id != shadow_run_id),
+        None,
+    )
+    if mismatched_event is not None:
+        raise ShadowPersistenceError(
+            "audit_identity_mismatch",
+            "health event run identity must match the shadow run being audited.",
+        )
+    mismatched_alert = next(
+        (alert for alert in alerts if alert.shadow_run_id != shadow_run_id),
+        None,
+    )
+    if mismatched_alert is not None:
+        raise ShadowPersistenceError(
+            "audit_identity_mismatch",
+            "alert run identity must match the shadow run being audited.",
+        )
 
 
 def _fetch_run_row(connection: sqlite3.Connection, shadow_run_id: str) -> sqlite3.Row | None:

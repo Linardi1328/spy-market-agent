@@ -265,7 +265,9 @@ Each shadow run identity must be deterministic from stable inputs:
 
 Clock time, username, hostname, absolute local paths, credentials, random UUIDs, and
 unstructured operator notes must not define shadow identity. A duplicate logical run must be
-detected and fail closed rather than silently creating another record.
+detected and fail closed rather than silently creating another record. Rejected duplicate
+attempts must append local health-event and alert audit evidence without changing the
+existing run lifecycle or overwriting the existing input snapshot.
 
 ## 17. Model-Admission Gate
 
@@ -419,7 +421,11 @@ mode must resolve to the same shadow run identity. Observation-Only Operational 
 uses the lifecycle `reserved`, `completed`, `blocked`, and `failed`. A terminal
 `completed`, `blocked`, or `failed` record rejects retries as `duplicate_run`. A prior
 `reserved`, incomplete, or unknown record rejects retries as `recovery_required` and must not
-be automatically resumed, deleted, or overwritten.
+be automatically resumed, deleted, or overwritten. Retry rejections are audit events, not
+lifecycle transitions. They may append `duplicate_run` or `recovery_required` health events
+and local alerts associated with the existing deterministic run ID. Persistence uncertainty
+must fail closed through typed shadow persistence errors rather than leaking raw SQLite
+exceptions through the CLI.
 
 ## 26. Audit and Lineage
 
