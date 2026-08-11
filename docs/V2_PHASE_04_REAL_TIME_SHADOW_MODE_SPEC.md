@@ -1,18 +1,22 @@
 # Version 2 Phase 4 - Real-Time Shadow Mode Specification
 
-Status: Active specification and infrastructure-first scaffolding
+Status: Active - observation-only operational pipeline development
 
 Target release identifier: `v2.0.0-beta.1`
 
-Current implementation branch: `review/v2-phase-04-shadow-mode`
+Current implementation branch: `review/v2-phase-04-observation-pipeline`
 
-Current package/runtime version during specification/scaffolding: `2.0.0a3`
+Current package/runtime version during observation-pipeline development: `2.0.0a3`
 
 Version 2 Phase 3 is complete and released as `v2.0.0-alpha.3`. Its scientific outcome was
 `NO CANDIDATE PROMOTION`. No Phase 3 model is approved for protected evaluation, shadow
-operation, production paper operation, or live trading. Phase 4 may begin only as
-infrastructure-first shadow-mode scaffolding under explicit owner authorization. It must not
-reinterpret or bypass the Phase 3 model rejection result.
+operation, production paper operation, or live trading. PR #27 merged the approved Phase 4
+specification and infrastructure-first scaffold. The owner has now explicitly authorized
+Phase 4 Observation-Only Operational Pipeline V1. This authorization permits manual run-once
+observation-only operation against verified local Phase 1 manifests, durable shadow
+operational state, monitoring events, local alert records, deterministic idempotency, and
+read-only inspection commands. It must not reinterpret or bypass the Phase 3 model rejection
+result.
 
 ## 1. Purpose
 
@@ -21,10 +25,11 @@ intelligence. The goal is to build calendar-aware, reproducible, observable infr
 that can later run approved model inference against newly completed daily sessions without
 submitting orders.
 
-This first Phase 4 substage is not a complete production shadow system. It establishes
+This Phase 4 substage is not a complete production shadow system. It establishes
 terminology, governance, safety boundaries, deterministic identities, model-admission locks,
-freshness checks, scheduling policy functions, monitoring state, alert concepts, persistence
-design, and synthetic tests.
+freshness checks, scheduling policy functions, monitoring state, alert records, durable
+shadow SQLite persistence, manual run-once observation execution, read-only inspection, and
+synthetic tests.
 
 ## 2. Background
 
@@ -55,11 +60,13 @@ must not be silently substituted for a separately approved shadow model.
 Phase 4 has two gates.
 
 Gate A - Infrastructure Entry is satisfied for this branch because Phase 3 is complete and
-released and the owner explicitly authorized Phase 4 specification and infrastructure-first
-scaffolding. Gate A permits shadow architecture, market-data readiness policy, freshness and
-completeness controls, calendar and scheduling policy functions, idempotency, shadow
-persistence design, monitoring, alert schemas, run-state management, proposal schemas,
-model-admission locks, synthetic tests, and manual run-once scaffolding.
+released, PR #27 merged the specification/scaffold, and the owner explicitly authorized the
+observation-only operational pipeline. Gate A permits shadow architecture, verified local
+Phase 1 manifest consumption, market-data readiness policy, freshness and completeness
+controls, calendar and scheduling policy functions, deterministic idempotency, dedicated
+shadow persistence, monitoring, local alert records, run-state management, read-only
+inspection, model-admission locks, synthetic tests, and manual run-once observation
+execution.
 
 Gate B - Model-Connected Shadow Inference is not satisfied. It requires a separately
 approved model candidate with immutable approved metadata. Until Gate B is satisfied,
@@ -85,6 +92,13 @@ Phase 4 specification/scaffolding does not authorize:
 - cloud services, external model APIs, AutoML, deep learning, or new major model
   dependencies;
 - package version bump or `v2.0.0-beta.1` tag creation.
+
+Phase 4 Observation-Only Operational Pipeline V1 specifically does not authorize model
+artifact loading, model inference, `LONG`/`CASH` model signals, strategy inference,
+risk-based order sizing, `ShadowProposal` generation from operational runs, paper order
+submission, broker communication, trading credential reads, market-data acquisition,
+unattended scheduling, API mutation routes, Streamlit execution controls, Phase 5 behavior,
+protected evaluation, or live trading.
 
 ## 6. Shadow-Mode Terminology
 
@@ -142,6 +156,13 @@ The shadow runner must not acquire data in this branch. Future real market-data 
 ingestion may use the Phase 1 market-data credential boundary only after separate review.
 Trading credentials are never required for shadow infrastructure.
 
+Observation-Only Operational Pipeline V1 consumes only an already acquired and verified
+local Version 2 Phase 1 dataset manifest. The runner must invoke the existing deep Phase 1
+manifest verifier before loading canonical bars, verify symbol `SPY`, timeframe `1Day`,
+calendar `XNYS`, and adjustment `all`, and fail closed on checksum, lineage, raw/canonical
+artifact, manifest, session, or OHLCV inconsistencies. It must not accept arbitrary CSV input
+that bypasses the manifest.
+
 ## 10. Daily-Session Semantics
 
 The signal session is the completed daily SPY session whose close is known. Features, if a
@@ -152,6 +173,12 @@ execution path.
 
 Weekends and exchange holidays are not missing sessions. Non-XNYS dates are ineligible
 shadow sessions. Incomplete current-session candles are rejected.
+
+Every operational observation run targets exactly one explicit `--session YYYY-MM-DD`. That
+session must be a valid XNYS session, exist exactly once in the verified canonical dataset,
+match the latest canonical session represented by the operational snapshot, be complete at
+the supplied `--as-of` timestamp, and contain valid canonical OHLCV data. The command must
+not silently fall back to another date or use calendar-day arithmetic.
 
 ## 11. Freshness Policy
 
@@ -170,6 +197,13 @@ Freshness requires:
 
 Provider finalization delay is not invented by this specification. It must be explicit
 metadata or configuration supplied by a later approved ingestion design.
+
+For Observation-Only Operational Pipeline V1 the operator must provide explicit UTC
+`--as-of` evidence and explicit provider finalization evidence such as `--provider-finalized`
+plus `--provider-finalization-policy-id`. If finalization is not confirmed, the run is
+blocked with `provider_not_finalized`. If the target dataset session is older than the
+latest XNYS session that should be complete at `as_of`, the run is blocked with
+`stale_data`.
 
 ## 12. Completeness Policy
 
@@ -201,15 +235,17 @@ It may implement deterministic policy functions that answer:
 - whether a run is eligible;
 - why a run was refused.
 
-A later Phase 4 PR may wire these functions into explicit manual or scheduled operation
-after review.
+Observation-Only Operational Pipeline V1 wires these checks into explicit manual
+run-once operation. Unattended scheduled operation still requires a later reviewed Phase 4
+authorization.
 
 ## 15. Run-Once Contract
 
-The initial run-once contract is manual and local. It evaluates a target session, a data
-snapshot lineage, a mode, and configuration metadata once. In `observation_only_no_model`
-mode it may emit readiness and health state. In `model_connected` mode it must require
-approved model metadata and otherwise fail before inference.
+The initial run-once contract is manual and local. It evaluates a target session, a verified
+Phase 1 data snapshot lineage, `observation_only_no_model` mode, explicit provider
+finalization evidence, and configuration metadata once. It may emit readiness and health
+state and persist a local audit record. In `model_connected` mode it must fail before any
+model loading or inference.
 
 No run-once path may acquire data, construct a broker, submit an order, initialize paper
 execution, or contact a trading API.
@@ -229,7 +265,9 @@ Each shadow run identity must be deterministic from stable inputs:
 
 Clock time, username, hostname, absolute local paths, credentials, random UUIDs, and
 unstructured operator notes must not define shadow identity. A duplicate logical run must be
-detected and fail closed rather than silently creating another record.
+detected and fail closed rather than silently creating another record. Rejected duplicate
+attempts must append local health-event and alert audit evidence without changing the
+existing run lifecycle or overwriting the existing input snapshot.
 
 ## 17. Model-Admission Gate
 
@@ -300,19 +338,24 @@ create strategy optimization, order sizing, approval, paper submission, or recon
 
 ## 21. Persistence
 
-Phase 4 persistence must be separate from paper execution state. Initial design records may
-include:
+Phase 4 persistence must be separate from paper execution state. Observation-Only
+Operational Pipeline V1 uses a dedicated SQLite database supplied explicitly by the operator
+and schema version `spy-v2-phase4-shadow-db-v1`. It allows a new empty database or an
+existing valid shadow database with the expected version. It fails closed if the database
+contains non-shadow application tables or an incompatible/incomplete shadow schema.
 
-- `shadow_run`;
-- `shadow_input_snapshot`;
-- `shadow_health_event`;
-- `shadow_proposal`;
-- `shadow_alert`;
-- `shadow_model_admission`.
+All application tables use a `shadow_` prefix:
 
-Records must preserve immutable identities, timestamps, lineage, status transitions,
-duplicate behavior, auditability, and restart/recovery semantics. Schema migrations are not
-required for this first scaffold unless a later reviewed implementation needs them.
+- `shadow_schema_metadata`;
+- `shadow_runs`;
+- `shadow_input_snapshots`;
+- `shadow_health_events`;
+- `shadow_alerts`.
+
+This substage intentionally does not persist model admissions, model proposals, paper
+orders, raw provider payloads, or full historical OHLCV rows. Records preserve immutable
+identities, timestamps, lineage, terminal status, duplicate behavior, auditability, and
+restart/recovery semantics.
 
 ## 22. Monitoring
 
@@ -340,9 +383,10 @@ dependencies. Alert classes include:
 - `stale_data`;
 - `missing_session`;
 - `invalid_market_data`;
-- `model_not_approved`;
+- `provider_not_finalized`;
 - `duplicate_run`;
 - `persistence_failure`;
+- `recovery_required`;
 - `unexpected_configuration`;
 - `lineage_failure`.
 
@@ -372,11 +416,16 @@ asset, another timeframe, or a paper execution path.
 
 ## 25. Restart/Recovery Behavior
 
-Restart and recovery must be idempotent. The same session/configuration/data snapshot/model
-metadata must resolve to the same shadow run identity. If a completed or reserved run
-already exists, the new attempt must fail closed or resume only through a documented recovery
-state that proves the identity and prior state match. Unknown or corrupted state is
-blocking.
+Restart and recovery must be idempotent. The same session, configuration, data snapshot, and
+mode must resolve to the same shadow run identity. Observation-Only Operational Pipeline V1
+uses the lifecycle `reserved`, `completed`, `blocked`, and `failed`. A terminal
+`completed`, `blocked`, or `failed` record rejects retries as `duplicate_run`. A prior
+`reserved`, incomplete, or unknown record rejects retries as `recovery_required` and must not
+be automatically resumed, deleted, or overwritten. Retry rejections are audit events, not
+lifecycle transitions. They may append `duplicate_run` or `recovery_required` health events
+and local alerts associated with the existing deterministic run ID. Persistence uncertainty
+must fail closed through typed shadow persistence errors rather than leaking raw SQLite
+exceptions through the CLI.
 
 ## 26. Audit and Lineage
 
@@ -414,10 +463,29 @@ not be read by shadow infrastructure.
 
 ## 29. CLI/API Boundaries
 
-No Phase 4 CLI that performs real-data model inference is approved in this scaffold. No API
-mutation route or dashboard execution control is approved. Future manual commands must be
-explicit, local, and reviewed before they can load real market data. Importing
-`spy_market_agent.shadow` must have no side effects.
+Observation-Only Operational Pipeline V1 adds explicit manual CLI commands only:
+
+```bash
+python -m spy_market_agent.shadow.cli run-observation \
+  --manifest <phase1-manifest-path> \
+  --data-root ./data \
+  --shadow-db ./shadow.sqlite3 \
+  --session YYYY-MM-DD \
+  --as-of YYYY-MM-DDTHH:MM:SSZ \
+  --provider-finalized \
+  --provider-finalization-policy-id <policy-id>
+
+python -m spy_market_agent.shadow.cli show-run \
+  --shadow-db ./shadow.sqlite3 \
+  --run-id <shadow-run-id>
+```
+
+`run-observation` verifies local Phase 1 artifacts, evaluates observation readiness,
+reserves a deterministic run, persists sanitized lineage, writes health events and local
+alerts, and marks the run `completed` or `blocked`. `show-run` is read-only. No Phase 4 CLI
+that performs real-data model inference is approved. No API mutation route or dashboard
+execution control is approved. Importing `spy_market_agent.shadow` or
+`spy_market_agent.shadow.cli` must have no side effects.
 
 ## 30. Testing
 
@@ -434,9 +502,17 @@ Required coverage includes:
   inference;
 - SPY daily XNYS policy;
 - incomplete and stale sessions rejected;
+- provider-not-finalized blocked;
+- verified local Phase 1 manifests required;
+- target session must be the latest canonical session;
+- shadow SQLite schema version and isolation;
 - duplicate run rejected;
+- incomplete reservation requires recovery;
 - deterministic run identity;
+- health events and blocking alerts persisted;
+- read-only inspection does not mutate state;
 - no broker/trading imports from shadow modules;
+- no credential reads;
 - no automatic order submission;
 - no import side effects;
 - live trading remains prohibited;
@@ -444,10 +520,12 @@ Required coverage includes:
 
 ## 31. Owner Testing
 
-Owner testing for this substage should review the spec, inspect the shadow scaffold, run the
-synthetic tests, and confirm no model-connected real-data shadow inference is available.
-Owner testing must not rerun Phase 3 research, access protected labels, or create paper/live
-orders.
+Owner testing for this substage should review the spec, inspect the observation-only shadow
+pipeline, run the synthetic tests, verify a local Phase 1 manifest through the existing Phase
+1 workflow, run one manual observation-only session, inspect the persisted run, rerun the
+same command to confirm duplicate protection, and inspect stored events/alerts. Owner
+testing must not rerun Phase 3 research, access protected labels, load a model, create
+proposals, or create paper/live orders.
 
 ## 32. Required Artifacts/Evidence
 
@@ -455,7 +533,9 @@ Acceptance evidence for this first Phase 4 PR should include:
 
 - this governing specification;
 - updated governance/status documentation;
-- the `spy_market_agent.shadow` scaffold;
+- the `spy_market_agent.shadow` observation-only pipeline;
+- dedicated shadow SQLite persistence evidence;
+- manual CLI evidence;
 - synthetic test evidence;
 - quality-gate output;
 - confirmation that package version remains `2.0.0a3`;
@@ -470,6 +550,10 @@ This substage may be accepted when:
 - Phase 3 release status and `NO CANDIDATE PROMOTION` are documented accurately;
 - Phase 4 Gate A and Gate B are documented;
 - observation-only mode is implemented and tested;
+- manual observation-only operation consumes verified local Phase 1 manifests only;
+- dedicated shadow SQLite persistence is isolated from paper execution state;
+- duplicate and incomplete-reservation retry behavior fails closed;
+- monitoring events and local alerts are persisted;
 - model-connected shadow inference is mechanically locked because there is no trusted
   approved model-admission registry or artifact;
 - deterministic shadow run identity is implemented and tested;
@@ -501,7 +585,8 @@ This substage must be rejected or held when:
 ## 35. Versioning Contract
 
 Phase 4 starts from released `v2.0.0-alpha.3` and package/runtime version `2.0.0a3`.
-Specification and infrastructure-first scaffolding must not bump the package version.
+Specification, infrastructure-first scaffolding, and Observation-Only Operational Pipeline
+V1 must not bump the package version.
 
 The target future public release identifier is `v2.0.0-beta.1`. A later reviewed
 release-preparation branch may set an appropriate beta package version after Phase 4
@@ -512,10 +597,11 @@ merely because Phase 4 planning begins.
 
 ## 36. Approval Boundary
 
-This specification authorizes Phase 4 infrastructure-first shadow-mode scaffolding only. It
-does not authorize model-connected real-data inference, protected evaluation, strategy
-optimization, production paper operation, live trading, broker communication, schedulers,
-API write routes, dashboard execution controls, package version bump, or a beta tag.
+This specification authorizes Phase 4 infrastructure-first shadow-mode scaffolding and
+Observation-Only Operational Pipeline V1 only. It does not authorize model-connected
+real-data inference, protected evaluation, strategy optimization, production paper
+operation, live trading, broker communication, schedulers, API write routes, dashboard
+execution controls, package version bump, or a beta tag.
 
 Any expansion beyond this document requires explicit owner approval and a new or amended
 governing specification. Model-connected shadow inference remains locked until a separate

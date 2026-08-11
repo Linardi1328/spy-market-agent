@@ -167,6 +167,9 @@ class DataSnapshotLineage(ShadowBaseModel):
     adjustment: str
     symbol: str = MARKET_SYMBOL
     session: date
+    first_session: date | None = None
+    latest_session: date | None = None
+    manifest_artifact_checksum: str | None = None
     row_count: int = Field(gt=0)
 
     @field_validator("dataset_id", "provider", "feed", "adjustment")
@@ -179,6 +182,13 @@ class DataSnapshotLineage(ShadowBaseModel):
     def _checksum(cls, value: str) -> str:
         return _require_sha256(value, field_name="canonical_dataset_checksum")
 
+    @field_validator("manifest_artifact_checksum")
+    @classmethod
+    def _manifest_checksum(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _require_sha256(value, field_name="manifest_artifact_checksum")
+
     @field_validator("symbol")
     @classmethod
     def _symbol(cls, value: str) -> str:
@@ -188,6 +198,20 @@ class DataSnapshotLineage(ShadowBaseModel):
     @classmethod
     def _timeframe(cls, value: str) -> str:
         return _require_daily(value, field_name="timeframe")
+
+    @model_validator(mode="after")
+    def _validate_session_range(self) -> DataSnapshotLineage:
+        if (
+            self.first_session is not None
+            and self.latest_session is not None
+            and self.first_session > self.latest_session
+        ):
+            msg = "first_session must not be after latest_session."
+            raise ValueError(msg)
+        if self.latest_session is not None and self.session != self.latest_session:
+            msg = "session must match latest_session for operational shadow snapshots."
+            raise ValueError(msg)
+        return self
 
 
 class ShadowModelMetadata(ShadowBaseModel):

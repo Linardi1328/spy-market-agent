@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Added Version 2 Phase 4 Observation-Only Operational Pipeline V1: a manual
+  `run-observation` CLI for verified local Phase 1 manifests, explicit XNYS session/as-of
+  checks, provider-finalization evidence, dedicated shadow SQLite audit persistence,
+  deterministic duplicate protection, persisted health events, local blocking alerts, and
+  read-only `show-run` inspection.
 - Began Version 2 Phase 4 Real-Time Shadow Mode specification and infrastructure-first
   scaffolding for target release `v2.0.0-beta.1`.
 - Added the governing Phase 4 specification and initial `spy_market_agent.shadow` package
@@ -11,8 +16,8 @@
   `NO CANDIDATE PROMOTION`, and model-connected shadow inference remains blocked because no
   model is approved for shadow operation.
 - Preserved package/runtime version `2.0.0a3`; no beta tag, protected evaluation, strategy
-  optimization, broker communication, scheduler, Phase 5 production paper operation, or live
-  trading is included.
+  optimization, model inference, broker communication, scheduler, Phase 5 production paper
+  operation, or live trading is included.
 
 ## [2.0.0-alpha.3] - 2026-08-11
 

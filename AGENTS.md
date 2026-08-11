@@ -29,13 +29,18 @@ released as `v2.0.0-alpha.3`. The Phase 3 scientific outcome was
 paper research, production paper operation, or live trading. Phase 3 development research
 must derive and apply the Phase 2 final-test prediction-session exclusion boundary before
 building labels from the accepted Phase 1 parent dataset.
-Version 2 Phase 4 is authorized only for specification and infrastructure-first shadow-mode
-scaffolding under `docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md` on
-`review/v2-phase-04-shadow-mode`. Gate A infrastructure entry is permitted; Gate B
-model-connected shadow inference is not satisfied because no approved shadow model exists.
-The target future release is `v2.0.0-beta.1`, the package/runtime version remains
-`2.0.0a3`, no beta tag exists, protected evaluation remains unexecuted, and Phase 5
-production paper operation remains unauthorized.
+Version 2 Phase 4 is active under
+`docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md`. PR #27 merged the approved
+specification and infrastructure-first scaffold. The current authorized substage is
+observation-only operational pipeline development on
+`review/v2-phase-04-observation-pipeline`. Gate A infrastructure entry is permitted; Gate B
+model-connected shadow inference remains locked because no approved shadow model exists.
+Manual observation-only runs may consume verified local Phase 1 manifests and persist
+shadow health/audit state, but they must not load models, generate `LONG`/`CASH` model
+signals, create proposals, submit orders, contact brokers, acquire market data, or schedule
+unattended operation. The target future release is `v2.0.0-beta.1`, the package/runtime
+version remains `2.0.0a3`, no beta tag exists, protected evaluation remains unexecuted, and
+Phase 5 production paper operation remains unauthorized.
 Real-data-provider selection belongs to Version 2 Phase 1, not to an old Version 1 phase.
 
 If a user request conflicts with `PROJECT_SPEC.md`, `FUTURE_ROADMAP.md`, or the active phase
