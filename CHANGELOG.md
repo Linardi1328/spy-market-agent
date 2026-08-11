@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Added Version 2 Phase 4 Scheduled Observation Operations V1: deterministic
+  operator-triggered `schedule-preview` and `run-due-observation` commands that derive the
+  latest completed XNYS target from explicit UTC `as_of`, inspect compatible shadow history,
+  treat already-processed runs as schedule no-ops, surface recovery-required and missed
+  observation history, and delegate eligible work to the existing observation runner at most
+  once.
 - Added Version 2 Phase 4 Observation-Only Operational Pipeline V1: a manual
   `run-observation` CLI for verified local Phase 1 manifests, explicit XNYS session/as-of
   checks, provider-finalization evidence, dedicated shadow SQLite audit persistence,
@@ -16,8 +22,8 @@
   `NO CANDIDATE PROMOTION`, and model-connected shadow inference remains blocked because no
   model is approved for shadow operation.
 - Preserved package/runtime version `2.0.0a3`; no beta tag, protected evaluation, strategy
-  optimization, model inference, broker communication, scheduler, Phase 5 production paper
-  operation, or live trading is included.
+  optimization, model inference, broker communication, unattended scheduler/daemon, Phase 5
+  production paper operation, or live trading is included.
 
 ## [2.0.0-alpha.3] - 2026-08-11
 

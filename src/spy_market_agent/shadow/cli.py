@@ -16,6 +16,11 @@ from spy_market_agent.shadow.runner import (
     require_explicit_utc_datetime,
     run_observation,
 )
+from spy_market_agent.shadow.schedule_ops import (
+    ScheduledObservationAction,
+    evaluate_scheduled_observation,
+    run_due_observation,
+)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -23,6 +28,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "run-observation":
         return _run_observation_command(args)
+    if args.command == "schedule-preview":
+        return _schedule_preview_command(args)
+    if args.command == "run-due-observation":
+        return _run_due_observation_command(args)
     if args.command == "show-run":
         return _show_run_command(args)
     parser.error("unsupported command")
@@ -53,7 +62,28 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     show_parser.add_argument("--shadow-db", required=True, type=Path)
     show_parser.add_argument("--run-id", required=True)
+
+    preview_parser = subparsers.add_parser(
+        "schedule-preview",
+        help="Preview the latest due observation without mutating shadow state.",
+    )
+    _add_scheduled_observation_arguments(preview_parser)
+
+    due_parser = subparsers.add_parser(
+        "run-due-observation",
+        help="Run at most one due observation using schedule-aware target resolution.",
+    )
+    _add_scheduled_observation_arguments(due_parser)
     return parser
+
+
+def _add_scheduled_observation_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--manifest", required=True, type=Path)
+    parser.add_argument("--data-root", required=True, type=Path)
+    parser.add_argument("--shadow-db", required=True, type=Path)
+    parser.add_argument("--as-of", required=True)
+    parser.add_argument("--provider-finalized", action="store_true")
+    parser.add_argument("--provider-finalization-policy-id", required=True)
 
 
 def _run_observation_command(args: argparse.Namespace) -> int:
@@ -84,6 +114,70 @@ def _run_observation_command(args: argparse.Namespace) -> int:
     ):
         print(line)
     return 0
+
+
+def _schedule_preview_command(args: argparse.Namespace) -> int:
+    try:
+        decision = evaluate_scheduled_observation(
+            manifest_path=args.manifest,
+            data_root=args.data_root,
+            shadow_db=args.shadow_db,
+            as_of=_parse_utc_timestamp(args.as_of),
+            provider_finalized=bool(args.provider_finalized),
+            provider_finalization_policy_id=args.provider_finalization_policy_id,
+        )
+    except (
+        MarketDataAcquisitionError,
+        ShadowOperationalError,
+        ShadowPersistenceError,
+        ValueError,
+    ) as exc:
+        print("status=failed_closed")
+        print(f"reason={_failure_code(exc, default='invalid_schedule_preview_request')}")
+        return 1
+
+    for line in decision.sanitized_summary_lines():
+        print(line)
+    return 0
+
+
+def _run_due_observation_command(args: argparse.Namespace) -> int:
+    try:
+        result = run_due_observation(
+            manifest_path=args.manifest,
+            data_root=args.data_root,
+            shadow_db=args.shadow_db,
+            as_of=_parse_utc_timestamp(args.as_of),
+            provider_finalized=bool(args.provider_finalized),
+            provider_finalization_policy_id=args.provider_finalization_policy_id,
+        )
+    except (
+        MarketDataAcquisitionError,
+        ShadowOperationalError,
+        ShadowPersistenceError,
+        ValueError,
+    ) as exc:
+        print("status=failed_closed")
+        print(f"reason={_failure_code(exc, default='invalid_run_due_observation_request')}")
+        return 1
+
+    print(f"schedule_action={result.action.value}")
+    for line in result.decision.sanitized_summary_lines():
+        print(line)
+    if result.observation_result is not None:
+        for line in result.observation_result.sanitized_summary_lines(
+            shadow_db_display=_display_path(args.shadow_db),
+        ):
+            print(f"observation_{line}")
+    return (
+        0
+        if result.action
+        in (
+            ScheduledObservationAction.RAN_OBSERVATION,
+            ScheduledObservationAction.ALREADY_PROCESSED,
+        )
+        else 1
+    )
 
 
 def _show_run_command(args: argparse.Namespace) -> int:
@@ -136,6 +230,10 @@ def _display_path(path: Path) -> str:
     if path.is_absolute():
         return path.name
     return path.as_posix()
+
+
+def _failure_code(exc: BaseException, *, default: str) -> str:
+    return str(getattr(exc, "code", default))
 
 
 if __name__ == "__main__":

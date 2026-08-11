@@ -532,6 +532,54 @@ class ShadowSQLiteRepository:
             alerts=tuple(_alert_from_row(alert_row) for alert_row in alert_rows),
         )
 
+    def find_run(self, shadow_run_id: str) -> ShadowStoredRun | None:
+        validate_run_id(shadow_run_id)
+        try:
+            with closing(self._connect(create=False)) as connection, connection:
+                _validate_existing_schema(connection)
+                row = _fetch_run_row(connection, shadow_run_id)
+                if row is None:
+                    return None
+                snapshot_row = connection.execute(
+                    """
+                    SELECT *
+                    FROM shadow_input_snapshots
+                    WHERE shadow_run_id = ?
+                    """,
+                    (shadow_run_id,),
+                ).fetchone()
+                event_rows = connection.execute(
+                    """
+                    SELECT *
+                    FROM shadow_health_events
+                    WHERE shadow_run_id = ?
+                    ORDER BY id ASC
+                    """,
+                    (shadow_run_id,),
+                ).fetchall()
+                alert_rows = connection.execute(
+                    """
+                    SELECT *
+                    FROM shadow_alerts
+                    WHERE shadow_run_id = ?
+                    ORDER BY id ASC
+                    """,
+                    (shadow_run_id,),
+                ).fetchall()
+        except ShadowPersistenceError:
+            raise
+        except sqlite3.Error as exc:
+            raise ShadowPersistenceError(
+                "persistence_failure",
+                "shadow run lookup failed.",
+            ) from exc
+        return ShadowStoredRun(
+            run=_run_record_from_row(row),
+            input_snapshot=_input_snapshot_from_row(snapshot_row) if snapshot_row else None,
+            health_events=tuple(_health_event_from_row(event_row) for event_row in event_rows),
+            alerts=tuple(_alert_from_row(alert_row) for alert_row in alert_rows),
+        )
+
     def list_runs(self, *, limit: int = 20) -> tuple[ShadowRunRecord, ...]:
         if limit <= 0:
             raise ShadowPersistenceError("invalid_list_limit", "list limit must be positive.")
@@ -553,6 +601,28 @@ class ShadowSQLiteRepository:
             raise ShadowPersistenceError(
                 "persistence_failure",
                 "shadow run listing failed.",
+            ) from exc
+        return tuple(_run_record_from_row(row) for row in rows)
+
+    def list_observation_runs(self) -> tuple[ShadowRunRecord, ...]:
+        try:
+            with closing(self._connect(create=False)) as connection, connection:
+                _validate_existing_schema(connection)
+                rows = connection.execute(
+                    """
+                    SELECT *
+                    FROM shadow_runs
+                    WHERE mode = ?
+                    ORDER BY signal_session ASC, created_at ASC, shadow_run_id ASC
+                    """,
+                    (ShadowMode.OBSERVATION_ONLY_NO_MODEL.value,),
+                ).fetchall()
+        except ShadowPersistenceError:
+            raise
+        except sqlite3.Error as exc:
+            raise ShadowPersistenceError(
+                "persistence_failure",
+                "shadow observation history lookup failed.",
             ) from exc
         return tuple(_run_record_from_row(row) for row in rows)
 
@@ -596,6 +666,45 @@ def _validate_or_initialize_schema(connection: sqlite3.Connection) -> None:
     if not tables:
         _create_schema(connection)
         return
+    unexpected_shadow_tables = sorted(tables - _APPLICATION_TABLES)
+    if unexpected_shadow_tables:
+        raise ShadowSchemaError(
+            "unsupported_shadow_database",
+            "shadow database contains unsupported shadow tables.",
+        )
+    missing_tables = sorted(_APPLICATION_TABLES - tables)
+    if missing_tables:
+        raise ShadowSchemaError(
+            "incomplete_shadow_schema",
+            "shadow database schema is incomplete.",
+        )
+    row = connection.execute(
+        """
+        SELECT schema_version
+        FROM shadow_schema_metadata
+        WHERE singleton_id = 1
+        """
+    ).fetchone()
+    if row is None or row["schema_version"] != SHADOW_DB_SCHEMA_VERSION:
+        raise ShadowSchemaError(
+            "incompatible_shadow_schema",
+            "shadow database schema version is incompatible.",
+        )
+
+
+def _validate_existing_schema(connection: sqlite3.Connection) -> None:
+    tables = _application_table_names(connection)
+    if not tables:
+        raise ShadowSchemaError(
+            "incomplete_shadow_schema",
+            "shadow database does not contain an initialized Phase 4 shadow schema.",
+        )
+    non_shadow_tables = sorted(table for table in tables if not table.startswith("shadow_"))
+    if non_shadow_tables:
+        raise ShadowSchemaError(
+            "mixed_shadow_database",
+            "shadow database must not contain non-shadow application tables.",
+        )
     unexpected_shadow_tables = sorted(tables - _APPLICATION_TABLES)
     if unexpected_shadow_tables:
         raise ShadowSchemaError(

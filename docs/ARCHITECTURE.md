@@ -186,11 +186,12 @@ evidence and must not be used for tuning. Protected evaluation, strategy optimiz
 production paper operation, and live trading remain unauthorized. Phase 3 produced
 `NO CANDIDATE PROMOTION`, so no model is approved for shadow or paper operation.
 
-## Version 2 Phase 4 Observation-Only Shadow Pipeline
+## Version 2 Phase 4 Scheduled Observation Shadow Pipeline
 
-**Active observation-only operational pipeline development:** Phase 4 is governed by
+**Active scheduled observation operations development:** Phase 4 is governed by
 `docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md` and targets `v2.0.0-beta.1`. The package
-version remains `2.0.0a3` during this substage.
+version remains `2.0.0a3` during this substage. PR #28 merged Observation Pipeline V1; the
+current substage adds operator-triggered schedule-aware orchestration on top of that runner.
 
 The initial `spy_market_agent.shadow` package is separate from research and execution:
 
@@ -203,16 +204,21 @@ The initial `spy_market_agent.shadow` package is separate from research and exec
 4. `freshness.py` evaluates daily SPY/XNYS freshness and completeness decisions.
 5. `schedule.py` exposes deterministic schedule eligibility functions without creating an
    OS scheduler, daemon, or background worker.
-6. `policy.py` combines freshness and admission decisions for observation-only or future
+6. `schedule_ops.py` resolves the latest completed XNYS target from explicit UTC `as_of`,
+   inspects durable shadow history, detects already-processed, recovery-required, stale,
+   provider-finalization, data-ahead, and missed-observation states, and delegates eligible
+   work to the existing observation runner at most once.
+7. `policy.py` combines freshness and admission decisions for observation-only or future
    model-connected run eligibility.
-7. `monitoring.py` summarizes health events as `healthy`, `degraded`, or `blocked`.
-8. `persistence.py` owns a dedicated shadow SQLite schema, `spy-v2-phase4-shadow-db-v1`,
+8. `monitoring.py` summarizes health events as `healthy`, `degraded`, or `blocked`.
+9. `persistence.py` owns a dedicated shadow SQLite schema, `spy-v2-phase4-shadow-db-v1`,
    with `shadow_schema_metadata`, `shadow_runs`, `shadow_input_snapshots`,
    `shadow_health_events`, and `shadow_alerts`.
-9. `runner.py` orchestrates manual observation-only execution from verified Phase 1
+10. `runner.py` orchestrates manual observation-only execution from verified Phase 1
    manifest, through target-session/freshness checks, durable reservation, health/alert
    writes, and terminal lifecycle update.
-10. `cli.py` exposes `run-observation` and read-only `show-run`.
+11. `cli.py` exposes `run-observation`, read-only `show-run`, read-only `schedule-preview`,
+    and operator-triggered `run-due-observation`.
 
 `observation_only_no_model` mode can report readiness and why inference is unavailable. It
 consumes verified local Phase 1 manifests only and persists sanitized shadow audit state in
@@ -224,6 +230,13 @@ raises a model-admission error in this scaffold even when caller-supplied metada
 self-declares approval. A future
 separately approved immutable model-admission registry or artifact is required before Gate B
 can unlock.
+
+Scheduled observation is orchestration, not a second observation engine. It does not
+duplicate Phase 1 verification, OHLCV validation, freshness checks, shadow run construction,
+durable reservation, lifecycle finalization, health persistence, or alert persistence. It
+does not change the shadow database schema version. A schedule no-op for an already
+processed run does not append duplicate audit records, while direct manual duplicate
+`run-observation` attempts keep the approved duplicate audit behavior.
 
 ## Backtest Data Flow
 

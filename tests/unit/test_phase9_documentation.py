@@ -268,7 +268,7 @@ def test_version_2_alpha_release_documents_are_consistent() -> None:
     assert "V2 Phase 2: accepted and released - Real Historical Benchmark" in readme
     assert "V2 Phase 3: accepted and released as `v2.0.0-alpha.3`" in readme
     assert "V2 Phase 3 model outcome: `NO CANDIDATE PROMOTION`" in readme
-    assert "V2 Phase 4: active observation-only operational pipeline development" in readme
+    assert "V2 Phase 4: active scheduled observation operations development" in readme
     assert "Public `v2.0.0-beta.1` release/tag: not yet created" in readme
     assert phase2_completion in readme
     assert "Began Version 2 Phase 4 Real-Time Shadow Mode" in changelog
@@ -285,7 +285,7 @@ def test_version_2_alpha_release_documents_are_consistent() -> None:
     assert "Status: Accepted and released as `v2.0.0-alpha.3`" in phase3_spec
     assert "Accepted - Version 2 Real SPY Data Foundation" in roadmap
     assert "Accepted and released after owner-run real SIP benchmark" in roadmap
-    assert "V2 Phase 4 / `v2.0.0-beta.1`: Active observation-only" in roadmap
+    assert "V2 Phase 4 / `v2.0.0-beta.1`: Active scheduled-observation" in roadmap
     assert "Git release identifier: `v2.0.0-alpha.1`" in phase1_release_notes
     assert "Git release identifier: `v2.0.0-alpha.2`" in phase2_release_notes
     assert "does not evaluate model accuracy" in phase1_release_notes
@@ -354,7 +354,7 @@ def test_version_2_phase2_release_preparation_status_is_documented() -> None:
     assert "version 2 phase 3 pr #24 merged" in normalized_agents
     assert "pr #25 merged" in normalized_agents
     assert "version 2 phase 4 is active under" in normalized_agents
-    assert "observation-only operational pipeline development" in normalized_agents
+    assert "scheduled observation operations v1" in normalized_agents
     assert "phase 2 is accepted" not in combined
     assert "profitability is guaranteed" not in combined
     assert "live-money readiness: approved" not in combined
