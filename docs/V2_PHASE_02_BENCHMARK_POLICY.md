@@ -1,6 +1,6 @@
 # Version 2 Phase 2 Benchmark Policy
 
-Status: Engineering acceptance complete; release preparation in review
+Status: Accepted and released as `v2.0.0-alpha.2`
 
 This policy records the exact implementation decisions for the Version 2 Phase 2 Real
 Historical Benchmark infrastructure. It is not a raw benchmark artifact and does not include

@@ -214,14 +214,14 @@ python -m spy_market_agent.benchmark.cli run-final-test \
 
 ## Run Phase 3 Development Walk-Forward Research
 
-Phase 3 PR #24 merged the approved framework and initial research scaffolding. The current
-Phase 3 release preparation is active after PR #25 merged the manual, offline,
-development-only classification experimentation runner under
-`docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md` and owner development testing completed
-locally. It starts from the completed `v2.0.0-alpha.2` benchmark evidence, but it must not
-tune against the already-opened Phase 2 final test. Protected evaluation, Phase 4 shadow
-mode, strategy optimization, production paper operation, live trading, and paper/live/broker
-behavior remain unauthorized.
+Phase 3 PR #24 merged the approved framework and initial research scaffolding. PR #25
+merged the manual, offline, development-only classification experimentation runner under
+`docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md`, owner development testing completed
+locally, and Alpha 3 was released as `v2.0.0-alpha.3`. It starts from the completed
+`v2.0.0-alpha.2` benchmark evidence, but it must not tune against the already-opened Phase 2
+final test. Protected evaluation, strategy optimization, production paper operation, live
+trading, and paper/live/broker behavior remain unauthorized. Phase 3 produced
+`NO CANDIDATE PROMOTION`, so no model is approved for shadow operation.
 
 For any future authorized local development run, the required workflow is:
 
@@ -280,9 +280,72 @@ python -m spy_market_agent.research.cli run-development \
 The command never acquires data, accesses the network, reads Alpaca keys, constructs broker
 clients, submits orders, loads Phase 2 final-test artifacts, reconstructs Phase 2 final-test
 row-level labels for development research, or opens Phase 3 protected evaluation. Generated
-research outputs remain ignored under `artifacts/research/<experiment_id>/`. Alpha 3 release
-preparation records only sanitized aggregate acceptance evidence and does not rerun the real
-owner campaign.
+research outputs remain ignored under `artifacts/research/<experiment_id>/`. The Alpha 3
+release record contains only sanitized aggregate acceptance evidence and does not authorize
+rerunning or retuning the real owner campaign.
+
+## Inspect Phase 4 Shadow-Mode Readiness Scaffolding
+
+Phase 4 is active only for specification and infrastructure-first Real-Time Shadow Mode
+scaffolding under
+`docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md`. The target future release is
+`v2.0.0-beta.1`; package/runtime version remains `2.0.0a3`, and no beta tag exists.
+
+This first substage has no real-data shadow inference CLI, no scheduler, no daemon, no API
+write route, no dashboard execution control, and no broker path. The initial
+`spy_market_agent.shadow` package supports observation-only policy functions that can be
+used from synthetic tests or a local Python shell to inspect readiness state:
+
+```python
+from datetime import UTC, date, datetime
+
+from spy_market_agent.shadow import (
+    DailyMarketDataStatus,
+    DataSnapshotLineage,
+    ShadowMode,
+    ShadowRunConfiguration,
+    ShadowRunRequest,
+    evaluate_market_data_freshness,
+    evaluate_shadow_run,
+)
+
+lineage = DataSnapshotLineage(
+    dataset_id="synthetic-shadow-dataset",
+    canonical_dataset_checksum="0" * 64,
+    provider="synthetic",
+    feed="synthetic",
+    adjustment="all",
+    session=date(2025, 1, 2),
+    row_count=1,
+)
+configuration = ShadowRunConfiguration(
+    configuration_version="phase4-shadow-scaffold-v1",
+    provider_finalization_policy_id="synthetic-provider-finalized-v1",
+    mode=ShadowMode.OBSERVATION_ONLY_NO_MODEL,
+)
+request = ShadowRunRequest(
+    configuration=configuration,
+    data_lineage=lineage,
+    signal_session=date(2025, 1, 2),
+    feature_schema="synthetic-shadow-feature-schema-v1",
+    as_of=datetime(2025, 1, 3, 0, 0, tzinfo=UTC),
+)
+freshness = evaluate_market_data_freshness(
+    DailyMarketDataStatus(
+        adjustment="all",
+        session=date(2025, 1, 2),
+        as_of=datetime(2025, 1, 3, 0, 0, tzinfo=UTC),
+        provider_finalized=True,
+    )
+)
+decision = evaluate_shadow_run(request, freshness)
+```
+
+Observation-only mode can report readiness and the explicit
+`blocked_no_approved_model` inference state. It cannot generate predictions, model-based
+`LONG` or `CASH` proposals from real market data, broker orders, paper orders, approvals, or
+execution requests. Model-connected shadow inference remains locked until a future
+separately approved model-admission record exists.
 
 ## Inspect Model Evaluations
 

@@ -1,6 +1,6 @@
 # Version 2 Phase 2 — Real Historical Benchmark Specification
 
-Status: Engineering acceptance complete; release preparation in review
+Status: Accepted and released as `v2.0.0-alpha.2`
 
 Target release identifier: `v2.0.0-alpha.2`
 

@@ -23,15 +23,19 @@ Version 2 Phase 2 is accepted and released as `v2.0.0-alpha.2` under
 `docs/V2_PHASE_02_REAL_HISTORICAL_BENCHMARK_SPEC.md`.
 Version 2 Phase 3 PR #24 merged the approved walk-forward framework and initial research
 scaffolding. PR #25 merged the manual, offline, classification-first development research
-implementation, and owner development testing has completed. The current authorized Phase 3
-substage is Alpha 3 release preparation under
-`docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md` on
-`review/v2-phase-03-alpha3-release-preparation`. Protected evaluation, Phase 4 shadow
-mode, production paper operation, live trading, and the public `v2.0.0-alpha.3` tag remain
-unauthorized until separate explicit owner approval. Version 2 Phase 3 is not released until
-owner acceptance gates and post-merge tag approval are complete. Phase 3 development
-research must derive and apply the Phase 2 final-test prediction-session exclusion boundary
-before building labels from the accepted Phase 1 parent dataset.
+implementation. Owner development testing completed, and Version 2 Phase 3 is accepted and
+released as `v2.0.0-alpha.3`. The Phase 3 scientific outcome was
+`NO CANDIDATE PROMOTION`; no model is authorized for protected evaluation, shadow mode,
+paper research, production paper operation, or live trading. Phase 3 development research
+must derive and apply the Phase 2 final-test prediction-session exclusion boundary before
+building labels from the accepted Phase 1 parent dataset.
+Version 2 Phase 4 is authorized only for specification and infrastructure-first shadow-mode
+scaffolding under `docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md` on
+`review/v2-phase-04-shadow-mode`. Gate A infrastructure entry is permitted; Gate B
+model-connected shadow inference is not satisfied because no approved shadow model exists.
+The target future release is `v2.0.0-beta.1`, the package/runtime version remains
+`2.0.0a3`, no beta tag exists, protected evaluation remains unexecuted, and Phase 5
+production paper operation remains unauthorized.
 Real-data-provider selection belongs to Version 2 Phase 1, not to an old Version 1 phase.
 
 If a user request conflicts with `PROJECT_SPEC.md`, `FUTURE_ROADMAP.md`, or the active phase

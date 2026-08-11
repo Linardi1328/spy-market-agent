@@ -37,6 +37,10 @@ submission can proceed.
   walk-forward fold construction, leakage guards, experiment/feature/model registries,
   research metrics, baselines, candidate selection, protected-evaluation denial, and
   ignored artifact schemas.
+- `spy_market_agent.shadow` (`src/spy_market_agent/shadow`): Version 2 Phase 4
+  infrastructure-first shadow-mode scaffold for observation-only readiness checks,
+  deterministic shadow run identity, model-admission locks, freshness/schedule policy
+  functions, and monitoring state. It has no order-submission capability.
 - `spy_market_agent.persistence` (`src/spy_market_agent/persistence`): explicit SQLite initialization, schema validation, and
   artifact repositories.
 - `spy_market_agent.api` (`src/spy_market_agent/api`): read-only FastAPI application and response service.
@@ -66,6 +70,8 @@ flowchart TD
     Benchmark --> Modeling
     Benchmark --> Backtest
     Research --> ResearchArtifacts[Ignored artifacts/research manifests]
+    Validation --> Shadow[Phase 4 shadow observation-only scaffold]
+    Shadow --> ShadowHealth[Shadow readiness and monitoring state]
     Backtest --> Persistence[SQLite artifact repository]
     FinalTest --> Persistence
     Validation --> Persistence
@@ -151,12 +157,12 @@ predictive discrimination and must not be described as a proven market edge.
 
 ## Version 2 Phase 3 Research Framework
 
-**Active for Alpha 3 release preparation:** Phase 3 PR #24 merged the approved framework
-and initial research scaffolding. PR #25 merged the manual, offline, classification-first
-research runner under `spy_market_agent.research`, and owner development testing completed
-locally. The current branch records sanitized release-preparation evidence and package
-metadata under `docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md`. It starts from the
-completed Phase 2 benchmark evidence as sanitized baseline motivation only.
+**Released as `v2.0.0-alpha.3`:** Phase 3 PR #24 merged the approved framework and initial
+research scaffolding. PR #25 merged the manual, offline, classification-first research
+runner under `spy_market_agent.research`, owner development testing completed locally, and
+Alpha 3 release preparation recorded sanitized evidence and package metadata under
+`docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md`. It starts from the completed Phase 2
+benchmark evidence as sanitized baseline motivation only.
 
 The default Phase 3 protocol is expanding-window walk-forward validation with chronological
 assessment windows, a six-row boundary exclusion after each training window, explicit
@@ -175,9 +181,38 @@ Phase 3 does not introduce a production runtime package, API mutation path, dash
 control, scheduler, broker connection, paper-execution change, live-execution behavior, or
 new asset support. The Phase 3 CLI is manual, local, offline after data acquisition, and has
 no acquisition or execution command. The already-opened Phase 2 final test remains frozen
-evidence and must not be used for Phase 3 tuning. Protected evaluation, strategy
-optimization, Phase 4 shadow mode, production paper operation, live trading, and the public
-`v2.0.0-alpha.3` tag remain unauthorized.
+evidence and must not be used for tuning. Protected evaluation, strategy optimization,
+production paper operation, and live trading remain unauthorized. Phase 3 produced
+`NO CANDIDATE PROMOTION`, so no model is approved for shadow or paper operation.
+
+## Version 2 Phase 4 Shadow Scaffold
+
+**Active specification and infrastructure-first scaffold:** Phase 4 is governed by
+`docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md` and targets `v2.0.0-beta.1`. The package
+version remains `2.0.0a3` during this scaffold.
+
+The initial `spy_market_agent.shadow` package is separate from research and execution:
+
+1. `types.py` defines immutable shadow configuration, lineage, freshness, model-admission,
+   monitoring, run decision, and proposal data structures.
+2. `identity.py` derives deterministic shadow run IDs from stable session, mode, data
+   lineage, feature schema, model metadata, and configuration inputs.
+3. `model_gate.py` implements the fail-closed model-admission contract. The current state is
+   `NO APPROVED SHADOW MODEL`.
+4. `freshness.py` evaluates daily SPY/XNYS freshness and completeness decisions.
+5. `schedule.py` exposes deterministic schedule eligibility functions without creating an
+   OS scheduler, daemon, or background worker.
+6. `policy.py` combines freshness and admission decisions for observation-only or future
+   model-connected run eligibility.
+7. `monitoring.py` summarizes health events as `healthy`, `degraded`, or `blocked`.
+
+`observation_only_no_model` mode can report readiness and why inference is unavailable. It
+cannot generate predictions, produce model-based `LONG` or `CASH` proposals from real
+market data, submit paper orders, contact brokers, modify SQLite paper-execution state, or
+run Phase 5 production paper behavior. `model_connected` mode raises a model-admission error
+in this scaffold even when caller-supplied metadata self-declares approval. A future
+separately approved immutable model-admission registry or artifact is required before Gate B
+can unlock.
 
 ## Backtest Data Flow
 
@@ -237,8 +272,13 @@ requires a matching human approval, and keeps uncertainty as local audit state.
 - Phase 3 experiment artifacts are untrusted until dataset, feature, label, fold, model,
   calibration, threshold, metric, candidate-selection configuration, code, package, Python,
   and dependency lineage are verified.
+- Phase 4 shadow inputs are untrusted until session, freshness, completeness, data-lineage,
+  duplicate-run, and model-admission checks pass. Observation-only readiness is not model
+  approval.
 - Models cannot access brokers. The modeling package imports no execution adapter, no
   Alpaca SDK, and no broker protocol.
+- The shadow package imports no execution adapter, paper service, order approval service,
+  or Alpaca TradingClient.
 - Alpaca trading-client usage is isolated to `execution/alpaca_paper.py`.
 - Historical market-data SDK use is isolated to `market_data/alpaca_provider.py`, which uses
   the data API client and not the trading client.
@@ -258,3 +298,6 @@ dashboard startup do not read ignored benchmark artifacts or access final-test d
 Phase 3 research scaffolding must preserve the same import and startup behavior: no
 automatic acquisition, model experimentation, artifact loading, broker construction, or
 order submission.
+Phase 4 shadow scaffolding also preserves side-effect-free imports: no scheduler startup,
+broker construction, credential reads, data acquisition, model inference, artifact loading,
+database migration, or order submission occurs on import.
