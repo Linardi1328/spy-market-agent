@@ -1,22 +1,26 @@
 # Version 2 Phase 4 - Real-Time Shadow Mode Specification
 
-Status: Active - observation-only operational pipeline development
+Status: Active - scheduled observation operations development
 
 Target release identifier: `v2.0.0-beta.1`
 
-Current implementation branch: `review/v2-phase-04-observation-pipeline`
+Current implementation branch: `review/v2-phase-04-scheduled-observation-ops`
 
-Current package/runtime version during observation-pipeline development: `2.0.0a3`
+Current package/runtime version during scheduled-observation development: `2.0.0a3`
 
 Version 2 Phase 3 is complete and released as `v2.0.0-alpha.3`. Its scientific outcome was
 `NO CANDIDATE PROMOTION`. No Phase 3 model is approved for protected evaluation, shadow
 operation, production paper operation, or live trading. PR #27 merged the approved Phase 4
-specification and infrastructure-first scaffold. The owner has now explicitly authorized
-Phase 4 Observation-Only Operational Pipeline V1. This authorization permits manual run-once
-observation-only operation against verified local Phase 1 manifests, durable shadow
-operational state, monitoring events, local alert records, deterministic idempotency, and
-read-only inspection commands. It must not reinterpret or bypass the Phase 3 model rejection
-result.
+specification and infrastructure-first scaffold. PR #28 merged Observation-Only Operational
+Pipeline V1. The owner has now explicitly authorized Phase 4 Scheduled Observation
+Operations V1. In this document, "scheduled" means deterministic, schedule-aware,
+operator-triggered observation orchestration only. This authorization permits deterministic
+target-session resolution, schedule eligibility evaluation, durable shadow-history
+inspection, already-processed detection, missed-observation detection, operator-triggered
+schedule preview, operator-triggered run-due observation, exact reuse of the existing
+Observation Pipeline V1 runner, and synthetic calendar/schedule tests. It does not authorize
+an unattended daemon, cron job, cloud scheduler, background worker, continuously running
+process, model inference, or any bypass of the Phase 3 model rejection result.
 
 ## 1. Purpose
 
@@ -28,8 +32,8 @@ submitting orders.
 This Phase 4 substage is not a complete production shadow system. It establishes
 terminology, governance, safety boundaries, deterministic identities, model-admission locks,
 freshness checks, scheduling policy functions, monitoring state, alert records, durable
-shadow SQLite persistence, manual run-once observation execution, read-only inspection, and
-synthetic tests.
+shadow SQLite persistence, manual run-once observation execution, read-only inspection,
+operator-triggered schedule-aware orchestration, and synthetic tests.
 
 ## 2. Background
 
@@ -60,13 +64,14 @@ must not be silently substituted for a separately approved shadow model.
 Phase 4 has two gates.
 
 Gate A - Infrastructure Entry is satisfied for this branch because Phase 3 is complete and
-released, PR #27 merged the specification/scaffold, and the owner explicitly authorized the
-observation-only operational pipeline. Gate A permits shadow architecture, verified local
-Phase 1 manifest consumption, market-data readiness policy, freshness and completeness
-controls, calendar and scheduling policy functions, deterministic idempotency, dedicated
-shadow persistence, monitoring, local alert records, run-state management, read-only
-inspection, model-admission locks, synthetic tests, and manual run-once observation
-execution.
+released, PR #27 merged the specification/scaffold, PR #28 merged Observation-Only
+Operational Pipeline V1, and the owner explicitly authorized Scheduled Observation
+Operations V1. Gate A permits shadow architecture, verified local Phase 1 manifest
+consumption, market-data readiness policy, freshness and completeness controls, calendar and
+scheduling policy functions, deterministic idempotency, dedicated shadow persistence,
+monitoring, local alert records, run-state management, read-only inspection,
+model-admission locks, synthetic tests, manual run-once observation execution, and
+operator-triggered schedule-aware orchestration.
 
 Gate B - Model-Connected Shadow Inference is not satisfied. It requires a separately
 approved model candidate with immutable approved metadata. Until Gate B is satisfied,
@@ -99,6 +104,13 @@ risk-based order sizing, `ShadowProposal` generation from operational runs, pape
 submission, broker communication, trading credential reads, market-data acquisition,
 unattended scheduling, API mutation routes, Streamlit execution controls, Phase 5 behavior,
 protected evaluation, or live trading.
+
+Phase 4 Scheduled Observation Operations V1 specifically does not authorize cron,
+APScheduler, Celery, RQ, background threads, daemon processes, systemd, launchd, GitHub
+Actions schedules, cloud schedulers, continuous loops, automatic market-data acquisition,
+model loading, model inference, `ShadowProposal` generation, `LONG`/`CASH` signals, paper
+order submission, broker communication, Phase 5 behavior, protected evaluation, or live
+trading.
 
 ## 6. Shadow-Mode Terminology
 
@@ -174,11 +186,18 @@ execution path.
 Weekends and exchange holidays are not missing sessions. Non-XNYS dates are ineligible
 shadow sessions. Incomplete current-session candles are rejected.
 
-Every operational observation run targets exactly one explicit `--session YYYY-MM-DD`. That
+Every manual `run-observation` targets exactly one explicit `--session YYYY-MM-DD`. That
 session must be a valid XNYS session, exist exactly once in the verified canonical dataset,
 match the latest canonical session represented by the operational snapshot, be complete at
 the supplied `--as-of` timestamp, and contain valid canonical OHLCV data. The command must
 not silently fall back to another date or use calendar-day arithmetic.
+
+Scheduled Observation Operations V1 does not accept an arbitrary target session. Its
+operator-triggered commands derive the due target session deterministically from an explicit
+timezone-aware UTC `--as-of` timestamp using the approved XNYS calendar adapter. The target
+is the latest XNYS session that has completed as of `as_of`, including weekends, exchange
+holidays, and early-close sessions. Naive timestamps, non-UTC timestamps, and calendar
+uncertainty fail closed.
 
 ## 11. Freshness Policy
 
@@ -204,6 +223,13 @@ plus `--provider-finalization-policy-id`. If finalization is not confirmed, the 
 blocked with `provider_not_finalized`. If the target dataset session is older than the
 latest XNYS session that should be complete at `as_of`, the run is blocked with
 `stale_data`.
+
+For Scheduled Observation Operations V1, the verified canonical snapshot's latest session
+must exactly match the latest completed XNYS target session. If the latest canonical session
+is older than the due target, the schedule decision is blocked with `stale_data`. If the
+latest canonical session is newer than the latest completed XNYS session, the decision fails
+closed with `data_ahead_of_completed_session`. The schedule layer must not use a future or
+current incomplete row as input, and it must not call acquisition as a fallback.
 
 ## 12. Completeness Policy
 
@@ -235,9 +261,25 @@ It may implement deterministic policy functions that answer:
 - whether a run is eligible;
 - why a run was refused.
 
-Observation-Only Operational Pipeline V1 wires these checks into explicit manual
-run-once operation. Unattended scheduled operation still requires a later reviewed Phase 4
-authorization.
+Observation-Only Operational Pipeline V1 wires these checks into explicit manual run-once
+operation. Scheduled Observation Operations V1 adds deterministic schedule-aware
+orchestration only:
+
+- resolve the due target session from explicit UTC `as_of`;
+- verify local Phase 1 manifest lineage before declaring a run eligible;
+- compare the due target with the latest canonical session;
+- inspect durable shadow history;
+- identify already-processed, recovery-required, stale, provider-not-finalized, and
+  data-ahead states;
+- surface missed shadow-observation history without backfilling it;
+- preview schedule status without creating or mutating runs;
+- call the existing observation runner at most once when the current due session is
+  eligible.
+
+The schedule layer must not become a second observation engine. It must not duplicate
+manifest verification, OHLCV validation, freshness evaluation, shadow run construction,
+durable reservation, run finalization, health persistence, or alert persistence.
+Unattended scheduled operation still requires a later reviewed Phase 4 authorization.
 
 ## 15. Run-Once Contract
 
@@ -249,6 +291,10 @@ model loading or inference.
 
 No run-once path may acquire data, construct a broker, submit an order, initialize paper
 execution, or contact a trading API.
+
+`run-due-observation` is also a run-once command. It performs at most one schedule decision
+and at most one delegated observation attempt per invocation. It must not loop, sleep, poll,
+retry, backfill historical sessions, or create unattended operation.
 
 ## 16. Idempotency
 
@@ -268,6 +314,13 @@ unstructured operator notes must not define shadow identity. A duplicate logical
 detected and fail closed rather than silently creating another record. Rejected duplicate
 attempts must append local health-event and alert audit evidence without changing the
 existing run lifecycle or overwriting the existing input snapshot.
+
+Schedule orchestration reuses the same underlying `shadow_run_id` as manual observation for
+identical manifest, target session, `as_of`, provider-finalization policy, configuration,
+and data lineage. A manual `run-observation` duplicate remains a rejected duplicate attempt
+and may append duplicate audit evidence. An idempotent `run-due-observation` invocation that
+finds an already terminal run is a safe schedule no-op: it must not create another
+`shadow_runs` row, input snapshot, duplicate health event, or duplicate alert.
 
 ## 17. Model-Admission Gate
 
@@ -325,8 +378,10 @@ A shadow proposal is a non-executable audit object. Candidate fields include:
 - monitoring status;
 - proposal status.
 
-Observation-only mode may produce no proposal or a proposal status such as
-`not_generated_observation_only`. A shadow proposal must not reuse paper-execution order
+Observation-only operational commands produce no `ShadowProposal`. A future scaffolded
+observation-only proposal status such as `not_generated_observation_only` may exist as a
+typed contract, but this substage must not persist or emit model proposals, probabilities,
+scores, or `LONG`/`CASH` targets. A shadow proposal must not reuse paper-execution order
 objects and must not include submit, place, cancel, replace, reconcile, liquidation, or
 broker methods.
 
@@ -463,7 +518,8 @@ not be read by shadow infrastructure.
 
 ## 29. CLI/API Boundaries
 
-Observation-Only Operational Pipeline V1 adds explicit manual CLI commands only:
+Observation-Only Operational Pipeline V1 and Scheduled Observation Operations V1 add
+explicit manual CLI commands only:
 
 ```bash
 python -m spy_market_agent.shadow.cli run-observation \
@@ -478,14 +534,36 @@ python -m spy_market_agent.shadow.cli run-observation \
 python -m spy_market_agent.shadow.cli show-run \
   --shadow-db ./shadow.sqlite3 \
   --run-id <shadow-run-id>
+
+python -m spy_market_agent.shadow.cli schedule-preview \
+  --manifest <phase1-manifest-path> \
+  --data-root ./data \
+  --shadow-db ./shadow.sqlite3 \
+  --as-of YYYY-MM-DDTHH:MM:SSZ \
+  --provider-finalized \
+  --provider-finalization-policy-id <policy-id>
+
+python -m spy_market_agent.shadow.cli run-due-observation \
+  --manifest <phase1-manifest-path> \
+  --data-root ./data \
+  --shadow-db ./shadow.sqlite3 \
+  --as-of YYYY-MM-DDTHH:MM:SSZ \
+  --provider-finalized \
+  --provider-finalization-policy-id <policy-id>
 ```
 
 `run-observation` verifies local Phase 1 artifacts, evaluates observation readiness,
 reserves a deterministic run, persists sanitized lineage, writes health events and local
-alerts, and marks the run `completed` or `blocked`. `show-run` is read-only. No Phase 4 CLI
-that performs real-data model inference is approved. No API mutation route or dashboard
-execution control is approved. Importing `spy_market_agent.shadow` or
-`spy_market_agent.shadow.cli` must have no side effects.
+alerts, and marks the run `completed` or `blocked`. `show-run` is read-only.
+`schedule-preview` resolves the due session, validates local lineage and compatible history,
+and reports due/blocked/degraded/already-processed/recovery states without creating a
+database or mutating existing run lifecycle. `run-due-observation` resolves the due session,
+refuses already-processed or recovery states, and delegates to `run_observation` exactly
+once only when the current due session is eligible. It does not accept `--session` because
+the target is calendar-derived from `--as-of`. No Phase 4 CLI that performs real-data model
+inference is approved. No API mutation route or dashboard execution control is approved.
+Importing `spy_market_agent.shadow` or `spy_market_agent.shadow.cli` must have no side
+effects.
 
 ## 30. Testing
 
@@ -511,9 +589,16 @@ Required coverage includes:
 - deterministic run identity;
 - health events and blocking alerts persisted;
 - read-only inspection does not mutate state;
+- schedule preview is read-only and does not create a missing database;
+- due-session resolution uses XNYS, including weekends, holidays, and early closes;
+- schedule no-ops for already processed runs do not append duplicate audit records;
+- reserved current runs surface recovery-required without resume or overwrite;
+- missed shadow-operation sessions are surfaced and never backfilled automatically;
+- `run-due-observation` performs at most one delegated observation attempt;
 - no broker/trading imports from shadow modules;
 - no credential reads;
 - no automatic order submission;
+- no unattended scheduler, daemon, loop, sleep, cron, APScheduler, Celery, or RQ dependency;
 - no import side effects;
 - live trading remains prohibited;
 - Phase 5 remains unauthorized.
@@ -522,10 +607,12 @@ Required coverage includes:
 
 Owner testing for this substage should review the spec, inspect the observation-only shadow
 pipeline, run the synthetic tests, verify a local Phase 1 manifest through the existing Phase
-1 workflow, run one manual observation-only session, inspect the persisted run, rerun the
-same command to confirm duplicate protection, and inspect stored events/alerts. Owner
-testing must not rerun Phase 3 research, access protected labels, load a model, create
-proposals, or create paper/live orders.
+1 workflow, run `schedule-preview`, inspect due/blocked/degraded state, run
+`run-due-observation` for the latest due session when eligible, inspect the persisted run,
+rerun the same scheduled command to confirm already-processed no-op behavior, and inspect
+stored events/alerts. Owner testing must not rerun Phase 3 research, access protected
+labels, load a model, create proposals, create paper/live orders, or configure unattended
+automation.
 
 ## 32. Required Artifacts/Evidence
 
@@ -534,8 +621,10 @@ Acceptance evidence for this first Phase 4 PR should include:
 - this governing specification;
 - updated governance/status documentation;
 - the `spy_market_agent.shadow` observation-only pipeline;
+- the schedule-aware operator-triggered orchestration layer;
 - dedicated shadow SQLite persistence evidence;
-- manual CLI evidence;
+- manual CLI evidence for `run-observation`, `show-run`, `schedule-preview`, and
+  `run-due-observation`;
 - synthetic test evidence;
 - quality-gate output;
 - confirmation that package version remains `2.0.0a3`;
@@ -551,6 +640,10 @@ This substage may be accepted when:
 - Phase 4 Gate A and Gate B are documented;
 - observation-only mode is implemented and tested;
 - manual observation-only operation consumes verified local Phase 1 manifests only;
+- schedule-aware operation resolves the latest completed XNYS target from explicit UTC
+  `as_of` and delegates eligible work to the approved observation runner at most once;
+- schedule preview is read-only, already-processed runs are no-ops, recovery states fail
+  closed, and missed shadow-operation sessions are reported without backfill;
 - dedicated shadow SQLite persistence is isolated from paper execution state;
 - duplicate and incomplete-reservation retry behavior fails closed;
 - monitoring events and local alerts are persisted;
@@ -574,7 +667,8 @@ This substage must be rejected or held when:
 - a dummy or fallback model can run outside synthetic tests;
 - shadow code imports broker clients or paper execution services;
 - paper/live behavior changes;
-- a scheduler, daemon, API write route, or dashboard execution control is introduced;
+- an unattended scheduler, daemon, API write route, or dashboard execution control is
+  introduced;
 - intraday data, another asset, protected evaluation, strategy optimization, or live
   trading is added;
 - generated real-data artifacts, credentials, account identifiers, or private paths are
@@ -585,8 +679,8 @@ This substage must be rejected or held when:
 ## 35. Versioning Contract
 
 Phase 4 starts from released `v2.0.0-alpha.3` and package/runtime version `2.0.0a3`.
-Specification, infrastructure-first scaffolding, and Observation-Only Operational Pipeline
-V1 must not bump the package version.
+Specification, infrastructure-first scaffolding, Observation-Only Operational Pipeline V1,
+and Scheduled Observation Operations V1 must not bump the package version.
 
 The target future public release identifier is `v2.0.0-beta.1`. A later reviewed
 release-preparation branch may set an appropriate beta package version after Phase 4
@@ -597,11 +691,13 @@ merely because Phase 4 planning begins.
 
 ## 36. Approval Boundary
 
-This specification authorizes Phase 4 infrastructure-first shadow-mode scaffolding and
-Observation-Only Operational Pipeline V1 only. It does not authorize model-connected
-real-data inference, protected evaluation, strategy optimization, production paper
-operation, live trading, broker communication, schedulers, API write routes, dashboard
-execution controls, package version bump, or a beta tag.
+This specification authorizes Phase 4 infrastructure-first shadow-mode scaffolding,
+Observation-Only Operational Pipeline V1, and Scheduled Observation Operations V1 only. The
+scheduled-observation substage is operator-triggered schedule-aware orchestration, not an
+unattended scheduler. It does not authorize model-connected real-data inference, protected
+evaluation, strategy optimization, production paper operation, live trading, broker
+communication, cron, daemon, background workers, continuously running processes, API write
+routes, dashboard execution controls, package version bump, or a beta tag.
 
 Any expansion beyond this document requires explicit owner approval and a new or amended
 governing specification. Model-connected shadow inference remains locked until a separate

@@ -18,13 +18,14 @@ profitability, and is not real-money trading infrastructure.
 - V2 Phase 2: accepted and released - Real Historical Benchmark.
 - V2 Phase 3: accepted and released as `v2.0.0-alpha.3` - Walk-Forward Model Research.
 - V2 Phase 3 model outcome: `NO CANDIDATE PROMOTION`.
-- V2 Phase 4: active observation-only operational pipeline development.
+- V2 Phase 4: active scheduled observation operations development.
 - V2 Phase 4 model admission: blocked - no approved shadow model.
 - Owner-run real SIP benchmark and one controlled final-test execution completed.
 - Owner-run Phase 3 development campaign completed locally with generated artifacts ignored.
 - Public `v2.0.0-beta.1` release/tag: not yet created.
 - Protected evaluation: not executed.
-- Scheduled shadow operation: not authorized.
+- Scheduled observation operations: operator-triggered only.
+- Unattended scheduler or daemon: not authorized.
 - Phase 5 production paper operation: not authorized.
 - Live trading: prohibited.
 
@@ -173,10 +174,11 @@ python -m spy_market_agent.research.cli run-development \
   --campaign-config configs/research/phase3_development_campaign.json
 ```
 
-## Version 2 Phase 4 Observation-Only Shadow Pipeline
+## Version 2 Phase 4 Scheduled Observation Shadow Pipeline
 
-Version 2 Phase 4 is active for the manual observation-only operational pipeline under the
-Real-Time Shadow Mode specification. The governing document is
+Version 2 Phase 4 is active for operator-triggered scheduled observation operations under
+the Real-Time Shadow Mode specification. PR #27 merged the Phase 4 scaffold and PR #28
+merged the manual Observation Pipeline V1. The governing document is
 [Version 2 Phase 4 Real-Time Shadow Mode Specification](docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md).
 The target future release is `v2.0.0-beta.1`, but the package/runtime version remains
 `2.0.0a3` and no beta tag exists.
@@ -189,8 +191,8 @@ current state is `NO APPROVED SHADOW MODEL`, and `model_connected` shadow infere
 raise `blocked_no_approved_model` unless a future separately approved model-admission record
 exists.
 
-The `spy_market_agent.shadow` package supports `observation_only_no_model` mode and a
-manual run-once CLI that consumes verified local Phase 1 manifests only:
+The `spy_market_agent.shadow` package supports `observation_only_no_model` mode and manual
+CLIs that consume verified local Phase 1 manifests only:
 
 ```bash
 python -m spy_market_agent.shadow.cli run-observation \
@@ -205,6 +207,22 @@ python -m spy_market_agent.shadow.cli run-observation \
 python -m spy_market_agent.shadow.cli show-run \
   --shadow-db ./shadow.sqlite3 \
   --run-id SHADOW_RUN_ID
+
+python -m spy_market_agent.shadow.cli schedule-preview \
+  --manifest data/manifests/alpaca/SPY/1Day/sip/all/DATASET_ID.manifest.json \
+  --data-root ./data \
+  --shadow-db ./shadow.sqlite3 \
+  --as-of YYYY-MM-DDTHH:MM:SSZ \
+  --provider-finalized \
+  --provider-finalization-policy-id operator-confirmed-daily-final-v1
+
+python -m spy_market_agent.shadow.cli run-due-observation \
+  --manifest data/manifests/alpaca/SPY/1Day/sip/all/DATASET_ID.manifest.json \
+  --data-root ./data \
+  --shadow-db ./shadow.sqlite3 \
+  --as-of YYYY-MM-DDTHH:MM:SSZ \
+  --provider-finalized \
+  --provider-finalization-policy-id operator-confirmed-daily-final-v1
 ```
 
 The observation pipeline verifies Phase 1 lineage before loading canonical bars, enforces
@@ -212,9 +230,18 @@ SPY/`1Day`/XNYS/adjustment `all`, checks target-session completeness, freshness,
 finalization, and OHLCV validity, then writes sanitized run, input-snapshot, health-event,
 and local-alert records to a dedicated shadow SQLite database. It cannot generate
 predictions, model-based `LONG` or `CASH` proposals from real market data, broker orders,
-paper orders, risk approvals, or execution requests. Phase 4 does not add intraday data, a
-scheduler, strategy optimization, protected evaluation, Phase 5 production paper operation,
-live trading, broker communication, API write routes, or dashboard execution controls.
+paper orders, risk approvals, or execution requests.
+
+The schedule-aware commands are deterministic wrappers over the approved observation runner.
+`schedule-preview` resolves the latest completed XNYS session from explicit UTC `--as-of`,
+checks local manifest lineage and shadow history, and does not create or mutate runs.
+`run-due-observation` accepts no `--session`, resolves the due target the same way, treats an
+already processed run as a safe no-op, surfaces `recovery_required` for incomplete prior
+reservations, reports missed shadow-operation sessions without backfilling them, and
+delegates to the existing observation runner at most once only when the current due session
+is eligible. Phase 4 does not add intraday data, unattended scheduling, daemons, loops,
+strategy optimization, protected evaluation, Phase 5 production paper operation, live
+trading, broker communication, API write routes, or dashboard execution controls.
 
 ## Safety Boundaries
 
@@ -264,7 +291,7 @@ The current implemented system intentionally does not include:
 - automatic broker communication
 - automatic paper-order submission
 - order cancellation, replacement, liquidation, stops, limits, brackets, OCO, or OTO
-- schedulers, workers, cron jobs, deployment files, or cloud infrastructure
+- unattended schedulers, workers, cron jobs, deployment files, or cloud infrastructure
 - live trading or live Alpaca endpoints
 - assets other than SPY
 
@@ -276,9 +303,10 @@ Version 2 Phase 3 is released as `v2.0.0-alpha.3`. The completed development cam
 produced `NO CANDIDATE PROMOTION`; it did not run protected evaluation, strategy
 optimization, shadow inference, or paper/live operation.
 
-Version 2 Phase 4 currently includes the manual observation-only operational pipeline and
-dedicated local shadow audit persistence. Model-connected shadow inference remains locked
-because no approved shadow model exists.
+Version 2 Phase 4 currently includes the manual observation-only operational pipeline,
+dedicated local shadow audit persistence, and operator-triggered schedule-aware observation
+orchestration. Model-connected shadow inference remains locked because no approved shadow
+model exists.
 
 Version 1.0.0 specifically did not include market-data downloading; the explicit SPY
 historical-data acquisition CLI begins in Version 2 Phase 1.

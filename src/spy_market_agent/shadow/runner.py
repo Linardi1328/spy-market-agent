@@ -8,7 +8,12 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from spy_market_agent.market_data.acquisition import CanonicalDailyBar, DatasetManifest, utc_now
-from spy_market_agent.market_data.calendar import MARKET_CALENDAR, MARKET_TIMEZONE, XNYSCalendar
+from spy_market_agent.market_data.calendar import (
+    MARKET_CALENDAR,
+    MARKET_TIMEZONE,
+    TradingCalendar,
+    XNYSCalendar,
+)
 from spy_market_agent.market_data.errors import ChecksumMismatch, ManifestValidationFailure
 from spy_market_agent.market_data.manifest import (
     canonical_bars_from_csv_bytes,
@@ -408,7 +413,7 @@ def build_operational_snapshot(
 
 def latest_completed_xnys_session(
     *,
-    calendar: XNYSCalendar,
+    calendar: TradingCalendar,
     as_of: datetime,
     earliest_session: date,
 ) -> date | None:

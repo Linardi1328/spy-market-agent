@@ -290,9 +290,9 @@ Phase 4 is active for manual observation-only Real-Time Shadow Mode operation un
 `docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md`. The target future release is
 `v2.0.0-beta.1`; package/runtime version remains `2.0.0a3`, and no beta tag exists.
 
-This substage has a manual observation-only CLI, no model inference, no scheduler, no
-daemon, no API write route, no dashboard execution control, and no broker path. It consumes
-only verified local Phase 1 manifests and never performs acquisition.
+This substage has manual observation-only CLIs, no model inference, no unattended scheduler,
+no daemon, no API write route, no dashboard execution control, and no broker path. It
+consumes only verified local Phase 1 manifests and never performs acquisition.
 
 First verify the local Phase 1 manifest through the existing offline verifier:
 
@@ -330,6 +330,76 @@ failing an otherwise healthy data-readiness run. It cannot generate predictions,
 `ShadowProposal` records, model-based `LONG` or `CASH` proposals from real market data,
 broker orders, paper orders, approvals, or execution requests. Model-connected shadow
 inference remains locked until a future separately approved model-admission record exists.
+
+## Run Phase 4 Scheduled Observation Operations
+
+Scheduled Observation Operations V1 means deterministic, schedule-aware,
+operator-triggered orchestration. It is not cron, a daemon, a background worker, a retry
+loop, or automatic market-data acquisition. The schedule layer answers which XNYS session is
+due, whether local verified data is fresh enough, whether that logical observation has
+already been processed, and whether prior shadow-operation history has gaps. Eligible work
+delegates to the approved `run_observation(...)` path at most once.
+
+First update or verify the local Phase 1 dataset through the separately approved Phase 1
+workflow. The schedule commands consume that local manifest only:
+
+```bash
+python -m spy_market_agent.market_data.cli verify \
+  --manifest data/manifests/alpaca/SPY/1Day/sip/all/DATASET_ID.manifest.json \
+  --data-root ./data
+```
+
+Preview the latest due observation without mutating shadow state:
+
+```bash
+python -m spy_market_agent.shadow.cli schedule-preview \
+  --manifest data/manifests/alpaca/SPY/1Day/sip/all/DATASET_ID.manifest.json \
+  --data-root ./data \
+  --shadow-db ./shadow.sqlite3 \
+  --as-of YYYY-MM-DDTHH:MM:SSZ \
+  --provider-finalized \
+  --provider-finalization-policy-id operator-confirmed-daily-final-v1
+```
+
+`schedule-preview` derives the latest completed XNYS target from explicit UTC `--as-of`.
+It treats a missing shadow database as `no_prior_history`, validates any existing shadow
+database before reading history, and reports due, blocked, degraded, already-processed, or
+recovery-required state. It does not create a database solely for preview and does not
+append duplicate audit events.
+
+Run the currently due observation only when the preview is eligible:
+
+```bash
+python -m spy_market_agent.shadow.cli run-due-observation \
+  --manifest data/manifests/alpaca/SPY/1Day/sip/all/DATASET_ID.manifest.json \
+  --data-root ./data \
+  --shadow-db ./shadow.sqlite3 \
+  --as-of YYYY-MM-DDTHH:MM:SSZ \
+  --provider-finalized \
+  --provider-finalization-policy-id operator-confirmed-daily-final-v1
+```
+
+`run-due-observation` accepts no `--session`; the target is calendar-derived. If the exact
+deterministic run already ended as `completed`, `blocked`, or `failed`, the command returns
+an `already_processed` no-op without creating a second run, input snapshot, duplicate health
+event, or duplicate alert. If the existing run is `reserved`, it returns
+`recovery_required` and does not resume, delete, overwrite, or backfill.
+
+Inspect the persisted run:
+
+```bash
+python -m spy_market_agent.shadow.cli show-run \
+  --shadow-db ./shadow.sqlite3 \
+  --run-id SHADOW_RUN_ID
+```
+
+Missed shadow observation sessions are operational-history gaps between the latest prior
+terminal observation and the current due XNYS session. They are not missing market-data
+sessions, proof of model failure, or authorization for replay. The scheduled layer reports
+them as warnings and never loops through historical sessions to backfill them. If current
+data is verified, fresh, finalized, not already processed, and not in recovery, missed
+history alone may make the schedule state `degraded` while still allowing the current due
+observation to proceed.
 
 ## Inspect Model Evaluations
 

@@ -38,15 +38,15 @@ leakage-safe features, trains deterministic baseline models, runs risk-controlle
 persists audit artifacts in SQLite, exposes read-only FastAPI and Streamlit views, and
 contains explicitly invoked Alpaca paper-only safeguards.
 
-**Active:** Version 2 Phase 4 Real-Time Shadow Mode is active for observation-only
-operational pipeline development on `review/v2-phase-04-observation-pipeline` after PR #27
-merged the approved specification and infrastructure-first scaffold. Version 2 Phase 3 is
-complete and released as `v2.0.0-alpha.3`; its scientific outcome was
+**Active:** Version 2 Phase 4 Real-Time Shadow Mode is active for Scheduled Observation
+Operations V1 on `review/v2-phase-04-scheduled-observation-ops` after PR #27 merged the
+approved specification/scaffold and PR #28 merged Observation Pipeline V1. Version 2 Phase 3
+is complete and released as `v2.0.0-alpha.3`; its scientific outcome was
 `NO CANDIDATE PROMOTION`. Phase 4 Gate A infrastructure entry is authorized, but Gate B
 model-connected shadow inference is blocked because no model has been approved for shadow
 operation. Protected evaluation, strategy optimization, production paper operation, live
-trading, broker communication, schedulers, API write routes, and dashboard execution
-controls remain unauthorized.
+trading, broker communication, unattended schedulers, API write routes, and dashboard
+execution controls remain unauthorized.
 
 **Planned:** A responsible future path preserves Version 1, uses the accepted real SPY
 benchmark as baseline evidence, then adds stronger model research, shadow-mode operations,
@@ -246,14 +246,15 @@ be used for later tuning.
 
 ### Stage 3 - Real-Time Shadow and Production Paper System
 
-**Active as Version 2 Phase 4 observation-only operational pipeline:** Build manual
+**Active as Version 2 Phase 4 scheduled observation operations:** Build manual
 verified-manifest observation runs, reliable data-readiness policy, freshness/completeness
-controls, deterministic scheduling policy functions, run identities, durable idempotency,
-dedicated shadow SQLite audit state, monitoring events, local alerts, and model-admission
-locks. Model-connected inference is not permitted until a separate model candidate is
-approved. Paper execution remains a later Phase 5 topic and requires reconciliation and
-recovery runbooks. After any future model-connected shadow deployment, require observation
-evidence before considering live-readiness work.
+controls, deterministic scheduling policy functions, operator-triggered due-session
+resolution, already-processed and recovery detection, missed-observation reporting, run
+identities, durable idempotency, dedicated shadow SQLite audit state, monitoring events,
+local alerts, and model-admission locks. Model-connected inference is not permitted until a
+separate model candidate is approved. Paper execution remains a later Phase 5 topic and
+requires reconciliation and recovery runbooks. After any future model-connected shadow
+deployment, require observation evidence before considering live-readiness work.
 
 ### Stage 4 - Live-Readiness Engineering
 
@@ -334,8 +335,8 @@ Current tracking:
   owner-run real SIP benchmark completion.
 - V2 Phase 3 / `v2.0.0-alpha.3`: Accepted and released - Walk-Forward Model Research.
   Scientific outcome: `NO CANDIDATE PROMOTION`.
-- V2 Phase 4 / `v2.0.0-beta.1`: Active observation-only Real-Time Shadow Mode operational
-  pipeline development. Gate A infrastructure entry is authorized; Gate B model-connected
+- V2 Phase 4 / `v2.0.0-beta.1`: Active scheduled-observation Real-Time Shadow Mode
+  operations development. Gate A infrastructure entry is authorized; Gate B model-connected
   inference is blocked because no shadow model is approved.
 
 | Track | Version | Name | Recommended Branch | Scope |
@@ -344,7 +345,7 @@ Current tracking:
 | V2 Phase 1 | `v2.0.0-alpha.1` | Real SPY Data Foundation | `review/v2-phase-01-release-preparation` | Accepted - Version 2 Real SPY Data Foundation with approved provider workflow, licensing record, validated SPY dataset handling, checksums, and data lineage. |
 | V2 Phase 2 | `v2.0.0-alpha.2` | Real Historical Benchmark | `review/v2-phase-02-release-preparation` | Accepted and released after owner-run real SIP benchmark, validation, one controlled final-test execution, benchmark verification, quality gates, and tag confirmation. No live execution or profitability claim. |
 | V2 Phase 3 | `v2.0.0-alpha.3` | Walk-Forward Model Research | Merged and tagged | Accepted and released after PR #24 framework/scaffolding merge, PR #25 development implementation merge, owner development testing, and Alpha 3 release preparation. Outcome: `NO CANDIDATE PROMOTION`; no protected evaluation, strategy optimization, shadow inference, paper operation, or live trading. |
-| V2 Phase 4 | `v2.0.0-beta.1` | Real-Time Shadow Mode | `review/v2-phase-04-observation-pipeline` | Active observation-only operational pipeline for verified local Phase 1 manifests, freshness/completeness checks, dedicated shadow SQLite audit persistence, monitoring events, local alerts, deterministic idempotency, and model-admission lock. Model-connected inference remains blocked until a separate approved model exists. |
+| V2 Phase 4 | `v2.0.0-beta.1` | Real-Time Shadow Mode | `review/v2-phase-04-scheduled-observation-ops` | Active scheduled observation operations for verified local Phase 1 manifests, latest completed XNYS target resolution, read-only schedule preview, run-due delegation to the observation runner, already-processed no-ops, recovery-required detection, missed-observation reporting, dedicated shadow SQLite audit persistence, and model-admission lock. Model-connected inference remains blocked until a separate approved model exists. |
 | V2 Phase 5 | `v2.0.0-beta.2` | Production Paper Operation | `review/v2-phase-05-production-paper` | Production paper operation, reconciliation, recovery runbooks, and observation evidence. |
 | V2 Phase 6 | `v2.0.0-rc.1` | Version 2 Release Candidate | `review/v2-phase-06-release-candidate` | Feature-complete Version 2 audit for real-data, shadow, and production-paper scope. |
 | Final | `v2.0.0` | Approved Real-Data, Shadow, and Production-Paper Platform | Release from approved RC | Version 2 release after final audit; excludes real-money trading and live pilot approval. |
@@ -366,7 +367,8 @@ selection, protected-evaluation, and strategy-separation controls and recorded
 `NO CANDIDATE PROMOTION`. The Phase 4 governing specification is
 [Version 2 Phase 4 - Real-Time Shadow Mode Specification](docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md).
 PR #27 merged the infrastructure-first shadow-mode scaffold. The current authorized substage
-implements manual observation-only operation only.
+implements operator-triggered scheduled observation operations on top of the merged manual
+observation pipeline only.
 
 Recommended branch sequence:
 
@@ -376,7 +378,8 @@ Recommended branch sequence:
 - `review/v2-phase-03-development-research` (merged PR #25 development implementation)
 - `review/v2-phase-03-alpha3-release-preparation` (merged and tagged as `v2.0.0-alpha.3`)
 - `review/v2-phase-04-shadow-mode` (merged PR #27 specification/scaffold)
-- `review/v2-phase-04-observation-pipeline`
+- `review/v2-phase-04-observation-pipeline` (merged PR #28 observation pipeline)
+- `review/v2-phase-04-scheduled-observation-ops`
 - `review/v2-phase-05-production-paper`
 - `review/v2-phase-06-release-candidate`
 
@@ -683,8 +686,8 @@ Related documents:
 - [Version 2 Phase 3 Alpha 3 Release Evidence](docs/V2_PHASE_03_ALPHA3_RELEASE_EVIDENCE.md):
   sanitized aggregate evidence for the owner-run development campaign and Alpha 3 release.
 - [Version 2 Phase 4 - Real-Time Shadow Mode Specification](docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md):
-  active governing specification for `v2.0.0-beta.1` infrastructure-first shadow-mode
-  scaffolding. Model-connected inference remains locked because no shadow model is approved.
+  active governing specification for `v2.0.0-beta.1` scheduled observation operations.
+  Model-connected inference remains locked because no shadow model is approved.
 - [Version 2.0.0 Alpha 1 Release Notes](RELEASE_NOTES_V2.0.0_ALPHA_1.md): release notes
   for the `v2.0.0-alpha.1` release identifier.
 - [Version 2.0.0 Alpha 2 Release Notes](RELEASE_NOTES_V2.0.0_ALPHA_2.md): release notes
@@ -698,6 +701,7 @@ Change log:
 
 | Date | Base Main SHA | Change |
 | --- | --- | --- |
+| 2026-08-11 | `10441e982e979a82fe060c717240e0e1086f707c` | Began V2 Phase 4 Scheduled Observation Operations V1 on `review/v2-phase-04-scheduled-observation-ops` after PR #28 merged; authorized deterministic latest completed XNYS target resolution, schedule preview, run-due delegation to the approved observation runner, already-processed no-ops, recovery-required handling, and missed-observation reporting while Gate B model-connected inference, unattended schedulers, acquisition, broker behavior, Phase 5 paper operation, protected evaluation, and live trading remain unauthorized. |
 | 2026-08-11 | `d580d36a604121f3be0a137a60b6e9149d002566` | Began V2 Phase 4 Observation-Only Operational Pipeline V1 on `review/v2-phase-04-observation-pipeline` after PR #27 merged; authorized manual verified-manifest observation runs, dedicated shadow SQLite persistence, local monitoring/alerts, deterministic idempotency, and read-only inspection while Gate B model-connected inference, scheduling, broker behavior, Phase 5 paper operation, protected evaluation, and live trading remain unauthorized. |
 | 2026-08-11 | `d68e9eed068115c9af7efeb9110d1afc175806bb` | Began V2 Phase 4 Real-Time Shadow Mode specification and infrastructure-first scaffold on `review/v2-phase-04-shadow-mode`; Gate A infrastructure entry is authorized, Gate B model-connected inference remains blocked because Phase 3 produced `NO CANDIDATE PROMOTION`, package/runtime version remains `2.0.0a3`, and no beta tag, Phase 5 paper operation, broker behavior, or live trading is authorized. |
 | 2026-08-11 | `d68e9eed068115c9af7efeb9110d1afc175806bb` | Recorded that V2 Phase 3 Alpha 3 release preparation merged and was tagged as `v2.0.0-alpha.3`; the released scientific outcome is `NO CANDIDATE PROMOTION`, protected evaluation was not executed, and no model is approved for shadow or paper operation. |

@@ -280,7 +280,7 @@ execute protected evaluation or strategy optimization and did not promote a mode
 
 ## Version 2 Phase 4 Shadow Reproducibility
 
-**Active observation-only operational pipeline development:** Phase 4 is governed by
+**Active scheduled observation operations development:** Phase 4 is governed by
 `docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md` and targets `v2.0.0-beta.1`. The package
 version remains `2.0.0a3`; no beta tag exists.
 
@@ -306,6 +306,17 @@ closed. The dedicated shadow SQLite database uses schema version
 rejects completed, blocked, failed, reserved, incomplete, or unknown prior records rather
 than silently overwriting them.
 
+Scheduled Observation Operations V1 reuses the same identity as manual observation for
+identical manifest, target session, `as_of`, provider-finalization policy, configuration,
+and data lineage. `schedule-preview` derives the latest completed XNYS session from
+explicit UTC `as_of`, validates local lineage and compatible history, and is read-only; it
+does not create a missing shadow database or mutate existing run lifecycle.
+`run-due-observation` resolves the same due session, treats a terminal existing run as an
+`already_processed` no-op, fails closed on `reserved` recovery-required state, and delegates
+to `run_observation(...)` at most once only when the current due session is eligible. Missed
+shadow-operation sessions are reported as operational-history gaps and are never backfilled
+automatically. The shadow DB schema version remains `spy-v2-phase4-shadow-db-v1`.
+
 Current model-admission state is `NO APPROVED SHADOW MODEL`. Observation-only mode may
 evaluate daily SPY/XNYS session readiness, provider finalization evidence, monitoring state,
 and local alerts, but it cannot generate model predictions, real-data `LONG`/`CASH`
@@ -314,8 +325,8 @@ separately approved immutable model-admission record and otherwise raises
 `blocked_no_approved_model`.
 
 Normal tests for Phase 4 remain offline, synthetic, credential-free, broker-free, and do not
-run real owner research, protected evaluation, paper execution, live execution, or a
-scheduler.
+run real owner research, protected evaluation, paper execution, live execution, unattended
+schedulers, daemons, background loops, or market-data acquisition.
 
 ## Checksums and Schema Versions
 
