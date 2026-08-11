@@ -153,9 +153,10 @@ failed first access preserves the started record and requires explicit operator 
 any non-audit re-attempt; audit replay never creates a new access record or overwrites
 accepted final artifacts.
 
-The Version 2 Phase 3 research path is now in Alpha 3 release preparation after PR #24
-merged the approved framework, PR #25 merged the development research runner, and owner
-development testing completed locally. Its package-local runner must not load Phase 2
+The Version 2 Phase 3 research path is accepted and released as `v2.0.0-alpha.3` after PR
+#24 merged the approved framework, PR #25 merged the development research runner, owner
+development testing completed locally, and Alpha 3 release preparation was tagged. Its
+package-local runner must not load Phase 2
 final-test row-level labels, predictions, strategy rows, fills, or generated benchmark JSON
 for tuning. It also must not reconstruct Phase 2 final-test row-level labels indirectly from
 the parent canonical dataset: the development runner reconstructs the frozen Phase 2 split
@@ -165,8 +166,21 @@ final-test prediction sessions. Phase 3 generated real-data research artifacts r
 ignored under `artifacts/research/<experiment_id>/`, and tracked acceptance evidence is
 sanitized aggregate documentation only. The Phase 3 CLI is manual, offline after data
 acquisition, credential-free, broker-free, and unable to submit paper or live orders.
-Protected evaluation, Phase 4 shadow mode, strategy optimization, production paper
-operation, live trading, and the public `v2.0.0-alpha.3` tag remain unauthorized.
+Protected evaluation, strategy optimization, production paper operation, and live trading
+remain unauthorized. The Phase 3 scientific outcome was `NO CANDIDATE PROMOTION`, so no
+model is approved for shadow or paper operation.
+
+The Version 2 Phase 4 shadow scaffold is governed by
+`docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md`. It is infrastructure-first and starts in
+`observation_only_no_model` mode. It may evaluate synthetic or local session readiness,
+freshness, completeness, deterministic run identity, duplicate-run state, model-admission
+state, and monitoring state. It must not generate model predictions from real data,
+construct model-based `LONG` or `CASH` proposals, submit orders, create risk approvals,
+initialize paper execution, construct Alpaca `TradingClient`, use broker credentials, expose
+API write routes, add dashboard execution controls, or start a scheduler. Model-connected
+shadow inference is locked with machine-readable status `blocked_no_approved_model` until a
+future separately approved immutable model-admission record exists. Phase 5 production paper
+operation and live trading remain unauthorized.
 
 ## Historical Market-Data Safety
 

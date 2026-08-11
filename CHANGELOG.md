@@ -2,12 +2,28 @@
 
 ## [Unreleased]
 
+- Began Version 2 Phase 4 Real-Time Shadow Mode specification and infrastructure-first
+  scaffolding for target release `v2.0.0-beta.1`.
+- Added the governing Phase 4 specification and initial `spy_market_agent.shadow` package
+  for observation-only readiness checks, deterministic run identities, model-admission
+  locking, freshness/schedule policy functions, and monitoring state.
+- Documented that Version 2 Phase 3 is released as `v2.0.0-alpha.3`, its outcome was
+  `NO CANDIDATE PROMOTION`, and model-connected shadow inference remains blocked because no
+  model is approved for shadow operation.
+- Preserved package/runtime version `2.0.0a3`; no beta tag, protected evaluation, strategy
+  optimization, broker communication, scheduler, Phase 5 production paper operation, or live
+  trading is included.
+
+## [2.0.0-alpha.3] - 2026-08-11
+
+Corresponding Python package version: `2.0.0a3`.
+
 - Began Version 2 Phase 3 Alpha 3 release preparation after PR #25 was owner-tested and
   merged into `main` at `cc6ee4ee404659143a1ba633d3faf7fddbc63f9f`.
 - Added sanitized Alpha 3 release evidence for owner-run campaign
   `spy-v2p3-dev-3741349b8aa34020b8425af5`, which ended with `NO CANDIDATE PROMOTION`.
-- Prepared package/runtime version `2.0.0a3` for the future public release identifier
-  `v2.0.0-alpha.3`; the public tag has not been created.
+- Prepared package/runtime version `2.0.0a3` for public release identifier
+  `v2.0.0-alpha.3`; the tag was created after merge and final verification on `main`.
 - Documented that protected evaluation, strategy optimization, Phase 4 shadow mode,
   production paper operation, live trading, broker communication, and real-data artifact
   commits remain unauthorized.
@@ -34,6 +50,13 @@
   guidance to mark Phase 3 as active framework implementation and initial research
   scaffolding.
 - Documented that Phase 3 must not tune against the already-opened Phase 2 final test.
+
+### Released
+
+- Version 2 Phase 3 was accepted, merged, and tagged as `v2.0.0-alpha.3`.
+- The owner-run development campaign produced `NO CANDIDATE PROMOTION`.
+- Protected evaluation, shadow inference, production paper operation, and live trading were
+  not executed or authorized by Alpha 3.
 
 ## [2.0.0-alpha.2] - 2026-08-09
 

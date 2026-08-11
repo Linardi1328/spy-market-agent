@@ -56,9 +56,9 @@ API or dashboard inspection.
 
 ## Version 2 Phase 1 Data Foundation
 
-**Accepted for alpha release preparation:** Phase 1 adds explicit historical SPY daily-data
-acquisition. Normal verification remains offline and does not require market-data
-credentials.
+**Accepted and released as `v2.0.0-alpha.1`:** Phase 1 adds explicit historical SPY
+daily-data acquisition. Normal verification remains offline and does not require
+market-data credentials.
 
 Example explicit acquisition command:
 
@@ -164,10 +164,10 @@ retrieval timestamp, and fails closed on mismatches.
 
 ## Version 2 Phase 2 Benchmark Reproducibility
 
-**Engineering accepted for alpha release preparation:** Phase 2 benchmark infrastructure
-uses ignored immutable files under `artifacts/benchmarks/<benchmark_id>/`. It does not
-change the SQLite schema and does not persist model binaries. The final model is
-reconstructed from the locked configuration and refit deterministically from verified data.
+**Accepted and released as `v2.0.0-alpha.2`:** Phase 2 benchmark infrastructure uses
+ignored immutable files under `artifacts/benchmarks/<benchmark_id>/`. It does not change the
+SQLite schema and does not persist model binaries. The final model is reconstructed from the
+locked configuration and refit deterministically from verified data.
 
 The owner-run primary benchmark used dataset ID `spy-v2p1-825930b0a2bcab20c733b867` and
 benchmark ID `spy-v2p2-a065593e952e6a9d96f4be86`. Dataset verification, completed benchmark
@@ -228,13 +228,12 @@ result showed weak predictive discrimination and must not be used for Phase 3 tu
 
 ## Version 2 Phase 3 Research Reproducibility
 
-**Active for Alpha 3 release preparation:** Phase 3 defines walk-forward research rules
+**Accepted and released as `v2.0.0-alpha.3`:** Phase 3 defines walk-forward research rules
 under `docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md`. PR #24 merged the approved
 framework and initial scaffolding; PR #25 merged a manual, offline, classification-first
-development campaign under `src/spy_market_agent/research`, and owner development testing
-completed locally. The release-preparation branch prepares package/runtime version
-`2.0.0a3` for the future public identifier `v2.0.0-alpha.3`; the public tag has not been
-created.
+development campaign under `src/spy_market_agent/research`; owner development testing
+completed locally; and Alpha 3 release preparation was merged and tagged. Package/runtime
+version is `2.0.0a3`. The scientific outcome was `NO CANDIDATE PROMOTION`.
 
 The recommended primary protocol is expanding-window walk-forward validation:
 
@@ -276,8 +275,40 @@ feature warm-up, fold policy, diagnostic threshold, reliability bin count, candi
 selection thresholds, calibration procedure, and regime/drift settings before execution.
 Changing selection-sensitive values creates a different stable campaign or experiment
 identity. The owner-run development campaign remains under ignored local artifacts and is
-represented in tracked files only by sanitized aggregate release evidence. The current
-branch does not execute protected evaluation or strategy optimization.
+represented in tracked files only by sanitized aggregate release evidence. Alpha 3 did not
+execute protected evaluation or strategy optimization and did not promote a model.
+
+## Version 2 Phase 4 Shadow Reproducibility
+
+**Active specification and infrastructure-first scaffold:** Phase 4 is governed by
+`docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md` and targets `v2.0.0-beta.1`. The package
+version remains `2.0.0a3`; no beta tag exists.
+
+The initial shadow scaffold records deterministic identity policy before model-connected
+operation is authorized. A shadow run identity is derived from stable inputs:
+
+- symbol `SPY`;
+- signal session;
+- mode, initially `observation_only_no_model`;
+- data snapshot lineage and canonical checksum;
+- feature schema;
+- model metadata and checksum when a future model is approved;
+- configuration version;
+- provider finalization policy identifier.
+
+Shadow run identity excludes clock time, usernames, hostnames, absolute local paths,
+credentials, random UUIDs, and raw provider payloads. Duplicate logical runs must fail
+closed.
+
+Current model-admission state is `NO APPROVED SHADOW MODEL`. Observation-only mode may
+evaluate daily SPY/XNYS session readiness and monitoring state, but it cannot generate model
+predictions or real-data `LONG`/`CASH` proposals. Model-connected mode requires a future
+separately approved immutable model-admission record and otherwise raises
+`blocked_no_approved_model`.
+
+Normal tests for Phase 4 remain offline, synthetic, credential-free, broker-free, and do not
+run real owner research, protected evaluation, paper execution, live execution, or a
+scheduler.
 
 ## Checksums and Schema Versions
 
@@ -293,6 +324,7 @@ Validated data and downstream artifacts retain explicit schema and checksum line
 - paper-execution schema: `spy-paper-execution-v1`
 - SQLite schema: `spy-sqlite-persistence-v2`
 - benchmark artifact schema: `spy-v2-phase2-benchmark-artifacts-v1`
+- shadow artifact schema: `spy-v2-phase4-shadow-v1`
 
 Market-data checksums are deterministic over canonical rows, column order, session order,
 prices, and volume. Backtest results also retain source market data and execution-price

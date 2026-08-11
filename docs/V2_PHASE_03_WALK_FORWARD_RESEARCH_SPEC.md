@@ -1,20 +1,22 @@
 # Version 2 Phase 3 - Walk-Forward Model Research Specification
 
-Status: Alpha 3 release preparation after PR #24 framework merge, PR #25 development
-implementation merge, and owner development testing
+Status: Accepted and released as `v2.0.0-alpha.3` after PR #24 framework merge, PR #25
+development implementation merge, owner development testing, and Alpha 3 release
+preparation
 
 Target release identifier: `v2.0.0-alpha.3`
 
-Current implementation branch: `review/v2-phase-03-alpha3-release-preparation`
+Release-preparation branch: `review/v2-phase-03-alpha3-release-preparation`
 
-Release-preparation package/runtime version: `2.0.0a3`
+Released package/runtime version: `2.0.0a3`
 
 PR #24 merged the approved Phase 3 framework and initial research scaffolding. PR #25
 merged the manual, offline, classification-first development experimentation runner, and
-owner development testing completed locally. The current authorized substage prepares Alpha
-3 acceptance/release evidence and package metadata. It does not authorize Phase 3 protected
-evaluation, strategy-threshold optimization, Phase 4 shadow mode, Phase 5 production paper
-operation, live trading, broker communication, or the public `v2.0.0-alpha.3` tag.
+owner development testing completed locally. Alpha 3 release preparation recorded sanitized
+acceptance evidence, bumped package metadata to `2.0.0a3`, merged to `main`, and was tagged
+as `v2.0.0-alpha.3`. The scientific outcome was `NO CANDIDATE PROMOTION`. Phase 3 did not
+execute protected evaluation, strategy-threshold optimization, Phase 4 shadow mode, Phase 5
+production paper operation, live trading, or broker communication.
 
 Phase 3 begins after the completed `v2.0.0-alpha.2` release. Phase 2 established the first
 real SPY historical benchmark on a verified Alpaca SIP, `1Day`, adjustment `all` dataset.
@@ -108,9 +110,9 @@ the authorized development substage for the predeclared classification-first wal
 campaign: verified Phase 1 manifest input, baseline and research OHLCV features, feature
 ablations, fixed Phase 2 model baselines, finite scikit-learn model grids, the predeclared
 calibration sub-study, classification metrics, regime/drift diagnostics, and candidate
-selection. The current Alpha 3 release-preparation branch records sanitized acceptance
-evidence and release metadata. Strategy optimization and protected evaluation remain locked
-until a later explicit approval.
+selection. Alpha 3 release preparation recorded sanitized acceptance evidence and release
+metadata. Strategy optimization and protected evaluation remain locked until a later
+explicit approval. No model was promoted.
 
 ## 3. Explicit Non-Goals
 
@@ -761,10 +763,14 @@ Phase 3 must be rejected or held when:
 This specification is the governing Phase 3 document. PR #24 delivered the approved
 walk-forward model-research framework and initial research scaffolding. PR #25 delivered the
 development-only, manual, offline classification experimentation runner under the same
-leakage, lineage, fold, artifact, and selection controls. The current authorized branch may
-prepare sanitized Alpha 3 acceptance evidence and release metadata only.
+leakage, lineage, fold, artifact, and selection controls. Alpha 3 release preparation
+recorded sanitized acceptance evidence and release metadata, then was merged and tagged as
+`v2.0.0-alpha.3`.
 
-It does not authorize Phase 4 shadow mode, Phase 5 production paper operation, live trading,
-new assets, protected evaluation execution, strategy optimization in the current branch,
-production execution behavior, or the public `v2.0.0-alpha.3` tag. Any expansion beyond this
-specification requires explicit owner approval and a new or amended governing specification.
+It does not authorize model promotion, Phase 3 protected evaluation execution, Phase 5
+production paper operation, live trading, new assets, strategy optimization, or production
+execution behavior. Phase 4 shadow infrastructure is now governed separately by
+`docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md`; model-connected shadow inference remains
+locked because Phase 3 produced `NO CANDIDATE PROMOTION`. Any expansion beyond the relevant
+active specification requires explicit owner approval and a new or amended governing
+specification.

@@ -12,22 +12,27 @@ profitability, and is not real-money trading infrastructure.
 
 - Current stable historical baseline: `v1.0.0`.
 - Current package/runtime version: `2.0.0a3`.
-- Current released identifier: `v2.0.0-alpha.2`.
-- Active release-preparation target: `v2.0.0-alpha.3`.
+- Current released identifier: `v2.0.0-alpha.3`.
+- Active specification/scaffolding target: `v2.0.0-beta.1`.
 - V2 Phase 1: accepted and complete - Real SPY Data Foundation.
 - V2 Phase 2: accepted and released - Real Historical Benchmark.
-- V2 Phase 3: Alpha 3 release preparation active after owner-tested development
-  experimentation - Walk-Forward Model Research.
+- V2 Phase 3: accepted and released as `v2.0.0-alpha.3` - Walk-Forward Model Research.
+- V2 Phase 3 model outcome: `NO CANDIDATE PROMOTION`.
+- V2 Phase 4: active specification and infrastructure-first shadow-mode scaffolding.
+- V2 Phase 4 model admission: blocked - no approved shadow model.
 - Owner-run real SIP benchmark and one controlled final-test execution completed.
 - Owner-run Phase 3 development campaign completed locally with generated artifacts ignored.
-- Public `v2.0.0-alpha.3` release/tag: not yet created.
+- Public `v2.0.0-beta.1` release/tag: not yet created.
+- Protected evaluation: not executed.
+- Phase 5 production paper operation: not authorized.
 - Live-money readiness: not approved.
 
 Version 2 Phase 1 uses package version `2.0.0a1` and release identifier
 `v2.0.0-alpha.1`. Version 2 Phase 2 uses package version `2.0.0a2` and release identifier
-`v2.0.0-alpha.2`. Version 2 Phase 3 Alpha 3 release preparation uses package version
-`2.0.0a3` for the future public identifier `v2.0.0-alpha.3`. Release tags must point only
-to successfully verified `main` commits after review approval and merge.
+`v2.0.0-alpha.2`. Version 2 Phase 3 uses package version `2.0.0a3` and release identifier
+`v2.0.0-alpha.3`. Version 2 Phase 4 starts from package version `2.0.0a3` and targets the
+future public identifier `v2.0.0-beta.1`; no beta tag exists yet. Release tags must point
+only to successfully verified `main` commits after review approval and merge.
 
 ## Version 1 Historical Baseline
 
@@ -127,13 +132,13 @@ Scientific result:
 This is valid benchmark evidence and not an engineering failure. It does not establish a
 reliable predictive edge, trading readiness, profitability, or investment suitability.
 
-## Version 2 Phase 3 Alpha 3 Release Preparation
+## Version 2 Phase 3 Alpha 3 Release
 
-Version 2 Phase 3 is in Alpha 3 release preparation for the Walk-Forward Model Research
-phase. PR #24 merged the approved framework and initial research scaffolding. PR #25 merged
-the manual, offline, classification-first development research runner, and owner
-development testing completed locally. The active release-preparation branch is
-`review/v2-phase-03-alpha3-release-preparation`, governed by
+Version 2 Phase 3 is complete and released as `v2.0.0-alpha.3` for the Walk-Forward Model
+Research phase. PR #24 merged the approved framework and initial research scaffolding. PR
+#25 merged the manual, offline, classification-first development research runner, owner
+development testing completed locally, and Alpha 3 release preparation was merged and
+tagged. The governing document remains
 [Version 2 Phase 3 Walk-Forward Model Research Specification](docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md).
 Sanitized Alpha 3 acceptance evidence is recorded in
 [Version 2 Phase 3 Alpha 3 Release Evidence](docs/V2_PHASE_03_ALPHA3_RELEASE_EVIDENCE.md).
@@ -156,8 +161,7 @@ evaluation, paper research, shadow mode, or live trading. This branch does not a
 protected evaluation, strategy-threshold optimization, strategy candidate selection, live
 trading, production paper execution, shadow mode, API write routes, dashboard execution
 controls, schedulers, automatic order submission, or broker communication. Package/runtime
-version is prepared as `2.0.0a3`; the future release target remains `v2.0.0-alpha.3`, and
-the public tag has not been created.
+version remains `2.0.0a3`.
 
 Owner-run development research, when authorized locally, is launched manually with:
 
@@ -167,6 +171,30 @@ python -m spy_market_agent.research.cli run-development \
   --data-root ./data \
   --campaign-config configs/research/phase3_development_campaign.json
 ```
+
+## Version 2 Phase 4 Shadow-Mode Specification
+
+Version 2 Phase 4 is active only for specification and infrastructure-first Real-Time
+Shadow Mode scaffolding. The governing document is
+[Version 2 Phase 4 Real-Time Shadow Mode Specification](docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md).
+The target future release is `v2.0.0-beta.1`, but the package/runtime version remains
+`2.0.0a3` and no beta tag exists.
+
+Phase 4 has two gates. Gate A infrastructure entry is permitted for shadow architecture,
+freshness and completeness policy, XNYS daily-session scheduling functions, idempotent
+shadow run identities, monitoring state, alert concepts, and model-admission locks. Gate B
+model-connected shadow inference is not satisfied because Phase 3 promoted no model. The
+current state is `NO APPROVED SHADOW MODEL`, and `model_connected` shadow inference must
+raise `blocked_no_approved_model` unless a future separately approved model-admission record
+exists.
+
+The initial `spy_market_agent.shadow` package supports `observation_only_no_model` mode.
+This mode can inspect synthetic or local session readiness, compute deterministic run
+identity, and report why inference is unavailable. It cannot generate predictions,
+model-based `LONG` or `CASH` proposals from real market data, broker orders, paper orders,
+risk approvals, or execution requests. Phase 4 does not add intraday data, a scheduler,
+strategy optimization, protected evaluation, Phase 5 production paper operation, live
+trading, broker communication, API write routes, or dashboard execution controls.
 
 ## Safety Boundaries
 
@@ -224,10 +252,13 @@ Version 2 Phase 2 includes completed historical benchmarking on one owner-run re
 dataset. It does not include model research beyond the approved locked candidates and does
 not prove predictive market edge.
 
-Version 2 Phase 3 currently prepares the owner-tested development-only classification
-research implementation for Alpha 3 review. The completed development campaign produced
-`NO CANDIDATE PROMOTION`; it did not run protected evaluation, strategy optimization, or
-paper/live operation.
+Version 2 Phase 3 is released as `v2.0.0-alpha.3`. The completed development campaign
+produced `NO CANDIDATE PROMOTION`; it did not run protected evaluation, strategy
+optimization, shadow inference, or paper/live operation.
+
+Version 2 Phase 4 currently includes only specification and infrastructure-first shadow
+scaffolding. Model-connected shadow inference remains locked because no approved shadow
+model exists.
 
 Version 1.0.0 specifically did not include market-data downloading; the explicit SPY
 historical-data acquisition CLI begins in Version 2 Phase 1.

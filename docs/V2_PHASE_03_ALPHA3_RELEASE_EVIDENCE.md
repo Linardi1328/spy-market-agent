@@ -1,10 +1,10 @@
 # Version 2 Phase 3 Alpha 3 Release Evidence
 
-Status: Alpha 3 release preparation evidence for owner review.
+Status: Accepted release evidence for `v2.0.0-alpha.3`.
 
-Public release identifier: `v2.0.0-alpha.3` is not yet tagged or released.
+Public release identifier: `v2.0.0-alpha.3` has been tagged and released.
 
-Package/runtime version prepared by this branch: `2.0.0a3`.
+Released package/runtime version: `2.0.0a3`.
 
 ## 1. Phase 3 Scope
 
@@ -14,8 +14,8 @@ walk-forward folds, predeclared feature ablations, finite scikit-learn model gri
 predeclared calibration sub-study, classification metrics, and descriptive regime/drift
 diagnostics.
 
-This release-preparation branch records sanitized aggregate acceptance evidence only. It
-does not run a new real-data experiment.
+The release-preparation branch recorded sanitized aggregate acceptance evidence only. It did
+not run a new real-data experiment.
 
 ## 2. Governing Specification
 
@@ -269,10 +269,10 @@ All indexed artifacts were recomputed and matched the recorded SHA-256 checksums
 
 ## 20. Release Decision and Limitations
 
-Alpha 3 may be accepted as a research-framework and development-evidence release because
-the system can reject weak candidates under predeclared scientific gates. It does not
-promote a model and does not authorize a protected evaluation. The public
-`v2.0.0-alpha.3` tag has not been created.
+Alpha 3 was accepted as a research-framework and development-evidence release because the
+system can reject weak candidates under predeclared scientific gates. It does not promote a
+model and does not authorize a protected evaluation. The public `v2.0.0-alpha.3` tag was
+created only after release-preparation merge and final verification on `main`.
 
 Limitations:
 
