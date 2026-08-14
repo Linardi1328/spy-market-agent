@@ -188,12 +188,12 @@ production paper operation, and live trading remain unauthorized. Phase 3 produc
 
 ## Version 2 Phase 4 Scheduled Observation Shadow Pipeline
 
-**Owner accepted; Beta 1 release preparation active:** Phase 4 is governed by
-`docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md` and targets `v2.0.0-beta.1`. The package
-runtime candidate is `2.0.0b1`, and the public beta tag has not been created. PR #27 merged
-the specification/scaffold, PR #28 merged Observation Pipeline V1, PR #29 merged Scheduled
-Observation Operations V1, and owner acceptance evidence is recorded for release
-preparation.
+**Accepted and released as `v2.0.0-beta.1`:** Phase 4 is governed by
+`docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md`. The package/runtime version is
+`2.0.0b1`, and the public beta tag points to
+`1c8feae478c0f5536b2193eeb408e580f3f7e33c`. PR #27 merged the specification/scaffold, PR
+#28 merged Observation Pipeline V1, PR #29 merged Scheduled Observation Operations V1, PR
+#30 merged Beta 1 release preparation, and owner acceptance evidence is recorded.
 
 The initial `spy_market_agent.shadow` package is separate from research and execution:
 
@@ -239,6 +239,32 @@ durable reservation, lifecycle finalization, health persistence, or alert persis
 does not change the shadow database schema version. A schedule no-op for an already
 processed run does not append duplicate audit records, while direct manual duplicate
 `run-observation` attempts keep the approved duplicate audit behavior.
+
+## Version 2 Phase 5 Production Paper Operation Scaffold
+
+**Active specification + non-submitting safety/recovery scaffold:** Phase 5 is governed by
+`docs/V2_PHASE_05_PRODUCTION_PAPER_OPERATION_SPEC.md` for target future release
+`v2.0.0-beta.2`. Package/runtime remains `2.0.0b1`, and no beta.2 tag exists.
+
+The new `spy_market_agent.paper_ops` package is intentionally separate from the existing
+execution adapter and service:
+
+1. `types.py` defines immutable gate, readiness, recovery-disposition, and operational
+   issue contracts.
+2. `gates.py` exposes the current Phase 5 gate posture: P5-A authorized, P5-B broker
+   submission blocked pending separate owner authorization, and P5-C model-connected paper
+   operation blocked because no approved paper model exists.
+3. `recovery.py` classifies persisted paper-attempt states from the existing execution
+   model into operator recovery dispositions without network, filesystem, settings, or
+   broker side effects.
+4. `policy.py` combines the current gate decisions for offline inspection.
+
+The existing `spy_market_agent.execution` package remains the owner of paper-order
+instruction construction, approval validation, repository transitions, paper-only Alpaca
+adapter, and explicit paper execution service. Phase 5 does not rewrite those controls. The
+first Phase 5 scaffold does not import the Alpaca adapter, instantiate a trading client,
+read credentials, submit orders, perform broker reconciliation, start a scheduler, load a
+model, expose API mutation routes, or add dashboard execution controls.
 
 ## Backtest Data Flow
 

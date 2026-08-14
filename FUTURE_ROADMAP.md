@@ -38,17 +38,17 @@ leakage-safe features, trains deterministic baseline models, runs risk-controlle
 persists audit artifacts in SQLite, exposes read-only FastAPI and Streamlit views, and
 contains explicitly invoked Alpaca paper-only safeguards.
 
-**Active:** Version 2 Phase 4 Real-Time Shadow Mode implementation is owner accepted, and
-Beta 1 release preparation is active on `review/v2-phase-04-beta1-release-preparation`.
-PR #27 merged the approved specification/scaffold, PR #28 merged Observation Pipeline V1,
-and PR #29 merged Scheduled Observation Operations V1. Version 2 Phase 3 is complete and
-released as `v2.0.0-alpha.3`; its scientific outcome was `NO CANDIDATE PROMOTION`. Phase 4
-Gate A infrastructure entry is authorized, but Gate B model-connected shadow inference is
-blocked because no model has been approved for shadow operation. Protected evaluation,
-strategy optimization, production paper operation, live trading, broker communication,
-unattended schedulers, API write routes, and dashboard execution controls remain
-unauthorized. The package/runtime candidate is `2.0.0b1`; the public `v2.0.0-beta.1` tag is
-still pending.
+**Active:** Version 2 Phase 4 Real-Time Shadow Mode is accepted and released as
+`v2.0.0-beta.1`; the public tag points to
+`1c8feae478c0f5536b2193eeb408e580f3f7e33c`. Version 2 Phase 5 Production Paper Operation
+is active for specification plus non-submitting safety/recovery scaffold on
+`review/v2-phase-05-production-paper`. Phase 5 infrastructure entry is authorized. Actual
+Phase 5 broker submission remains blocked pending separate owner authorization, and
+model-connected paper operation is `BLOCKED_NO_APPROVED_PAPER_MODEL` because Phase 3
+produced `NO CANDIDATE PROMOTION`. Protected evaluation, strategy optimization, live
+trading, broker communication through the new Phase 5 layer, unattended schedulers, API
+write routes, and dashboard execution controls remain unauthorized. The package/runtime
+version remains `2.0.0b1`; the public `v2.0.0-beta.2` tag does not exist.
 
 **Planned:** A responsible future path preserves Version 1, uses the accepted real SPY
 benchmark as baseline evidence, then adds stronger model research, shadow-mode operations,
@@ -207,7 +207,7 @@ evidence is reviewed. The estimates are planning ranges, not promises.
 | 0 | Complete; preserved V1 baseline | Preserve V1 reproducibility and safety. | v1.0.0 merged and tagged. | Checks and safety audits stay clean. | Ongoing. | Dependency drift; scope creep; stale docs. | Passing verification; maintenance notes; no unapproved behavior change. |
 | 1 | Planned real SPY benchmark | Build approved real SPY data and benchmark evidence. | V1 reproducible; provider and license reviewed. | Regime and naive-baseline report accepted. | 1-2 months. | Data licensing; leakage; weak baselines; cost assumptions. | Dataset checksum; provider record; split specs; baseline and sensitivity results. |
 | 2 | Complete V2 Phase 3 Alpha 3 | Add walk-forward research framework, ablation policy, calibration policy, threshold policy, drift diagnostics, registry scaffolding, and owner-tested classification development evidence. | Stage 1 evidence accepted and Phase 2 benchmark released; PR #24 and PR #25 merged. | Phase 3 released as `v2.0.0-alpha.3` with `NO CANDIDATE PROMOTION`; no protected evaluation executed. | 2-4 months. | Final-test contamination; unstable gains; poor calibration; turnover. | Walk-forward report; ablations; calibration; drift/regime diagnostics; leakage tests; honest no-promotion decision. |
-| 3 | Active V2 Phase 4 Beta 1 release preparation | Record owner-accepted observation-only shadow infrastructure, freshness/completeness policy, run identities, monitoring, alerts, model-admission locks, and deterministic schedule orchestration with no submission capability. | Gate A satisfied by released Phase 3, PR #27, PR #28, PR #29, and owner acceptance; Gate B model-connected inference not satisfied because no model was promoted. | Beta 1 release preparation reviewed and merged, public tag separately approved, and model-connected inference remains locked until separate model admission. | Release preparation plus later observation if a model is approved. | Data outages; scheduler defects; duplicate runs; alert fatigue; accidental model bypass. | Freshness logs; shadow audit; owner acceptance evidence; model-admission denial tests; no-broker import tests; paper drills only in later authorized stage. |
+| 3 | Active V2 Phase 5 specification + non-submitting paper scaffold | Preserve released Phase 4 shadow evidence and define production paper-operation safety, recovery, reconciliation, and gate contracts without authorizing broker submission. | Phase 4 released as `v2.0.0-beta.1`; owner authorized Phase 5 infrastructure entry; no approved paper model exists. | Governing Phase 5 spec, recovery runbook, offline scaffold, tests, and safety audit accepted while broker submission and model-connected paper remain blocked. | Specification/scaffold first; later paper drills only if separately approved. | Duplicate orders; uncertain submission outcomes; credential exposure; accidental model or broker bypass. | Phase 5 gate tests; recovery matrix; no-resubmission evidence; static no-broker/no-credential/no-scheduler audit; existing execution regression tests. |
 | 4 | Planned live-readiness engineering | Design separate live spec, controls, reviews, and incident drills. | Stage 3 observation accepted. | Live-readiness package approved or rejected. | 2-3 months after shadow validation. | Credential exposure; legal gaps; broker mismatch; unsafe limits. | Signed spec; security review; legal notes; incident drill evidence. |
 | 5 | Exploratory live SPY pilot | Test small-capital owner-approved SPY-only live operation if separately approved. | Stage 4 explicitly approved. | Pilot evidence reviewed or pilot stopped with lessons. | At least 3-6 months observation. | Live slippage; approval fatigue; operational error; broker outage. | Exact approval records; reconciliation; limit logs; incident reports. |
 | 6 | Exploratory mature single-market platform | Add retraining governance, champion/challenger, rollback, drift, and DR. | Stage 5 results reviewed. | Mature single-market controls accepted. | Additional 6-12 months. | Model drift; registry errors; rollback failure; data loss. | Retraining policy; challenger reviews; DR tests; drift dashboards. |
@@ -248,15 +248,16 @@ be used for later tuning.
 
 ### Stage 3 - Real-Time Shadow and Production Paper System
 
-**Active as Version 2 Phase 4 Beta 1 release preparation after owner acceptance:** Phase 4
-has implemented manual verified-manifest observation runs, reliable data-readiness policy,
-freshness/completeness controls, deterministic scheduling policy functions,
-operator-triggered due-session resolution, already-processed and recovery detection,
-missed-observation reporting, run identities, durable idempotency, dedicated shadow SQLite
-audit state, monitoring events, local alerts, and model-admission locks. Model-connected
-inference is not permitted until a separate model candidate is approved. Paper execution
-remains a later Phase 5 topic and requires separate authorization, reconciliation, and
-recovery runbooks. After any future model-connected shadow deployment, require observation
+**Active as Version 2 Phase 5 specification + non-submitting safety/recovery scaffold:**
+Phase 4 has been released as `v2.0.0-beta.1` after implementing manual verified-manifest
+observation runs, reliable data-readiness policy, freshness/completeness controls,
+deterministic scheduling policy functions, operator-triggered due-session resolution,
+already-processed and recovery detection, missed-observation reporting, run identities,
+durable idempotency, dedicated shadow SQLite audit state, monitoring events, local alerts,
+and model-admission locks. Phase 5 now defines production paper-operation gates, recovery
+policy, and offline scaffold. Actual Phase 5 broker submission requires separate
+authorization, and model-connected paper operation is blocked because no approved paper
+model exists. After any future model-connected shadow deployment, require observation
 evidence before considering live-readiness work.
 
 ### Stage 4 - Live-Readiness Engineering
@@ -338,9 +339,14 @@ Current tracking:
   owner-run real SIP benchmark completion.
 - V2 Phase 3 / `v2.0.0-alpha.3`: Accepted and released - Walk-Forward Model Research.
   Scientific outcome: `NO CANDIDATE PROMOTION`.
-- V2 Phase 4 / `v2.0.0-beta.1`: Beta 1 release preparation after owner acceptance. Gate A
-  infrastructure entry is authorized; Gate B model-connected inference is blocked because
-  no shadow model is approved. The public tag is still pending.
+- V2 Phase 4 / `v2.0.0-beta.1`: Accepted and released. Tag: `v2.0.0-beta.1`.
+  Release commit: `1c8feae478c0f5536b2193eeb408e580f3f7e33c`.
+  Gate B model-connected inference is blocked because no shadow model is approved.
+- V2 Phase 5 / `v2.0.0-beta.2`: Production Paper Operation. Current substage:
+  specification + non-submitting safety/recovery scaffold. Branch:
+  `review/v2-phase-05-production-paper`. Phase 5 infrastructure entry is authorized.
+  Actual Phase 5 broker submission is not yet authorized. Model-connected paper operation
+  is blocked because no approved paper model exists.
 
 | Track | Version | Name | Recommended Branch | Scope |
 | --- | --- | --- | --- | --- |
@@ -348,8 +354,8 @@ Current tracking:
 | V2 Phase 1 | `v2.0.0-alpha.1` | Real SPY Data Foundation | `review/v2-phase-01-release-preparation` | Accepted - Version 2 Real SPY Data Foundation with approved provider workflow, licensing record, validated SPY dataset handling, checksums, and data lineage. |
 | V2 Phase 2 | `v2.0.0-alpha.2` | Real Historical Benchmark | `review/v2-phase-02-release-preparation` | Accepted and released after owner-run real SIP benchmark, validation, one controlled final-test execution, benchmark verification, quality gates, and tag confirmation. No live execution or profitability claim. |
 | V2 Phase 3 | `v2.0.0-alpha.3` | Walk-Forward Model Research | Merged and tagged | Accepted and released after PR #24 framework/scaffolding merge, PR #25 development implementation merge, owner development testing, and Alpha 3 release preparation. Outcome: `NO CANDIDATE PROMOTION`; no protected evaluation, strategy optimization, shadow inference, paper operation, or live trading. |
-| V2 Phase 4 | `v2.0.0-beta.1` | Real-Time Shadow Mode | `review/v2-phase-04-beta1-release-preparation` | Beta 1 release preparation after owner acceptance. PR #27, PR #28, and PR #29 are merged; owner acceptance is complete; package/runtime candidate is `2.0.0b1`; public tag is pending. Scope remains verified local Phase 1 manifests, latest completed XNYS target resolution, read-only schedule preview, run-due delegation to the observation runner, already-processed no-ops, recovery-required detection, missed-observation reporting, dedicated shadow SQLite audit persistence, and model-admission lock. Model-connected inference remains blocked until a separate approved model exists. |
-| V2 Phase 5 | `v2.0.0-beta.2` | Production Paper Operation | `review/v2-phase-05-production-paper` | PLANNED / NOT YET AUTHORIZED production paper operation, reconciliation, recovery runbooks, and observation evidence. |
+| V2 Phase 4 | `v2.0.0-beta.1` | Real-Time Shadow Mode | Merged and tagged | Accepted and released. PR #27, PR #28, PR #29, and PR #30 are merged; owner acceptance is complete; package/runtime version is `2.0.0b1`; public tag `v2.0.0-beta.1` points to `1c8feae478c0f5536b2193eeb408e580f3f7e33c`. Scope remains verified local Phase 1 manifests, latest completed XNYS target resolution, read-only schedule preview, run-due delegation to the observation runner, already-processed no-ops, recovery-required detection, missed-observation reporting, dedicated shadow SQLite audit persistence, and model-admission lock. Model-connected inference remains blocked until a separate approved model exists. |
+| V2 Phase 5 | `v2.0.0-beta.2` | Production Paper Operation | `review/v2-phase-05-production-paper` | ACTIVE - specification + non-submitting safety/recovery scaffold. Phase 5 infrastructure entry is authorized. Actual Phase 5 broker submission is blocked pending separate owner authorization. Model-connected paper operation is blocked because no approved paper model exists. No beta.2 tag exists. |
 | V2 Phase 6 | `v2.0.0-rc.1` | Version 2 Release Candidate | `review/v2-phase-06-release-candidate` | Feature-complete Version 2 audit for real-data, shadow, and production-paper scope. |
 | Final | `v2.0.0` | Approved Real-Data, Shadow, and Production-Paper Platform | Release from approved RC | Version 2 release after final audit; excludes real-money trading and live pilot approval. |
 
@@ -370,9 +376,11 @@ selection, protected-evaluation, and strategy-separation controls and recorded
 `NO CANDIDATE PROMOTION`. The Phase 4 governing specification is
 [Version 2 Phase 4 - Real-Time Shadow Mode Specification](docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md).
 PR #27 merged the infrastructure-first shadow-mode scaffold, PR #28 merged Observation
-Pipeline V1, PR #29 merged Scheduled Observation Operations V1, and owner acceptance is
-complete. The current authorized substage prepares Beta 1 release metadata and sanitized
-acceptance evidence only.
+Pipeline V1, PR #29 merged Scheduled Observation Operations V1, PR #30 merged Beta 1
+release preparation, owner acceptance is complete, and `v2.0.0-beta.1` is released. The
+Phase 5 governing specification is
+[Version 2 Phase 5 - Production Paper Operation Specification](docs/V2_PHASE_05_PRODUCTION_PAPER_OPERATION_SPEC.md).
+The current Phase 5 substage is specification plus non-submitting safety/recovery scaffold.
 
 Phase 4 transition sequence:
 
@@ -408,8 +416,8 @@ Recommended branch sequence:
 - `review/v2-phase-04-shadow-mode` (merged PR #27 specification/scaffold)
 - `review/v2-phase-04-observation-pipeline` (merged PR #28 observation pipeline)
 - `review/v2-phase-04-scheduled-observation-ops` (merged PR #29 scheduled observation operations)
-- `review/v2-phase-04-beta1-release-preparation`
-- `review/v2-phase-05-production-paper` (planned / not yet authorized)
+- `review/v2-phase-04-beta1-release-preparation` (merged PR #30 and tagged as `v2.0.0-beta.1`)
+- `review/v2-phase-05-production-paper` (active specification + non-submitting safety/recovery scaffold)
 - `review/v2-phase-06-release-candidate`
 
 ## 6. Cross-Cutting Engineering Workstreams
@@ -715,16 +723,20 @@ Related documents:
 - [Version 2 Phase 3 Alpha 3 Release Evidence](docs/V2_PHASE_03_ALPHA3_RELEASE_EVIDENCE.md):
   sanitized aggregate evidence for the owner-run development campaign and Alpha 3 release.
 - [Version 2 Phase 4 - Real-Time Shadow Mode Specification](docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md):
-  governing specification for owner-accepted `v2.0.0-beta.1` Beta 1 release preparation.
-  Model-connected inference remains locked because no shadow model is approved.
+  governing specification for owner-accepted and released `v2.0.0-beta.1`. Model-connected
+  inference remains locked because no shadow model is approved.
 - [Version 2 Phase 4 Beta 1 Release Evidence](docs/V2_PHASE_04_BETA1_RELEASE_EVIDENCE.md):
-  sanitized owner acceptance and release-preparation evidence for target `v2.0.0-beta.1`.
+  sanitized owner acceptance and release evidence for `v2.0.0-beta.1`.
+- [Version 2 Phase 5 - Production Paper Operation Specification](docs/V2_PHASE_05_PRODUCTION_PAPER_OPERATION_SPEC.md):
+  active governing specification for target future release `v2.0.0-beta.2`.
+- [Version 2 Phase 5 Paper Recovery Runbook](docs/V2_PHASE_05_PAPER_RECOVERY_RUNBOOK.md):
+  non-submitting operator recovery guidance for uncertain paper attempts.
 - [Version 2.0.0 Alpha 1 Release Notes](RELEASE_NOTES_V2.0.0_ALPHA_1.md): release notes
   for the `v2.0.0-alpha.1` release identifier.
 - [Version 2.0.0 Alpha 2 Release Notes](RELEASE_NOTES_V2.0.0_ALPHA_2.md): release notes
   for the `v2.0.0-alpha.2` release identifier.
 - [Version 2.0.0 Beta 1 Release Notes](RELEASE_NOTES_V2.0.0_BETA_1.md): release notes
-  prepared for the pending `v2.0.0-beta.1` release identifier.
+  for the `v2.0.0-beta.1` release identifier.
 - [Version 2 Phase 1 Release Checklist](VERSION_2_PHASE_01_RELEASE_CHECKLIST.md):
   release checklist and post-merge operator actions.
 - [Version 2 Phase 2 Release Checklist](VERSION_2_PHASE_02_RELEASE_CHECKLIST.md):
@@ -734,6 +746,8 @@ Change log:
 
 | Date | Base Main SHA | Change |
 | --- | --- | --- |
+| 2026-08-15 | `1c8feae478c0f5536b2193eeb408e580f3f7e33c` | Began V2 Phase 5 Production Paper Operation specification plus non-submitting safety/recovery scaffold on `review/v2-phase-05-production-paper` after Phase 4 Beta 1 was tagged as `v2.0.0-beta.1`; package/runtime remains `2.0.0b1`, target future release is `v2.0.0-beta.2`, Phase 5 infrastructure entry is authorized, actual Phase 5 broker submission remains separately gated, model-connected paper operation is blocked because no approved paper model exists, and no credentials, broker calls, paper orders, automatic retries, scheduler, model inference, protected evaluation, live trading, or beta.2 tag are authorized. |
+| 2026-08-15 | `1c8feae478c0f5536b2193eeb408e580f3f7e33c` | Recorded that V2 Phase 4 Beta 1 release preparation merged through PR #30 and was tagged as `v2.0.0-beta.1`; release commit is `1c8feae478c0f5536b2193eeb408e580f3f7e33c`, package/runtime is `2.0.0b1`, Gate B remains locked, no shadow model is approved, protected evaluation was not executed, and Phase 5 paper submission remains separately gated. |
 | 2026-08-15 | `6fb92c0a6f630d7faa3626cef515d0bb6c742951` | Began V2 Phase 4 Beta 1 release preparation on `review/v2-phase-04-beta1-release-preparation` after PR #29 merged and owner acceptance completed; package/runtime candidate is `2.0.0b1`, target release is `v2.0.0-beta.1`, the public tag remains pending, Gate B remains locked, and no model inference, broker behavior, market-data acquisition, unattended scheduler, Phase 5 paper operation, protected evaluation, or live trading is authorized. |
 | 2026-08-11 | `10441e982e979a82fe060c717240e0e1086f707c` | Began V2 Phase 4 Scheduled Observation Operations V1 on `review/v2-phase-04-scheduled-observation-ops` after PR #28 merged; authorized deterministic latest completed XNYS target resolution, schedule preview, run-due delegation to the approved observation runner, already-processed no-ops, recovery-required handling, and missed-observation reporting while Gate B model-connected inference, unattended schedulers, acquisition, broker behavior, Phase 5 paper operation, protected evaluation, and live trading remain unauthorized. |
 | 2026-08-11 | `d580d36a604121f3be0a137a60b6e9149d002566` | Began V2 Phase 4 Observation-Only Operational Pipeline V1 on `review/v2-phase-04-observation-pipeline` after PR #27 merged; authorized manual verified-manifest observation runs, dedicated shadow SQLite persistence, local monitoring/alerts, deterministic idempotency, and read-only inspection while Gate B model-connected inference, scheduling, broker behavior, Phase 5 paper operation, protected evaluation, and live trading remain unauthorized. |

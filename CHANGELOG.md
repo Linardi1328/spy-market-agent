@@ -2,20 +2,37 @@
 
 ## [Unreleased]
 
-No entries beyond the pending Version 2 Phase 4 Beta 1 release-preparation package.
+Corresponding Python package version remains: `2.0.0b1`.
 
-## [2.0.0-beta.1] - Pending post-merge owner tag approval
+- Began Version 2 Phase 5 Production Paper Operation specification plus non-submitting
+  safety/recovery scaffold on `review/v2-phase-05-production-paper` after Phase 4 Beta 1
+  was released at `1c8feae478c0f5536b2193eeb408e580f3f7e33c`.
+- Added the governing Phase 5 specification for target future release `v2.0.0-beta.2`.
+- Added a Phase 5 paper recovery runbook documenting the rule that uncertainty never means
+  retry the order.
+- Added the offline `spy_market_agent.paper_ops` scaffold for Phase 5 gate decisions,
+  paper-model admission lock, and deterministic recovery classification of existing paper
+  attempt states.
+- Recorded Gate P5-A as authorized, Gate P5-B broker paper submission as blocked pending
+  separate owner authorization, and Gate P5-C model-connected paper operation as
+  `BLOCKED_NO_APPROVED_PAPER_MODEL`.
+- Preserved existing Version 1 paper execution controls and kept package/runtime at
+  `2.0.0b1`; no `v2.0.0-beta.2` tag exists.
+- No real broker calls, credentials, paper order submission, automatic resubmission,
+  scheduler, model inference, protected evaluation, or live trading are included.
 
-Corresponding Python package candidate: `2.0.0b1`.
+## [2.0.0-beta.1] - 2026-08-15
+
+Corresponding Python package version: `2.0.0b1`.
 
 - Began Version 2 Phase 4 Beta 1 release preparation after PR #29 merged into `main` at
   `6fb92c0a6f630d7faa3626cef515d0bb6c742951` and owner acceptance completed.
 - Added sanitized Beta 1 release evidence for owner observation-only smoke test
   `spy-v2p4-shadow-09c5104d1614fe7902a3fadf` using accepted Phase 1 dataset
   `spy-v2p1-825930b0a2bcab20c733b867`.
-- Added Beta 1 release notes for target public identifier `v2.0.0-beta.1`; the public tag
-  has not been created.
-- Prepared package/runtime candidate `2.0.0b1` for the future Beta 1 release.
+- Added Beta 1 release notes for public identifier `v2.0.0-beta.1`; the tag was created
+  after review, merge, owner approval, and final verification on `main`.
+- Prepared package/runtime version `2.0.0b1` for the Beta 1 release.
 - Added Version 2 Phase 4 Scheduled Observation Operations V1: deterministic
   operator-triggered `schedule-preview` and `run-due-observation` commands that derive the
   latest completed XNYS target from explicit UTC `as_of`, inspect compatible shadow history,

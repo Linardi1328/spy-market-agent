@@ -263,20 +263,21 @@ def test_version_2_alpha_release_documents_are_consistent() -> None:
         "Owner-run real SIP benchmark and one controlled final-test execution completed"
     )
 
-    assert "Current package/runtime candidate: `2.0.0b1`" in readme
-    assert "Current released identifier: `v2.0.0-alpha.3`" in readme
-    assert "Target Phase 4 release: `v2.0.0-beta.1`" in readme
+    assert "Current package/runtime version: `2.0.0b1`" in readme
+    assert "Current released identifier: `v2.0.0-beta.1`" in readme
+    assert "Target Phase 5 release: `v2.0.0-beta.2`" in readme
     assert "V2 Phase 1: accepted and complete - Real SPY Data Foundation" in readme
     assert "V2 Phase 2: accepted and released - Real Historical Benchmark" in readme
     assert "V2 Phase 3: accepted and released as `v2.0.0-alpha.3`" in readme
     assert "V2 Phase 3 model outcome: `NO CANDIDATE PROMOTION`" in readme
-    assert "V2 Phase 4 implementation: owner accepted" in readme
-    assert "V2 Phase 4 Beta 1 release preparation: active" in readme
+    assert "V2 Phase 4: accepted and released as `v2.0.0-beta.1`" in readme
+    assert "V2 Phase 5 specification/scaffold: active" in readme
     assert "Gate B: locked" in readme
-    assert "Public `v2.0.0-beta.1` release/tag: not yet created" in readme
+    assert "Public `v2.0.0-beta.1` release/tag: created" in readme
+    assert "Public `v2.0.0-beta.2` release/tag: not yet created" in readme
     assert phase2_completion in readme
     assert "Began Version 2 Phase 4 Real-Time Shadow Mode" in changelog
-    assert "Corresponding Python package candidate: `2.0.0b1`" in changelog
+    assert "Corresponding Python package version: `2.0.0b1`" in changelog
     assert "Corresponding Python package version: `2.0.0a3`" in changelog
     assert "Added the Version 2 Phase 3 Walk-Forward Model Research specification" in changelog
     assert "Implemented initial `spy_market_agent.research` scaffolding" in changelog
@@ -290,7 +291,8 @@ def test_version_2_alpha_release_documents_are_consistent() -> None:
     assert "Status: Accepted and released as `v2.0.0-alpha.3`" in phase3_spec
     assert "Accepted - Version 2 Real SPY Data Foundation" in roadmap
     assert "Accepted and released after owner-run real SIP benchmark" in roadmap
-    assert "V2 Phase 4 / `v2.0.0-beta.1`: Beta 1 release preparation" in roadmap
+    assert "V2 Phase 4 / `v2.0.0-beta.1`: Accepted and released" in roadmap
+    assert "V2 Phase 5 / `v2.0.0-beta.2`: Production Paper Operation" in roadmap
     assert "Git release identifier: `v2.0.0-alpha.1`" in phase1_release_notes
     assert "Git release identifier: `v2.0.0-alpha.2`" in phase2_release_notes
     assert "does not evaluate model accuracy" in phase1_release_notes
@@ -331,9 +333,9 @@ def test_version_2_phase2_release_preparation_status_is_documented() -> None:
         "Owner-run real SIP benchmark and one controlled final-test execution completed"
     )
 
-    assert "Current package/runtime candidate: `2.0.0b1`" in readme
-    assert "Current released identifier: `v2.0.0-alpha.3`" in readme
-    assert "Target Phase 4 release: `v2.0.0-beta.1`" in readme
+    assert "Current package/runtime version: `2.0.0b1`" in readme
+    assert "Current released identifier: `v2.0.0-beta.1`" in readme
+    assert "Target Phase 5 release: `v2.0.0-beta.2`" in readme
     assert "v2.0.0-alpha.2" in spec
     assert "2.0.0a2" in spec
     assert "Status: Accepted and released as `v2.0.0-alpha.2`" in spec
@@ -358,7 +360,7 @@ def test_version_2_phase2_release_preparation_status_is_documented() -> None:
     normalized_agents = " ".join(agents_lower.split())
     assert "version 2 phase 3 pr #24 merged" in normalized_agents
     assert "pr #25 merged" in normalized_agents
-    assert "version 2 phase 4 is active under" in normalized_agents
+    assert "version 2 phase 4 is accepted and released" in normalized_agents
     assert "scheduled observation operations v1" in normalized_agents
     assert "phase 2 is accepted" not in combined
     assert "profitability is guaranteed" not in combined
@@ -387,8 +389,8 @@ def test_version_2_phase3_walk_forward_research_framework_is_documented() -> Non
     assert "Target release identifier: `v2.0.0-alpha.3`" in spec
     assert "Release-preparation branch: `review/v2-phase-03-alpha3-release-preparation`" in spec
     assert "Released package/runtime version: `2.0.0a3`" in spec
-    assert "Current released identifier: `v2.0.0-alpha.3`" in readme
-    assert "Target Phase 4 release: `v2.0.0-beta.1`" in readme
+    assert "Current released identifier: `v2.0.0-beta.1`" in readme
+    assert "Target Phase 5 release: `v2.0.0-beta.2`" in readme
     assert "Version 2 Phase 3 Walk-Forward Model Research Specification" in readme
     assert "`spy_market_agent.research` package now provides a manual, offline" in readme
     assert "`spy_market_agent.shadow` package supports `observation_only_no_model`" in readme
@@ -536,13 +538,13 @@ def test_version_2_phase4_beta1_release_preparation_is_documented() -> None:
     )
     combined_lower = combined.lower()
 
-    assert "Package/runtime candidate prepared by this branch: `2.0.0b1`" in evidence
-    assert "Package candidate: `2.0.0b1`" in release_notes
-    assert "Target Git release identifier: `v2.0.0-beta.1`" in release_notes
-    assert "Target public release identifier: `v2.0.0-beta.1` is not yet tagged" in evidence
-    assert "Public `v2.0.0-beta.1` release/tag: not yet created" in readme
-    assert "public tag is pending" in roadmap
-    assert "Public tag: NOT YET CREATED" in spec
+    assert "Released package/runtime version: `2.0.0b1`" in evidence
+    assert "Package version: `2.0.0b1`" in release_notes
+    assert "Git release identifier: `v2.0.0-beta.1`" in release_notes
+    assert "Public release identifier: `v2.0.0-beta.1` has been tagged" in evidence
+    assert "Public `v2.0.0-beta.1` release/tag: created" in readme
+    assert "Release commit: `1c8feae478c0f5536b2193eeb408e580f3f7e33c`" in roadmap
+    assert "Public tag: `v2.0.0-beta.1` CREATED" in spec
     assert "PR #27 merged" in evidence
     assert "PR #28 merged" in evidence
     assert "PR #29 merged" in evidence
@@ -561,8 +563,10 @@ def test_version_2_phase4_beta1_release_preparation_is_documented() -> None:
     assert "paper execution = unauthorized" in evidence
     assert "unattended scheduling = unauthorized" in evidence
     assert "live trading = prohibited" in evidence
-    assert "PLANNED / NOT YET AUTHORIZED production paper operation" in roadmap
-    assert "review/v2-phase-05-production-paper` (planned / not yet authorized)" in roadmap
+    assert "ACTIVE - specification + non-submitting safety/recovery scaffold" in roadmap
+    assert (
+        "review/v2-phase-05-production-paper` (active specification + non-submitting"
+    ) in roadmap
 
     required_boundaries = (
         "no model loading",
@@ -573,7 +577,7 @@ def test_version_2_phase4_beta1_release_preparation_is_documented() -> None:
         "no unattended scheduler",
         "no market-data acquisition",
         "no protected evaluation",
-        "no Phase 5 production paper operation",
+        "no Phase 5 production paper submission",
         "no live trading",
     )
     for boundary in required_boundaries:
@@ -584,7 +588,7 @@ def test_version_2_phase4_beta1_release_preparation_is_documented() -> None:
         "predictive edge is claimed",
         "paper-trading readiness is approved",
         "live readiness is approved",
-        "tag already exists",
+        "beta.2 tag already exists",
     )
     for claim in prohibited_release_claims:
         assert claim not in combined_lower

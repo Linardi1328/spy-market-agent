@@ -8,11 +8,12 @@ The system is educational and experimental. It must never claim, imply, or guara
 
 Version 2 status is tracked through `FUTURE_ROADMAP.md` and approved phase
 specifications rather than by changing this frozen Version 1 baseline. The current
-release-preparation branch prepares package/runtime candidate `2.0.0b1` for target
-`v2.0.0-beta.1` after owner acceptance of Version 2 Phase 4 observation-only shadow
-operations. Gate B remains locked, no shadow model is approved, protected evaluation has not
-been executed, production paper operation is not authorized, unattended scheduling is not
-authorized, and live trading remains prohibited.
+package/runtime version is `2.0.0b1`; Version 2 Phase 4 is accepted and released as
+`v2.0.0-beta.1`, and Version 2 Phase 5 specification plus non-submitting safety/recovery
+scaffold is active for target future release `v2.0.0-beta.2`. Phase 5 infrastructure entry
+is authorized, but Phase 5 broker submission remains blocked pending separate owner
+authorization, no approved paper model exists, protected evaluation has not been executed,
+unattended scheduling is not authorized, and live trading remains prohibited.
 
 ## Problem Statement
 

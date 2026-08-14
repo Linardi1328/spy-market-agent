@@ -2,13 +2,12 @@
 
 Release identity:
 
-- Package candidate: `2.0.0b1`
-- Target Git release identifier: `v2.0.0-beta.1`
-- Date: pending post-merge owner tag approval
+- Package version: `2.0.0b1`
+- Git release identifier: `v2.0.0-beta.1`
+- Release commit: `1c8feae478c0f5536b2193eeb408e580f3f7e33c`
 
-Release policy: the `v2.0.0-beta.1` tag must point only to a successfully verified `main`
+Release policy satisfied: the `v2.0.0-beta.1` tag points to the verified `main` release
 commit after review approval, merge, post-merge verification, and separate owner approval.
-This release-preparation branch does not create the public tag.
 
 ## Purpose
 

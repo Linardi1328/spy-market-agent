@@ -177,15 +177,15 @@ def test_phase4_specification_and_release_status_are_documented() -> None:
     combined = "\n".join((spec, readme, roadmap, safety, changelog))
     combined_lower = combined.lower()
 
-    assert "Status: Owner accepted - Beta 1 release preparation active" in spec
+    assert "Status: Accepted and released as `v2.0.0-beta.1`" in spec
     assert "Target release identifier: `v2.0.0-beta.1`" in spec
-    assert "Package/runtime candidate: `2.0.0b1`" in spec
-    assert "Public tag: NOT YET CREATED" in spec
+    assert "Released package/runtime version: `2.0.0b1`" in spec
+    assert "Public tag: `v2.0.0-beta.1` CREATED" in spec
     assert "Gate B: LOCKED" in spec
-    assert "Current released identifier: `v2.0.0-alpha.3`" in readme
+    assert "Current released identifier: `v2.0.0-beta.1`" in readme
     assert "V2 Phase 3 model outcome: `NO CANDIDATE PROMOTION`" in readme
-    assert "Public `v2.0.0-beta.1` release/tag: not yet created" in readme
-    assert "Phase 5 production paper operation: not authorized" in readme
+    assert "Public `v2.0.0-beta.1` release/tag: created" in readme
+    assert "Phase 5 broker paper submission: not authorized" in readme
     assert "Gate A infrastructure entry is authorized" in roadmap
     assert "Gate B model-connected inference is blocked" in roadmap
     assert "python -m spy_market_agent.shadow.cli run-observation" in readme
