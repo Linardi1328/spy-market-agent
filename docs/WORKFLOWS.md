@@ -289,9 +289,10 @@ rerunning or retuning the real owner campaign.
 
 ## Run Phase 4 Observation-Only Shadow Readiness
 
-Phase 4 implementation is owner accepted and Beta 1 release preparation is active under
-`docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md`. The target future release is
-`v2.0.0-beta.1`; package/runtime candidate is `2.0.0b1`, and no beta tag exists.
+Phase 4 implementation is owner accepted and released as `v2.0.0-beta.1` under
+`docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md`. The package/runtime version is
+`2.0.0b1`, and the public beta tag points to
+`1c8feae478c0f5536b2193eeb408e580f3f7e33c`.
 
 This substage has manual observation-only CLIs, no model inference, no unattended scheduler,
 no daemon, no API write route, no dashboard execution control, and no broker path. It
@@ -342,7 +343,7 @@ loop, or automatic market-data acquisition. The schedule layer answers which XNY
 due, whether local verified data is fresh enough, whether that logical observation has
 already been processed, and whether prior shadow-operation history has gaps. Eligible work
 delegates to the approved `run_observation(...)` path at most once. Owner acceptance is
-complete; Beta 1 release preparation records sanitized evidence and package metadata only.
+complete, and Beta 1 is released.
 
 First update or verify the local Phase 1 dataset through the separately approved Phase 1
 workflow. The schedule commands consume that local manifest only:
@@ -404,6 +405,39 @@ them as warnings and never loops through historical sessions to backfill them. I
 data is verified, fresh, finalized, not already processed, and not in recovery, missed
 history alone may make the schedule state `degraded` while still allowing the current due
 observation to proceed.
+
+## Review Phase 5 Paper-Operation Recovery State
+
+Phase 5 is active for specification plus non-submitting safety/recovery scaffold under
+`docs/V2_PHASE_05_PRODUCTION_PAPER_OPERATION_SPEC.md`. Target future release is
+`v2.0.0-beta.2`; package/runtime remains `2.0.0b1`, and no beta.2 tag exists.
+
+Current gates:
+
+- P5-A infrastructure entry: `AUTHORIZED`.
+- P5-B Phase 5 broker submission: `BLOCKED PENDING SEPARATE OWNER AUTHORIZATION`.
+- P5-C model-connected paper operation: `BLOCKED_NO_APPROVED_PAPER_MODEL`.
+
+The new `spy_market_agent.paper_ops` package is an offline policy surface. It classifies
+existing paper-attempt states and reports gate status; it does not read credentials, contact
+Alpaca, submit orders, reconcile real broker state, start a scheduler, or load models.
+
+For local investigation of a persisted paper attempt, classify the known status in Python:
+
+```bash
+python - <<'PY'
+from spy_market_agent.paper_ops import classify_paper_attempt_recovery
+
+decision = classify_paper_attempt_recovery("submission_unknown")
+print(decision.disposition.value)
+print(decision.requires_client_order_id_lookup)
+PY
+```
+
+`reserved` and `submission_unknown` require reconciliation by `client_order_id`.
+`accepted`, `broker_existing_order_found`, and `reconciled` are terminal. `blocked` and
+`rejected` do not permit automatic resubmission. Unknown states fail closed. Use
+`docs/V2_PHASE_05_PAPER_RECOVERY_RUNBOOK.md` for operator recovery guidance.
 
 ## Inspect Model Evaluations
 

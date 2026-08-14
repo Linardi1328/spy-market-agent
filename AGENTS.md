@@ -29,21 +29,24 @@ released as `v2.0.0-alpha.3`. The Phase 3 scientific outcome was
 paper research, production paper operation, or live trading. Phase 3 development research
 must derive and apply the Phase 2 final-test prediction-session exclusion boundary before
 building labels from the accepted Phase 1 parent dataset.
-Version 2 Phase 4 is active under
+Version 2 Phase 4 is accepted and released as `v2.0.0-beta.1` under
 `docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md`. PR #27 merged the approved
 specification and infrastructure-first scaffold. PR #28 merged Observation-Only Operational
-Pipeline V1. PR #29 merged Scheduled Observation Operations V1. Owner Phase 4 acceptance
-testing completed successfully. The current authorized substage is Beta 1 release
-preparation on `review/v2-phase-04-beta1-release-preparation`. Gate A infrastructure entry
-is permitted; Gate B model-connected shadow inference remains locked because no approved
-shadow model exists. Operator-triggered observation-only commands may consume verified local
-Phase 1 manifests, resolve the latest completed XNYS session, inspect shadow history, and
-delegate eligible work to the existing observation runner, but they must not load models,
-generate `LONG`/`CASH` model signals, create proposals, submit orders, contact brokers,
-acquire market data, start daemons, or run unattended scheduling. The target future release
-is `v2.0.0-beta.1`, the package/runtime candidate is `2.0.0b1`, no beta tag exists,
-protected evaluation remains unexecuted, and Phase 5 production paper operation remains
-unauthorized.
+Pipeline V1. PR #29 merged Scheduled Observation Operations V1. PR #30 merged Beta 1
+release preparation, and the public `v2.0.0-beta.1` tag points to
+`1c8feae478c0f5536b2193eeb408e580f3f7e33c`. Gate B model-connected shadow inference
+remains locked because no approved shadow model exists.
+Version 2 Phase 5 is active under
+`docs/V2_PHASE_05_PRODUCTION_PAPER_OPERATION_SPEC.md`. The current authorized substage is
+specification plus non-submitting safety/recovery scaffold on
+`review/v2-phase-05-production-paper`. Gate P5-A infrastructure entry is authorized. Gate
+P5-B broker paper submission by the Phase 5 workflow is blocked pending separate owner
+authorization. Gate P5-C model-connected paper operation is
+`BLOCKED_NO_APPROVED_PAPER_MODEL` because Phase 3 produced `NO CANDIDATE PROMOTION`.
+The target future release is `v2.0.0-beta.2`, the package/runtime version remains
+`2.0.0b1`, no beta.2 tag exists, protected evaluation remains unexecuted, no approved paper
+model exists, unattended scheduling remains unauthorized, and live trading remains
+prohibited.
 Real-data-provider selection belongs to Version 2 Phase 1, not to an old Version 1 phase.
 
 If a user request conflicts with `PROJECT_SPEC.md`, `FUTURE_ROADMAP.md`, or the active phase

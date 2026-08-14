@@ -1,14 +1,15 @@
 # Version 2 Phase 4 - Real-Time Shadow Mode Specification
 
-Status: Owner accepted - Beta 1 release preparation active
+Status: Accepted and released as `v2.0.0-beta.1`
 
 Target release identifier: `v2.0.0-beta.1`
 
-Current release-preparation branch: `review/v2-phase-04-beta1-release-preparation`
+Release-preparation branch: `review/v2-phase-04-beta1-release-preparation`
 
-Package/runtime candidate: `2.0.0b1`
+Released package/runtime version: `2.0.0b1`
 
-Public tag: NOT YET CREATED
+Public tag: `v2.0.0-beta.1` CREATED at
+`1c8feae478c0f5536b2193eeb408e580f3f7e33c`
 
 Gate B: LOCKED
 
@@ -18,8 +19,8 @@ operation, production paper operation, or live trading. PR #27 merged the approv
 specification and infrastructure-first scaffold. PR #28 merged Observation-Only Operational
 Pipeline V1. PR #29 merged Scheduled Observation Operations V1. The owner completed Phase 4
 acceptance testing, including a sanitized real SPY observation-only smoke test on the
-accepted Phase 1 parent dataset. The current release-preparation substage records that
-evidence and prepares package metadata for Beta 1. In this document, "scheduled" means
+accepted Phase 1 parent dataset. PR #30 merged Beta 1 release preparation, and the public
+`v2.0.0-beta.1` tag was created after owner approval. In this document, "scheduled" means
 deterministic, schedule-aware, operator-triggered observation orchestration only. This
 authorization permits deterministic target-session resolution, schedule eligibility
 evaluation, durable shadow-history inspection, already-processed detection,
@@ -578,9 +579,9 @@ Normal automated tests must be offline, synthetic, credential-free, and broker-f
 Required coverage includes:
 
 - Phase 4 spec existence and status;
-- package/runtime candidate is `2.0.0b1` on the Beta 1 release-preparation branch;
+- released package/runtime version is `2.0.0b1`;
 - `v2.0.0-alpha.3` documented as released;
-- `v2.0.0-beta.1` documented only as a target;
+- `v2.0.0-beta.1` documented as released;
 - observation-only mode permitted;
 - model-connected inference rejected even with self-declared approved metadata;
 - synthetic approved metadata passes structural validation without granting runtime
@@ -608,7 +609,7 @@ Required coverage includes:
 - no unattended scheduler, daemon, loop, sleep, cron, APScheduler, Celery, or RQ dependency;
 - no import side effects;
 - live trading remains prohibited;
-- Phase 5 remains unauthorized.
+- Phase 5 production paper submission remains unauthorized unless separately approved.
 
 ## 31. Owner Testing
 
@@ -622,7 +623,7 @@ paper/live orders, or configure unattended automation.
 
 ## 32. Required Artifacts/Evidence
 
-Beta 1 release-preparation evidence should include:
+Beta 1 release evidence includes:
 
 - this governing specification;
 - updated governance/status documentation;
@@ -635,8 +636,9 @@ Beta 1 release-preparation evidence should include:
 - Beta 1 release notes;
 - synthetic test evidence;
 - quality-gate output;
-- confirmation that package/runtime is prepared as `2.0.0b1`;
-- confirmation that no beta tag was created;
+- confirmation that package/runtime is released as `2.0.0b1`;
+- confirmation that the beta tag was created only after review, merge, final verification,
+  and owner approval;
 - confirmation that no model was promoted;
 - confirmation that no broker/execution capability was added.
 
@@ -663,8 +665,7 @@ This substage may be accepted when:
 - normal tests remain offline and synthetic;
 - coverage remains at least 85%;
 - Ruff, formatting, MyPy, `git diff --check`, and `git status --short` pass;
-- no real-data experiment, protected evaluation, paper order, live order, or beta tag is
-  created.
+- no real-data experiment, protected evaluation, paper order, or live order is created.
 
 ## 34. Rejection Criteria
 
@@ -690,11 +691,9 @@ Phase 4 starts from released `v2.0.0-alpha.3` and package/runtime version `2.0.0
 Specification, infrastructure-first scaffolding, Observation-Only Operational Pipeline V1,
 and Scheduled Observation Operations V1 must not bump the package version.
 
-The target future public release identifier is `v2.0.0-beta.1`. A later reviewed
-release-preparation branch may set an appropriate beta package version after Phase 4
-implementation and owner acceptance. This Beta 1 release-preparation branch prepares
-package/runtime candidate `2.0.0b1`, records sanitized owner acceptance evidence, and still
-does not create the `v2.0.0-beta.1` tag.
+The public release identifier is `v2.0.0-beta.1`. The Beta 1 release-preparation branch
+prepared package/runtime version `2.0.0b1`, recorded sanitized owner acceptance evidence,
+merged through PR #30, and was tagged after final owner approval.
 
 API, database, market-data, benchmark, and research artifact schema versions do not change
 merely because Phase 4 planning begins.
@@ -704,7 +703,7 @@ merely because Phase 4 planning begins.
 This specification authorizes Phase 4 infrastructure-first shadow-mode scaffolding,
 Observation-Only Operational Pipeline V1, and Scheduled Observation Operations V1 only. The
 scheduled-observation substage is operator-triggered schedule-aware orchestration, not an
-unattended scheduler. Beta 1 release preparation authorizes release metadata, sanitized
+unattended scheduler. Beta 1 release preparation authorized release metadata, sanitized
 acceptance evidence, documentation, tests, and the package/runtime candidate bump only. It
 does not authorize model-connected real-data inference, protected evaluation, strategy
 optimization, production paper operation, live trading, broker communication, cron, daemon,

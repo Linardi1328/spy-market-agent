@@ -280,9 +280,10 @@ execute protected evaluation or strategy optimization and did not promote a mode
 
 ## Version 2 Phase 4 Shadow Reproducibility
 
-**Owner accepted; Beta 1 release preparation active:** Phase 4 is governed by
-`docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md` and targets `v2.0.0-beta.1`. The package
-runtime candidate is `2.0.0b1`; no beta tag exists.
+**Accepted and released as `v2.0.0-beta.1`:** Phase 4 is governed by
+`docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md`. The package/runtime version is
+`2.0.0b1`, and the public beta tag points to
+`1c8feae478c0f5536b2193eeb408e580f3f7e33c`.
 
 The observation-only shadow pipeline records deterministic identity policy before
 model-connected operation is authorized. It consumes verified local Phase 1 manifests only;
@@ -329,6 +330,25 @@ Owner acceptance evidence is recorded in
 synthetic, credential-free, broker-free, and do not run real owner research, protected
 evaluation, paper execution, live execution, unattended schedulers, daemons, background
 loops, or market-data acquisition.
+
+## Version 2 Phase 5 Paper-Operation Scaffold Reproducibility
+
+**Active specification + non-submitting safety/recovery scaffold:** Phase 5 is governed by
+`docs/V2_PHASE_05_PRODUCTION_PAPER_OPERATION_SPEC.md` for target future release
+`v2.0.0-beta.2`. Package/runtime remains `2.0.0b1`, and no beta.2 tag exists.
+
+The `spy_market_agent.paper_ops` package is deterministic and offline. Its gate decisions
+are fixed by the current approved Phase 5 state:
+
+- P5-A infrastructure entry: `AUTHORIZED`;
+- P5-B Phase 5 broker submission: `BLOCKED PENDING SEPARATE OWNER AUTHORIZATION`;
+- P5-C model-connected paper operation: `BLOCKED_NO_APPROVED_PAPER_MODEL`.
+
+Recovery classification is a pure mapping from the existing paper-attempt status to an
+operator disposition. It does not read SQLite files, environment variables, credentials,
+market data, settings, broker state, or model artifacts. Unknown states fail closed as
+`INVALID_STATE`. `reserved` and `submission_unknown` require reconciliation by
+`client_order_id`; no state permits automatic resubmission.
 
 ## Checksums and Schema Versions
 

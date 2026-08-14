@@ -1,10 +1,12 @@
 # Version 2 Phase 4 Beta 1 Release Evidence
 
-Status: Beta 1 release-preparation evidence for target `v2.0.0-beta.1`.
+Status: Accepted release evidence for `v2.0.0-beta.1`.
 
-Target public release identifier: `v2.0.0-beta.1` is not yet tagged or released.
+Public release identifier: `v2.0.0-beta.1` has been tagged and released.
 
-Package/runtime candidate prepared by this branch: `2.0.0b1`.
+Release commit: `1c8feae478c0f5536b2193eeb408e580f3f7e33c`.
+
+Released package/runtime version: `2.0.0b1`.
 
 Release-preparation branch:
 `review/v2-phase-04-beta1-release-preparation`.
@@ -19,9 +21,9 @@ aligned to the XNYS calendar after a daily session has completed and provider fi
 has been explicitly confirmed. It does not mean tick-level, intraday, unattended,
 model-connected, broker-connected, paper-trading, or live-trading operation.
 
-The release-preparation branch records sanitized acceptance evidence and prepares package
-metadata for the future public Beta 1 tag. It does not run a new real-data campaign and does
-not add new operational functionality.
+The release-preparation branch recorded sanitized acceptance evidence and prepared package
+metadata for the public Beta 1 tag. It did not run a new real-data campaign and did not add
+new operational functionality.
 
 ## 2. Governing Specification
 

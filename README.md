@@ -11,33 +11,40 @@ profitability, and is not real-money trading infrastructure.
 ## Release Status
 
 - Current stable historical baseline: `v1.0.0`.
-- Current package/runtime candidate: `2.0.0b1`.
-- Current released identifier: `v2.0.0-alpha.3`.
-- Target Phase 4 release: `v2.0.0-beta.1`.
+- Current package/runtime version: `2.0.0b1`.
+- Current released identifier: `v2.0.0-beta.1`.
+- Target Phase 5 release: `v2.0.0-beta.2`.
 - V2 Phase 1: accepted and complete - Real SPY Data Foundation.
 - V2 Phase 2: accepted and released - Real Historical Benchmark.
 - V2 Phase 3: accepted and released as `v2.0.0-alpha.3` - Walk-Forward Model Research.
 - V2 Phase 3 model outcome: `NO CANDIDATE PROMOTION`.
-- V2 Phase 4 implementation: owner accepted.
-- V2 Phase 4 Beta 1 release preparation: active.
+- V2 Phase 4: accepted and released as `v2.0.0-beta.1`.
 - V2 Phase 4 model admission: blocked - no approved shadow model.
+- V2 Phase 5 specification/scaffold: active.
+- Gate P5-A infrastructure entry: authorized.
+- Gate P5-B Phase 5 broker submission: blocked pending separate owner authorization.
+- Gate P5-C model-connected paper operation: `BLOCKED_NO_APPROVED_PAPER_MODEL`.
 - Gate B: locked.
 - Approved shadow model: none.
+- Approved paper model: none.
 - Owner-run real SIP benchmark and one controlled final-test execution completed.
 - Owner-run Phase 3 development campaign completed locally with generated artifacts ignored.
-- Public `v2.0.0-beta.1` release/tag: not yet created.
+- Public `v2.0.0-beta.1` release/tag: created at
+  `1c8feae478c0f5536b2193eeb408e580f3f7e33c`.
+- Public `v2.0.0-beta.2` release/tag: not yet created.
 - Protected evaluation: not executed.
 - Scheduled observation operations: operator-triggered only.
 - Unattended scheduler or daemon: not authorized.
-- Phase 5 production paper operation: not authorized.
+- Phase 5 broker paper submission: not authorized.
 - Live trading: prohibited.
 
 Version 2 Phase 1 uses package version `2.0.0a1` and release identifier
 `v2.0.0-alpha.1`. Version 2 Phase 2 uses package version `2.0.0a2` and release identifier
 `v2.0.0-alpha.2`. Version 2 Phase 3 uses package version `2.0.0a3` and release identifier
-`v2.0.0-alpha.3`. Version 2 Phase 4 Beta 1 release preparation moves the package/runtime
-candidate to `2.0.0b1` for the future public identifier `v2.0.0-beta.1`; no beta tag exists
-yet. Release tags must point only to successfully verified `main` commits after review
+`v2.0.0-alpha.3`. Version 2 Phase 4 uses package/runtime version `2.0.0b1` and release
+identifier `v2.0.0-beta.1`. The first Version 2 Phase 5 substage keeps package/runtime
+version `2.0.0b1` while targeting future public identifier `v2.0.0-beta.2`; no beta.2 tag
+exists. Release tags must point only to successfully verified `main` commits after review
 approval, merge, and separate owner tag approval.
 
 ## Version 1 Historical Baseline
@@ -180,13 +187,13 @@ python -m spy_market_agent.research.cli run-development \
 
 ## Version 2 Phase 4 Scheduled Observation Shadow Pipeline
 
-Version 2 Phase 4 implementation is owner accepted and Beta 1 release preparation is active
-under the Real-Time Shadow Mode specification. PR #27 merged the Phase 4 scaffold, PR #28
-merged the manual Observation Pipeline V1, and PR #29 merged Scheduled Observation
-Operations V1. The governing document is
+Version 2 Phase 4 is accepted and released as `v2.0.0-beta.1` under the Real-Time Shadow
+Mode specification. PR #27 merged the Phase 4 scaffold, PR #28 merged the manual
+Observation Pipeline V1, PR #29 merged Scheduled Observation Operations V1, and PR #30
+merged Beta 1 release preparation. The governing document is
 [Version 2 Phase 4 Real-Time Shadow Mode Specification](docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md).
-The target future release is `v2.0.0-beta.1`, the package/runtime candidate is `2.0.0b1`,
-and no beta tag exists.
+The package/runtime version is `2.0.0b1`, and the public `v2.0.0-beta.1` tag points to
+`1c8feae478c0f5536b2193eeb408e580f3f7e33c`.
 
 Phase 4 has two gates. Gate A infrastructure entry is permitted for shadow architecture,
 freshness and completeness policy, XNYS daily-session scheduling functions, idempotent
@@ -248,6 +255,29 @@ is eligible. Phase 4 does not add intraday data, unattended scheduling, daemons,
 strategy optimization, protected evaluation, Phase 5 production paper operation, live
 trading, broker communication, API write routes, or dashboard execution controls.
 
+## Version 2 Phase 5 Production Paper Operation Specification
+
+Version 2 Phase 5 is active for specification plus non-submitting safety/recovery
+scaffold. The governing document is
+[Version 2 Phase 5 Production Paper Operation Specification](docs/V2_PHASE_05_PRODUCTION_PAPER_OPERATION_SPEC.md),
+and the operator recovery guide is
+[Version 2 Phase 5 Paper Recovery Runbook](docs/V2_PHASE_05_PAPER_RECOVERY_RUNBOOK.md).
+The target future release is `v2.0.0-beta.2`, but package/runtime remains `2.0.0b1`, and
+no `v2.0.0-beta.2` tag exists.
+
+Gate P5-A infrastructure entry is authorized for deterministic, offline contracts and
+synthetic tests. Gate P5-B broker submission by the new Phase 5 workflow remains blocked
+pending separate owner authorization. Gate P5-C model-connected paper operation remains
+`BLOCKED_NO_APPROVED_PAPER_MODEL` because Phase 3 produced `NO CANDIDATE PROMOTION`.
+
+The `spy_market_agent.paper_ops` package provides pure Phase 5 gate decisions and recovery
+classification for existing paper-attempt states. It does not contact Alpaca, instantiate a
+broker client, read credentials, submit orders, reconcile real broker state, start a
+scheduler, load a model, expose API write routes, or add dashboard execution controls.
+Current scaffold safety is explicit: No real broker calls, no credentials, no paper order
+submission, no automatic resubmission, no scheduler, no model inference, no protected
+evaluation, and no live trading. No Phase 5 production paper submission is authorized.
+
 ## Safety Boundaries
 
 Live trading is not supported. `EXECUTION_MODE` may only be `paper`, and any attempt to
@@ -308,10 +338,15 @@ Version 2 Phase 3 is released as `v2.0.0-alpha.3`. The completed development cam
 produced `NO CANDIDATE PROMOTION`; it did not run protected evaluation, strategy
 optimization, shadow inference, or paper/live operation.
 
-Version 2 Phase 4 currently includes the manual observation-only operational pipeline,
-dedicated local shadow audit persistence, operator-triggered schedule-aware observation
-orchestration, owner acceptance evidence, and Beta 1 release preparation. Model-connected
+Version 2 Phase 4 includes the manual observation-only operational pipeline, dedicated
+local shadow audit persistence, operator-triggered schedule-aware observation
+orchestration, owner acceptance evidence, and the released Beta 1 package. Model-connected
 shadow inference remains locked because no approved shadow model exists.
+
+Version 2 Phase 5 currently includes only the governing specification, paper recovery
+runbook, and non-submitting safety/recovery scaffold. Actual Phase 5 broker submission is
+separately gated, model-connected paper operation is blocked because no approved paper model
+exists, and no beta.2 tag exists.
 
 Version 1.0.0 specifically did not include market-data downloading; the explicit SPY
 historical-data acquisition CLI begins in Version 2 Phase 1.
@@ -547,6 +582,8 @@ Detailed guides use the same local database, ports, and startup order:
 - [Version 2 Phase 3 Alpha 3 Release Evidence](docs/V2_PHASE_03_ALPHA3_RELEASE_EVIDENCE.md)
 - [Version 2 Phase 4 Real-Time Shadow Mode Specification](docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md)
 - [Version 2 Phase 4 Beta 1 Release Evidence](docs/V2_PHASE_04_BETA1_RELEASE_EVIDENCE.md)
+- [Version 2 Phase 5 Production Paper Operation Specification](docs/V2_PHASE_05_PRODUCTION_PAPER_OPERATION_SPEC.md)
+- [Version 2 Phase 5 Paper Recovery Runbook](docs/V2_PHASE_05_PAPER_RECOVERY_RUNBOOK.md)
 - [Version 2.0.0 Alpha 1 Release Notes](RELEASE_NOTES_V2.0.0_ALPHA_1.md)
 - [Version 2.0.0 Alpha 2 Release Notes](RELEASE_NOTES_V2.0.0_ALPHA_2.md)
 - [Version 2.0.0 Beta 1 Release Notes](RELEASE_NOTES_V2.0.0_BETA_1.md)

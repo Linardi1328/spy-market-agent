@@ -173,8 +173,10 @@ model is approved for shadow or paper operation.
 The Version 2 Phase 4 shadow pipeline is governed by
 `docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md`. PR #27 merged the specification/scaffold;
 PR #28 merged Observation Pipeline V1; PR #29 merged Scheduled Observation Operations V1;
-owner acceptance completed; and Beta 1 release preparation is active. Phase 4 remains
-operator-triggered scheduled observation operations in `observation_only_no_model` mode. It
+owner acceptance completed; PR #30 merged Beta 1 release preparation; and Phase 4 is
+released as `v2.0.0-beta.1` at commit
+`1c8feae478c0f5536b2193eeb408e580f3f7e33c`. Phase 4 remains operator-triggered scheduled
+observation operations in `observation_only_no_model` mode. It
 may consume a verified local Phase 1 manifest, resolve the latest completed XNYS session
 from explicit UTC `as_of`, check SPY daily XNYS session readiness, freshness, completeness,
 explicit provider finalization evidence, deterministic run identity, durable duplicate-run
@@ -188,8 +190,23 @@ create risk approvals, initialize paper execution, construct Alpaca `TradingClie
 broker credentials, expose API write routes, add dashboard execution controls, start cron,
 run a daemon, launch a background worker, or create unattended scheduling. Model-connected
 shadow inference is locked with machine-readable status `blocked_no_approved_model` until a
-future separately approved immutable model-admission record exists. Phase 5 production paper
-operation and live trading remain unauthorized.
+future separately approved immutable model-admission record exists. Live trading remains
+prohibited.
+
+Version 2 Phase 5 is governed by
+`docs/V2_PHASE_05_PRODUCTION_PAPER_OPERATION_SPEC.md`. The current substage is
+specification plus non-submitting safety/recovery scaffold for target future release
+`v2.0.0-beta.2`; package/runtime remains `2.0.0b1`, and no beta.2 tag exists. Gate P5-A
+infrastructure entry is authorized. Gate P5-B broker submission by the new Phase 5 workflow
+is blocked pending separate owner authorization. Gate P5-C model-connected paper operation
+is `BLOCKED_NO_APPROVED_PAPER_MODEL`.
+
+The new Phase 5 scaffold must not read credentials, contact brokers, submit or cancel paper
+orders, reconcile real broker state, acquire market data, start schedulers, run background
+workers, load models, generate model signals, expose API write routes, add dashboard
+execution controls, or create live-trading paths. Recovery policy is fail-closed:
+uncertainty never means retry the order, and `reserved` or `submission_unknown` attempts
+require reconciliation by `client_order_id` before any future action.
 
 ## Historical Market-Data Safety
 
