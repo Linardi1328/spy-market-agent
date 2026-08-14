@@ -9,9 +9,12 @@ python -m pip install -e ".[dev]"
 pytest --cov-fail-under=85
 pytest tests/unit -q
 pytest tests/integration -q
+pytest -W error::FutureWarning
 ruff check .
 ruff format --check .
 mypy src tests
+git diff --check
+git status --short
 ```
 
 ## Initialize SQLite Explicitly
@@ -286,9 +289,9 @@ rerunning or retuning the real owner campaign.
 
 ## Run Phase 4 Observation-Only Shadow Readiness
 
-Phase 4 is active for manual observation-only Real-Time Shadow Mode operation under
+Phase 4 implementation is owner accepted and Beta 1 release preparation is active under
 `docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md`. The target future release is
-`v2.0.0-beta.1`; package/runtime version remains `2.0.0a3`, and no beta tag exists.
+`v2.0.0-beta.1`; package/runtime candidate is `2.0.0b1`, and no beta tag exists.
 
 This substage has manual observation-only CLIs, no model inference, no unattended scheduler,
 no daemon, no API write route, no dashboard execution control, and no broker path. It
@@ -338,7 +341,8 @@ operator-triggered orchestration. It is not cron, a daemon, a background worker,
 loop, or automatic market-data acquisition. The schedule layer answers which XNYS session is
 due, whether local verified data is fresh enough, whether that logical observation has
 already been processed, and whether prior shadow-operation history has gaps. Eligible work
-delegates to the approved `run_observation(...)` path at most once.
+delegates to the approved `run_observation(...)` path at most once. Owner acceptance is
+complete; Beta 1 release preparation records sanitized evidence and package metadata only.
 
 First update or verify the local Phase 1 dataset through the separately approved Phase 1
 workflow. The schedule commands consume that local manifest only:

@@ -188,10 +188,12 @@ production paper operation, and live trading remain unauthorized. Phase 3 produc
 
 ## Version 2 Phase 4 Scheduled Observation Shadow Pipeline
 
-**Active scheduled observation operations development:** Phase 4 is governed by
+**Owner accepted; Beta 1 release preparation active:** Phase 4 is governed by
 `docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md` and targets `v2.0.0-beta.1`. The package
-version remains `2.0.0a3` during this substage. PR #28 merged Observation Pipeline V1; the
-current substage adds operator-triggered schedule-aware orchestration on top of that runner.
+runtime candidate is `2.0.0b1`, and the public beta tag has not been created. PR #27 merged
+the specification/scaffold, PR #28 merged Observation Pipeline V1, PR #29 merged Scheduled
+Observation Operations V1, and owner acceptance evidence is recorded for release
+preparation.
 
 The initial `spy_market_agent.shadow` package is separate from research and execution:
 

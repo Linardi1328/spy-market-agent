@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+No entries beyond the pending Version 2 Phase 4 Beta 1 release-preparation package.
+
+## [2.0.0-beta.1] - Pending post-merge owner tag approval
+
+Corresponding Python package candidate: `2.0.0b1`.
+
+- Began Version 2 Phase 4 Beta 1 release preparation after PR #29 merged into `main` at
+  `6fb92c0a6f630d7faa3626cef515d0bb6c742951` and owner acceptance completed.
+- Added sanitized Beta 1 release evidence for owner observation-only smoke test
+  `spy-v2p4-shadow-09c5104d1614fe7902a3fadf` using accepted Phase 1 dataset
+  `spy-v2p1-825930b0a2bcab20c733b867`.
+- Added Beta 1 release notes for target public identifier `v2.0.0-beta.1`; the public tag
+  has not been created.
+- Prepared package/runtime candidate `2.0.0b1` for the future Beta 1 release.
 - Added Version 2 Phase 4 Scheduled Observation Operations V1: deterministic
   operator-triggered `schedule-preview` and `run-due-observation` commands that derive the
   latest completed XNYS target from explicit UTC `as_of`, inspect compatible shadow history,
@@ -21,9 +35,11 @@
 - Documented that Version 2 Phase 3 is released as `v2.0.0-alpha.3`, its outcome was
   `NO CANDIDATE PROMOTION`, and model-connected shadow inference remains blocked because no
   model is approved for shadow operation.
-- Preserved package/runtime version `2.0.0a3`; no beta tag, protected evaluation, strategy
-  optimization, model inference, broker communication, unattended scheduler/daemon, Phase 5
-  production paper operation, or live trading is included.
+- Recorded that Gate B remains locked, approved shadow model remains none, protected
+  evaluation remains not executed, production paper operation remains unauthorized, and no
+  beta tag, strategy optimization, model inference, `ShadowProposal` operational generation,
+  broker communication, market-data acquisition, unattended scheduler/daemon, Phase 5
+  implementation, or live trading is included.
 
 ## [2.0.0-alpha.3] - 2026-08-11
 

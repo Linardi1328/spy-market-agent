@@ -177,17 +177,17 @@ def test_phase4_specification_and_release_status_are_documented() -> None:
     combined = "\n".join((spec, readme, roadmap, safety, changelog))
     combined_lower = combined.lower()
 
-    assert "Status: Active - scheduled observation operations development" in spec
+    assert "Status: Owner accepted - Beta 1 release preparation active" in spec
     assert "Target release identifier: `v2.0.0-beta.1`" in spec
-    assert (
-        "Current package/runtime version during scheduled-observation development: `2.0.0a3`"
-    ) in spec
+    assert "Package/runtime candidate: `2.0.0b1`" in spec
+    assert "Public tag: NOT YET CREATED" in spec
+    assert "Gate B: LOCKED" in spec
     assert "Current released identifier: `v2.0.0-alpha.3`" in readme
     assert "V2 Phase 3 model outcome: `NO CANDIDATE PROMOTION`" in readme
     assert "Public `v2.0.0-beta.1` release/tag: not yet created" in readme
     assert "Phase 5 production paper operation: not authorized" in readme
     assert "Gate A infrastructure entry is authorized" in roadmap
-    assert "Gate B model-connected inference remains blocked" in roadmap
+    assert "Gate B model-connected inference is blocked" in roadmap
     assert "python -m spy_market_agent.shadow.cli run-observation" in readme
     assert "python -m spy_market_agent.shadow.cli schedule-preview" in readme
     assert "python -m spy_market_agent.shadow.cli run-due-observation" in readme
@@ -200,8 +200,8 @@ def test_phase4_specification_and_release_status_are_documented() -> None:
     assert "!artifacts/research/.gitkeep" in gitignore
 
 
-def test_package_version_remains_alpha3_during_phase4_scaffold() -> None:
-    assert spy_market_agent.__version__ == "2.0.0a3"
+def test_package_version_is_beta1_candidate_during_release_preparation() -> None:
+    assert spy_market_agent.__version__ == "2.0.0b1"
 
 
 def test_shadow_metadata_validators_fail_closed_on_unsafe_inputs() -> None:
@@ -687,6 +687,11 @@ def test_shadow_package_static_import_boundary_excludes_broker_and_execution_mod
         "submit_order",
         "submit_approved_order",
         "AlpacaPaperBroker",
+        "APScheduler",
+        "Celery",
+        "RQ",
+        "time.sleep",
+        "while True",
     )
     for path in shadow_files:
         text = path.read_text(encoding="utf-8")

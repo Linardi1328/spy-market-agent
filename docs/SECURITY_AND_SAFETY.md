@@ -172,7 +172,8 @@ model is approved for shadow or paper operation.
 
 The Version 2 Phase 4 shadow pipeline is governed by
 `docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md`. PR #27 merged the specification/scaffold;
-PR #28 merged Observation Pipeline V1; the current authorized substage is
+PR #28 merged Observation Pipeline V1; PR #29 merged Scheduled Observation Operations V1;
+owner acceptance completed; and Beta 1 release preparation is active. Phase 4 remains
 operator-triggered scheduled observation operations in `observation_only_no_model` mode. It
 may consume a verified local Phase 1 manifest, resolve the latest completed XNYS session
 from explicit UTC `as_of`, check SPY daily XNYS session readiness, freshness, completeness,

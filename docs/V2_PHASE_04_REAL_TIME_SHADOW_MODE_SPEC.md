@@ -1,26 +1,33 @@
 # Version 2 Phase 4 - Real-Time Shadow Mode Specification
 
-Status: Active - scheduled observation operations development
+Status: Owner accepted - Beta 1 release preparation active
 
 Target release identifier: `v2.0.0-beta.1`
 
-Current implementation branch: `review/v2-phase-04-scheduled-observation-ops`
+Current release-preparation branch: `review/v2-phase-04-beta1-release-preparation`
 
-Current package/runtime version during scheduled-observation development: `2.0.0a3`
+Package/runtime candidate: `2.0.0b1`
+
+Public tag: NOT YET CREATED
+
+Gate B: LOCKED
 
 Version 2 Phase 3 is complete and released as `v2.0.0-alpha.3`. Its scientific outcome was
 `NO CANDIDATE PROMOTION`. No Phase 3 model is approved for protected evaluation, shadow
 operation, production paper operation, or live trading. PR #27 merged the approved Phase 4
 specification and infrastructure-first scaffold. PR #28 merged Observation-Only Operational
-Pipeline V1. The owner has now explicitly authorized Phase 4 Scheduled Observation
-Operations V1. In this document, "scheduled" means deterministic, schedule-aware,
-operator-triggered observation orchestration only. This authorization permits deterministic
-target-session resolution, schedule eligibility evaluation, durable shadow-history
-inspection, already-processed detection, missed-observation detection, operator-triggered
-schedule preview, operator-triggered run-due observation, exact reuse of the existing
-Observation Pipeline V1 runner, and synthetic calendar/schedule tests. It does not authorize
-an unattended daemon, cron job, cloud scheduler, background worker, continuously running
-process, model inference, or any bypass of the Phase 3 model rejection result.
+Pipeline V1. PR #29 merged Scheduled Observation Operations V1. The owner completed Phase 4
+acceptance testing, including a sanitized real SPY observation-only smoke test on the
+accepted Phase 1 parent dataset. The current release-preparation substage records that
+evidence and prepares package metadata for Beta 1. In this document, "scheduled" means
+deterministic, schedule-aware, operator-triggered observation orchestration only. This
+authorization permits deterministic target-session resolution, schedule eligibility
+evaluation, durable shadow-history inspection, already-processed detection,
+missed-observation detection, operator-triggered schedule preview, operator-triggered
+run-due observation, exact reuse of the existing Observation Pipeline V1 runner, and
+synthetic calendar/schedule tests. It does not authorize an unattended daemon, cron job,
+cloud scheduler, background worker, continuously running process, model inference, or any
+bypass of the Phase 3 model rejection result.
 
 ## 1. Purpose
 
@@ -96,7 +103,7 @@ Phase 4 specification/scaffolding does not authorize:
 - new assets, intraday bars, tick data, options, futures, crypto, or multi-asset support;
 - cloud services, external model APIs, AutoML, deep learning, or new major model
   dependencies;
-- package version bump or `v2.0.0-beta.1` tag creation.
+- `v2.0.0-beta.1` tag creation before post-merge owner approval.
 
 Phase 4 Observation-Only Operational Pipeline V1 specifically does not authorize model
 artifact loading, model inference, `LONG`/`CASH` model signals, strategy inference,
@@ -571,7 +578,7 @@ Normal automated tests must be offline, synthetic, credential-free, and broker-f
 Required coverage includes:
 
 - Phase 4 spec existence and status;
-- package version remains `2.0.0a3`;
+- package/runtime candidate is `2.0.0b1` on the Beta 1 release-preparation branch;
 - `v2.0.0-alpha.3` documented as released;
 - `v2.0.0-beta.1` documented only as a target;
 - observation-only mode permitted;
@@ -605,18 +612,17 @@ Required coverage includes:
 
 ## 31. Owner Testing
 
-Owner testing for this substage should review the spec, inspect the observation-only shadow
-pipeline, run the synthetic tests, verify a local Phase 1 manifest through the existing Phase
-1 workflow, run `schedule-preview`, inspect due/blocked/degraded state, run
-`run-due-observation` for the latest due session when eligible, inspect the persisted run,
-rerun the same scheduled command to confirm already-processed no-op behavior, and inspect
-stored events/alerts. Owner testing must not rerun Phase 3 research, access protected
-labels, load a model, create proposals, create paper/live orders, or configure unattended
-automation.
+Owner testing for the Phase 4 implementation is complete. The owner verified a local Phase
+1 manifest through the existing Phase 1 workflow, ran `schedule-preview`, inspected
+due/blocked/degraded state, ran `run-due-observation` for an eligible latest due session,
+inspected the persisted run, reran the same scheduled command to confirm
+already-processed no-op behavior, and inspected stored events/alerts. Owner testing did not
+rerun Phase 3 research, access protected labels, load a model, create proposals, create
+paper/live orders, or configure unattended automation.
 
 ## 32. Required Artifacts/Evidence
 
-Acceptance evidence for this first Phase 4 PR should include:
+Beta 1 release-preparation evidence should include:
 
 - this governing specification;
 - updated governance/status documentation;
@@ -625,9 +631,11 @@ Acceptance evidence for this first Phase 4 PR should include:
 - dedicated shadow SQLite persistence evidence;
 - manual CLI evidence for `run-observation`, `show-run`, `schedule-preview`, and
   `run-due-observation`;
+- sanitized owner acceptance evidence in `docs/V2_PHASE_04_BETA1_RELEASE_EVIDENCE.md`;
+- Beta 1 release notes;
 - synthetic test evidence;
 - quality-gate output;
-- confirmation that package version remains `2.0.0a3`;
+- confirmation that package/runtime is prepared as `2.0.0b1`;
 - confirmation that no beta tag was created;
 - confirmation that no model was promoted;
 - confirmation that no broker/execution capability was added.
@@ -684,7 +692,9 @@ and Scheduled Observation Operations V1 must not bump the package version.
 
 The target future public release identifier is `v2.0.0-beta.1`. A later reviewed
 release-preparation branch may set an appropriate beta package version after Phase 4
-implementation and owner acceptance. No `v2.0.0-beta.1` tag is created by this branch.
+implementation and owner acceptance. This Beta 1 release-preparation branch prepares
+package/runtime candidate `2.0.0b1`, records sanitized owner acceptance evidence, and still
+does not create the `v2.0.0-beta.1` tag.
 
 API, database, market-data, benchmark, and research artifact schema versions do not change
 merely because Phase 4 planning begins.
@@ -694,10 +704,12 @@ merely because Phase 4 planning begins.
 This specification authorizes Phase 4 infrastructure-first shadow-mode scaffolding,
 Observation-Only Operational Pipeline V1, and Scheduled Observation Operations V1 only. The
 scheduled-observation substage is operator-triggered schedule-aware orchestration, not an
-unattended scheduler. It does not authorize model-connected real-data inference, protected
-evaluation, strategy optimization, production paper operation, live trading, broker
-communication, cron, daemon, background workers, continuously running processes, API write
-routes, dashboard execution controls, package version bump, or a beta tag.
+unattended scheduler. Beta 1 release preparation authorizes release metadata, sanitized
+acceptance evidence, documentation, tests, and the package/runtime candidate bump only. It
+does not authorize model-connected real-data inference, protected evaluation, strategy
+optimization, production paper operation, live trading, broker communication, cron, daemon,
+background workers, continuously running processes, API write routes, dashboard execution
+controls, new operational functionality, or a beta tag.
 
 Any expansion beyond this document requires explicit owner approval and a new or amended
 governing specification. Model-connected shadow inference remains locked until a separate

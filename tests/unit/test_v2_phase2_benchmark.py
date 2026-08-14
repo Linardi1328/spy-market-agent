@@ -158,7 +158,7 @@ def test_prepare_builds_deterministic_split_lock_and_stage_a_guard(
     assert split["final_test"]["positive_count"] >= 40
     assert split["final_test"]["negative_count"] >= 40
     assert (store.benchmark_dir(lock.benchmark_id) / "benchmark_lock.sha256").exists()
-    assert lock.package_version == "2.0.0a3"
+    assert lock.package_version == "2.0.0b1"
 
 
 def test_iex_primary_benchmark_is_rejected(
@@ -464,7 +464,7 @@ def test_benchmark_imports_do_not_construct_network_or_broker_clients() -> None:
     import spy_market_agent.benchmark
     import spy_market_agent.benchmark.cli
 
-    assert spy_market_agent.__version__ == "2.0.0a3"
+    assert spy_market_agent.__version__ == "2.0.0b1"
     assert spy_market_agent.benchmark.BENCHMARK_SCHEMA_VERSION
     with pytest.raises(SystemExit):
         spy_market_agent.benchmark.cli.main(["--help"])
