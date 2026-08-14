@@ -280,9 +280,9 @@ execute protected evaluation or strategy optimization and did not promote a mode
 
 ## Version 2 Phase 4 Shadow Reproducibility
 
-**Active scheduled observation operations development:** Phase 4 is governed by
+**Owner accepted; Beta 1 release preparation active:** Phase 4 is governed by
 `docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md` and targets `v2.0.0-beta.1`. The package
-version remains `2.0.0a3`; no beta tag exists.
+runtime candidate is `2.0.0b1`; no beta tag exists.
 
 The observation-only shadow pipeline records deterministic identity policy before
 model-connected operation is authorized. It consumes verified local Phase 1 manifests only;
@@ -324,9 +324,11 @@ proposals, or operational `ShadowProposal` records. Model-connected mode require
 separately approved immutable model-admission record and otherwise raises
 `blocked_no_approved_model`.
 
-Normal tests for Phase 4 remain offline, synthetic, credential-free, broker-free, and do not
-run real owner research, protected evaluation, paper execution, live execution, unattended
-schedulers, daemons, background loops, or market-data acquisition.
+Owner acceptance evidence is recorded in
+`docs/V2_PHASE_04_BETA1_RELEASE_EVIDENCE.md`. Normal tests for Phase 4 remain offline,
+synthetic, credential-free, broker-free, and do not run real owner research, protected
+evaluation, paper execution, live execution, unattended schedulers, daemons, background
+loops, or market-data acquisition.
 
 ## Checksums and Schema Versions
 

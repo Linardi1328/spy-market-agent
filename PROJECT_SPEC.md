@@ -6,6 +6,14 @@ This project is a portfolio-quality Python system for researching SPY market sig
 
 The system is educational and experimental. It must never claim, imply, or guarantee profitability. Its purpose is to demonstrate careful engineering, chronological market-data handling, model evaluation discipline, risk controls, and safe separation between research, decisioning, and execution.
 
+Version 2 status is tracked through `FUTURE_ROADMAP.md` and approved phase
+specifications rather than by changing this frozen Version 1 baseline. The current
+release-preparation branch prepares package/runtime candidate `2.0.0b1` for target
+`v2.0.0-beta.1` after owner acceptance of Version 2 Phase 4 observation-only shadow
+operations. Gate B remains locked, no shadow model is approved, protected evaluation has not
+been executed, production paper operation is not authorized, unattended scheduling is not
+authorized, and live trading remains prohibited.
+
 ## Problem Statement
 
 Market-intelligence projects often fail by mixing research, prediction, backtesting, and execution in ways that introduce lookahead bias, unrealistic fills, uncontrolled risk, or unsafe broker access. This project addresses that problem by building a constrained, auditable workflow for SPY daily data:

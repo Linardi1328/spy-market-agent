@@ -11,15 +11,18 @@ profitability, and is not real-money trading infrastructure.
 ## Release Status
 
 - Current stable historical baseline: `v1.0.0`.
-- Current package/runtime version: `2.0.0a3`.
+- Current package/runtime candidate: `2.0.0b1`.
 - Current released identifier: `v2.0.0-alpha.3`.
-- Active Phase 4 target: `v2.0.0-beta.1`.
+- Target Phase 4 release: `v2.0.0-beta.1`.
 - V2 Phase 1: accepted and complete - Real SPY Data Foundation.
 - V2 Phase 2: accepted and released - Real Historical Benchmark.
 - V2 Phase 3: accepted and released as `v2.0.0-alpha.3` - Walk-Forward Model Research.
 - V2 Phase 3 model outcome: `NO CANDIDATE PROMOTION`.
-- V2 Phase 4: active scheduled observation operations development.
+- V2 Phase 4 implementation: owner accepted.
+- V2 Phase 4 Beta 1 release preparation: active.
 - V2 Phase 4 model admission: blocked - no approved shadow model.
+- Gate B: locked.
+- Approved shadow model: none.
 - Owner-run real SIP benchmark and one controlled final-test execution completed.
 - Owner-run Phase 3 development campaign completed locally with generated artifacts ignored.
 - Public `v2.0.0-beta.1` release/tag: not yet created.
@@ -32,9 +35,10 @@ profitability, and is not real-money trading infrastructure.
 Version 2 Phase 1 uses package version `2.0.0a1` and release identifier
 `v2.0.0-alpha.1`. Version 2 Phase 2 uses package version `2.0.0a2` and release identifier
 `v2.0.0-alpha.2`. Version 2 Phase 3 uses package version `2.0.0a3` and release identifier
-`v2.0.0-alpha.3`. Version 2 Phase 4 starts from package version `2.0.0a3` and targets the
-future public identifier `v2.0.0-beta.1`; no beta tag exists yet. Release tags must point
-only to successfully verified `main` commits after review approval and merge.
+`v2.0.0-alpha.3`. Version 2 Phase 4 Beta 1 release preparation moves the package/runtime
+candidate to `2.0.0b1` for the future public identifier `v2.0.0-beta.1`; no beta tag exists
+yet. Release tags must point only to successfully verified `main` commits after review
+approval, merge, and separate owner tag approval.
 
 ## Version 1 Historical Baseline
 
@@ -163,7 +167,7 @@ evaluation, paper research, model-connected shadow inference, or live trading. P
 B remains locked. Current work does not authorize protected evaluation, strategy-threshold
 optimization, strategy candidate selection, live trading, production paper execution, model
 inference, API write routes, dashboard execution controls, schedulers, automatic order
-submission, or broker communication. Package/runtime version remains `2.0.0a3`.
+submission, or broker communication. The Alpha 3 package/runtime version is `2.0.0a3`.
 
 Owner-run development research, when authorized locally, is launched manually with:
 
@@ -176,12 +180,13 @@ python -m spy_market_agent.research.cli run-development \
 
 ## Version 2 Phase 4 Scheduled Observation Shadow Pipeline
 
-Version 2 Phase 4 is active for operator-triggered scheduled observation operations under
-the Real-Time Shadow Mode specification. PR #27 merged the Phase 4 scaffold and PR #28
-merged the manual Observation Pipeline V1. The governing document is
+Version 2 Phase 4 implementation is owner accepted and Beta 1 release preparation is active
+under the Real-Time Shadow Mode specification. PR #27 merged the Phase 4 scaffold, PR #28
+merged the manual Observation Pipeline V1, and PR #29 merged Scheduled Observation
+Operations V1. The governing document is
 [Version 2 Phase 4 Real-Time Shadow Mode Specification](docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md).
-The target future release is `v2.0.0-beta.1`, but the package/runtime version remains
-`2.0.0a3` and no beta tag exists.
+The target future release is `v2.0.0-beta.1`, the package/runtime candidate is `2.0.0b1`,
+and no beta tag exists.
 
 Phase 4 has two gates. Gate A infrastructure entry is permitted for shadow architecture,
 freshness and completeness policy, XNYS daily-session scheduling functions, idempotent
@@ -304,9 +309,9 @@ produced `NO CANDIDATE PROMOTION`; it did not run protected evaluation, strategy
 optimization, shadow inference, or paper/live operation.
 
 Version 2 Phase 4 currently includes the manual observation-only operational pipeline,
-dedicated local shadow audit persistence, and operator-triggered schedule-aware observation
-orchestration. Model-connected shadow inference remains locked because no approved shadow
-model exists.
+dedicated local shadow audit persistence, operator-triggered schedule-aware observation
+orchestration, owner acceptance evidence, and Beta 1 release preparation. Model-connected
+shadow inference remains locked because no approved shadow model exists.
 
 Version 1.0.0 specifically did not include market-data downloading; the explicit SPY
 historical-data acquisition CLI begins in Version 2 Phase 1.
@@ -539,8 +544,12 @@ Detailed guides use the same local database, ports, and startup order:
 - [Version 2 Phase 2 Benchmark Policy](docs/V2_PHASE_02_BENCHMARK_POLICY.md)
 - [Version 2 Phase 2 Data Card Template](docs/V2_PHASE_02_DATA_CARD_TEMPLATE.md)
 - [Version 2 Phase 3 Walk-Forward Model Research Specification](docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md)
+- [Version 2 Phase 3 Alpha 3 Release Evidence](docs/V2_PHASE_03_ALPHA3_RELEASE_EVIDENCE.md)
+- [Version 2 Phase 4 Real-Time Shadow Mode Specification](docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md)
+- [Version 2 Phase 4 Beta 1 Release Evidence](docs/V2_PHASE_04_BETA1_RELEASE_EVIDENCE.md)
 - [Version 2.0.0 Alpha 1 Release Notes](RELEASE_NOTES_V2.0.0_ALPHA_1.md)
 - [Version 2.0.0 Alpha 2 Release Notes](RELEASE_NOTES_V2.0.0_ALPHA_2.md)
+- [Version 2.0.0 Beta 1 Release Notes](RELEASE_NOTES_V2.0.0_BETA_1.md)
 - [Version 2 Phase 1 Release Checklist](VERSION_2_PHASE_01_RELEASE_CHECKLIST.md)
 - [Version 2 Phase 2 Release Checklist](VERSION_2_PHASE_02_RELEASE_CHECKLIST.md)
 - [Project Specification](PROJECT_SPEC.md)

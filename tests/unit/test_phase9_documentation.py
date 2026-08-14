@@ -23,10 +23,12 @@ REQUIRED_DOCUMENTS = (
     "docs/V2_PHASE_03_WALK_FORWARD_RESEARCH_SPEC.md",
     "docs/V2_PHASE_03_ALPHA3_RELEASE_EVIDENCE.md",
     "docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md",
+    "docs/V2_PHASE_04_BETA1_RELEASE_EVIDENCE.md",
     "CHANGELOG.md",
     "RELEASE_NOTES_V1.0.0.md",
     "RELEASE_NOTES_V2.0.0_ALPHA_1.md",
     "RELEASE_NOTES_V2.0.0_ALPHA_2.md",
+    "RELEASE_NOTES_V2.0.0_BETA_1.md",
     "VERSION_1_RELEASE_CHECKLIST.md",
     "VERSION_2_PHASE_01_RELEASE_CHECKLIST.md",
     "VERSION_2_PHASE_02_RELEASE_CHECKLIST.md",
@@ -261,17 +263,20 @@ def test_version_2_alpha_release_documents_are_consistent() -> None:
         "Owner-run real SIP benchmark and one controlled final-test execution completed"
     )
 
-    assert "Current package/runtime version: `2.0.0a3`" in readme
+    assert "Current package/runtime candidate: `2.0.0b1`" in readme
     assert "Current released identifier: `v2.0.0-alpha.3`" in readme
-    assert "Active Phase 4 target: `v2.0.0-beta.1`" in readme
+    assert "Target Phase 4 release: `v2.0.0-beta.1`" in readme
     assert "V2 Phase 1: accepted and complete - Real SPY Data Foundation" in readme
     assert "V2 Phase 2: accepted and released - Real Historical Benchmark" in readme
     assert "V2 Phase 3: accepted and released as `v2.0.0-alpha.3`" in readme
     assert "V2 Phase 3 model outcome: `NO CANDIDATE PROMOTION`" in readme
-    assert "V2 Phase 4: active scheduled observation operations development" in readme
+    assert "V2 Phase 4 implementation: owner accepted" in readme
+    assert "V2 Phase 4 Beta 1 release preparation: active" in readme
+    assert "Gate B: locked" in readme
     assert "Public `v2.0.0-beta.1` release/tag: not yet created" in readme
     assert phase2_completion in readme
     assert "Began Version 2 Phase 4 Real-Time Shadow Mode" in changelog
+    assert "Corresponding Python package candidate: `2.0.0b1`" in changelog
     assert "Corresponding Python package version: `2.0.0a3`" in changelog
     assert "Added the Version 2 Phase 3 Walk-Forward Model Research specification" in changelog
     assert "Implemented initial `spy_market_agent.research` scaffolding" in changelog
@@ -285,7 +290,7 @@ def test_version_2_alpha_release_documents_are_consistent() -> None:
     assert "Status: Accepted and released as `v2.0.0-alpha.3`" in phase3_spec
     assert "Accepted - Version 2 Real SPY Data Foundation" in roadmap
     assert "Accepted and released after owner-run real SIP benchmark" in roadmap
-    assert "V2 Phase 4 / `v2.0.0-beta.1`: Active scheduled-observation" in roadmap
+    assert "V2 Phase 4 / `v2.0.0-beta.1`: Beta 1 release preparation" in roadmap
     assert "Git release identifier: `v2.0.0-alpha.1`" in phase1_release_notes
     assert "Git release identifier: `v2.0.0-alpha.2`" in phase2_release_notes
     assert "does not evaluate model accuracy" in phase1_release_notes
@@ -326,9 +331,9 @@ def test_version_2_phase2_release_preparation_status_is_documented() -> None:
         "Owner-run real SIP benchmark and one controlled final-test execution completed"
     )
 
-    assert "Current package/runtime version: `2.0.0a3`" in readme
+    assert "Current package/runtime candidate: `2.0.0b1`" in readme
     assert "Current released identifier: `v2.0.0-alpha.3`" in readme
-    assert "Active Phase 4 target: `v2.0.0-beta.1`" in readme
+    assert "Target Phase 4 release: `v2.0.0-beta.1`" in readme
     assert "v2.0.0-alpha.2" in spec
     assert "2.0.0a2" in spec
     assert "Status: Accepted and released as `v2.0.0-alpha.2`" in spec
@@ -383,7 +388,7 @@ def test_version_2_phase3_walk_forward_research_framework_is_documented() -> Non
     assert "Release-preparation branch: `review/v2-phase-03-alpha3-release-preparation`" in spec
     assert "Released package/runtime version: `2.0.0a3`" in spec
     assert "Current released identifier: `v2.0.0-alpha.3`" in readme
-    assert "Active Phase 4 target: `v2.0.0-beta.1`" in readme
+    assert "Target Phase 4 release: `v2.0.0-beta.1`" in readme
     assert "Version 2 Phase 3 Walk-Forward Model Research Specification" in readme
     assert "`spy_market_agent.research` package now provides a manual, offline" in readme
     assert "`spy_market_agent.shadow` package supports `observation_only_no_model`" in readme
@@ -515,6 +520,86 @@ def test_version_2_phase3_alpha3_release_preparation_evidence_is_documented() ->
 
     assert "artifacts/research/*" in gitignore
     assert "!artifacts/research/.gitkeep" in gitignore
+
+
+def test_version_2_phase4_beta1_release_preparation_is_documented() -> None:
+    evidence = (ROOT / "docs/V2_PHASE_04_BETA1_RELEASE_EVIDENCE.md").read_text(encoding="utf-8")
+    release_notes = (ROOT / "RELEASE_NOTES_V2.0.0_BETA_1.md").read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    roadmap = (ROOT / "FUTURE_ROADMAP.md").read_text(encoding="utf-8")
+    spec = (ROOT / "docs/V2_PHASE_04_REAL_TIME_SHADOW_MODE_SPEC.md").read_text(encoding="utf-8")
+    workflows = (ROOT / "docs/WORKFLOWS.md").read_text(encoding="utf-8")
+    safety = (ROOT / "docs/SECURITY_AND_SAFETY.md").read_text(encoding="utf-8")
+    combined = "\n".join(
+        (evidence, release_notes, readme, changelog, roadmap, spec, workflows, safety)
+    )
+    combined_lower = combined.lower()
+
+    assert "Package/runtime candidate prepared by this branch: `2.0.0b1`" in evidence
+    assert "Package candidate: `2.0.0b1`" in release_notes
+    assert "Target Git release identifier: `v2.0.0-beta.1`" in release_notes
+    assert "Target public release identifier: `v2.0.0-beta.1` is not yet tagged" in evidence
+    assert "Public `v2.0.0-beta.1` release/tag: not yet created" in readme
+    assert "public tag is pending" in roadmap
+    assert "Public tag: NOT YET CREATED" in spec
+    assert "PR #27 merged" in evidence
+    assert "PR #28 merged" in evidence
+    assert "PR #29 merged" in evidence
+    assert "owner acceptance is complete" in roadmap
+    assert "shadow run ID: `spy-v2p4-shadow-09c5104d1614fe7902a3fadf`" in evidence
+    assert "session: 2025-12-31" in evidence
+    assert "model gate status: `blocked_no_approved_model`" in evidence
+    assert "alerts: `none`" in evidence
+    assert "NO CANDIDATE PROMOTION" in release_notes
+    assert "Beta 1 contains no approved model-connected shadow inference" in release_notes
+    assert "Gate B = BLOCKED" in evidence
+    assert "approved shadow model = none" in evidence
+    assert "model inference = unavailable" in evidence
+    assert "ShadowProposal operational generation = unavailable" in evidence
+    assert "broker communication = unavailable" in evidence
+    assert "paper execution = unauthorized" in evidence
+    assert "unattended scheduling = unauthorized" in evidence
+    assert "live trading = prohibited" in evidence
+    assert "PLANNED / NOT YET AUTHORIZED production paper operation" in roadmap
+    assert "review/v2-phase-05-production-paper` (planned / not yet authorized)" in roadmap
+
+    required_boundaries = (
+        "no model loading",
+        "no model inference",
+        "no operational `ShadowProposal` generation",
+        "no broker communication",
+        "no paper execution",
+        "no unattended scheduler",
+        "no market-data acquisition",
+        "no protected evaluation",
+        "no Phase 5 production paper operation",
+        "no live trading",
+    )
+    for boundary in required_boundaries:
+        assert boundary.lower() in combined_lower
+
+    prohibited_release_claims = (
+        "profitability is guaranteed",
+        "predictive edge is claimed",
+        "paper-trading readiness is approved",
+        "live readiness is approved",
+        "tag already exists",
+    )
+    for claim in prohibited_release_claims:
+        assert claim not in combined_lower
+
+    sanitized_markers = (
+        "/Users/",
+        "C:\\",
+        "localhost",
+        "raw provider payload",
+        '"bars"',
+        '"y_true"',
+        '"y_score"',
+    )
+    for marker in sanitized_markers:
+        assert marker not in evidence
 
 
 def test_version_2_phase2_benchmark_integrity_governance_is_documented() -> None:

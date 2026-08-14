@@ -57,13 +57,13 @@ def test_package_version_matches_installed_metadata() -> None:
     assert spy_market_agent.__version__ == version("spy-market-agent")
 
 
-def test_version_2_alpha_release_version_matches_pyproject_and_metadata() -> None:
+def test_version_2_beta1_release_candidate_version_matches_pyproject_and_metadata() -> None:
     with (ROOT / "pyproject.toml").open("rb") as pyproject_file:
         pyproject = tomllib.load(pyproject_file)
 
-    assert pyproject["project"]["version"] == "2.0.0a3"
-    assert version("spy-market-agent") == "2.0.0a3"
-    assert spy_market_agent.__version__ == "2.0.0a3"
+    assert pyproject["project"]["version"] == "2.0.0b1"
+    assert version("spy-market-agent") == "2.0.0b1"
+    assert spy_market_agent.__version__ == "2.0.0b1"
 
 
 def test_required_top_level_documentation_files_exist() -> None:
@@ -84,6 +84,31 @@ def test_release_preparation_keeps_data_api_and_database_schema_versions_stable(
     assert PERSISTENCE_SCHEMA_VERSION == "spy-sqlite-persistence-v2"
     assert PHASE1_SCHEMA_VERSION == "spy-v2-phase1-canonical-daily-bars-v1"
     assert PHASE1_MANIFEST_SCHEMA_VERSION == "spy-v2-phase1-dataset-manifest-v1"
+
+
+def test_beta1_release_preparation_does_not_add_scheduler_dependencies_or_runtime_tag_logic() -> (
+    None
+):
+    with (ROOT / "pyproject.toml").open("rb") as pyproject_file:
+        pyproject = tomllib.load(pyproject_file)
+
+    dependencies = tuple(pyproject["project"]["dependencies"]) + tuple(
+        pyproject["project"]["optional-dependencies"]["dev"]
+    )
+    dependency_text = "\n".join(dependencies).lower()
+
+    for forbidden_dependency in ("apscheduler", "celery", "rq"):
+        assert forbidden_dependency not in dependency_text
+
+    release_identifier_hits: list[Path] = []
+    for path in (ROOT / "src/spy_market_agent").rglob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        if "v2.0.0-beta.1" in text:
+            release_identifier_hits.append(path.relative_to(ROOT))
+        assert "git tag" not in text, path
+        assert "tag already exists" not in text.lower(), path
+
+    assert release_identifier_hits == [Path("src/spy_market_agent/shadow/types.py")]
 
 
 def test_real_env_file_is_not_tracked_or_required() -> None:
