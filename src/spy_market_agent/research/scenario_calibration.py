@@ -212,6 +212,18 @@ def apply_temperature_scaling(
     value = float(temperature)
     if value <= 0.0 or not math.isfinite(value):
         raise ValueError("temperature must be positive and finite.")
+    if value == 1.0:
+        return tuple(
+            tuple(
+                ScenarioProbability(outcome=outcome, probability=probability)
+                for outcome, probability in zip(
+                    ScenarioOutcome,
+                    _probability_values(row),
+                    strict=True,
+                )
+            )
+            for row in probability_rows
+        )
     scaled_rows: list[tuple[ScenarioProbability, ...]] = []
     for row in probability_rows:
         probabilities = _probability_values(row)
@@ -250,16 +262,23 @@ def evaluate_development_temperature_calibration(
     folds: list[ScenarioCalibrationFoldEvaluation] = []
     for reference in reference_folds:
         assessment_start = reference.assessment_anchor_sessions[0]
-        fit_labels = tuple(
+        observable_labels = tuple(
             label
             for label in label_set.labels
             if label.outcome_session <= assessment_start
             and label.anchor_session in feature_by_session
         )
-        if len(fit_labels) < MI1E_MINIMUM_TOTAL_FIT_ROWS:
+        if len(observable_labels) < MI1E_MINIMUM_TOTAL_FIT_ROWS:
             continue
-        core_labels = fit_labels[:-MI1E_CALIBRATION_ROWS]
-        calibration_labels = fit_labels[-MI1E_CALIBRATION_ROWS:]
+        calibration_labels = observable_labels[-MI1E_CALIBRATION_ROWS:]
+        calibration_start = calibration_labels[0].anchor_session
+        core_labels = tuple(
+            label
+            for label in observable_labels[:-MI1E_CALIBRATION_ROWS]
+            if label.outcome_session <= calibration_start
+        )
+        if len(core_labels) < MI1E_MINIMUM_CORE_FIT_ROWS:
+            continue
         assessment_labels = tuple(
             label_by_anchor[session] for session in reference.assessment_anchor_sessions
         )
