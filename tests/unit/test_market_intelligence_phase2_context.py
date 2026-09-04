@@ -88,7 +88,10 @@ def test_mi2a_context_definitions_match_existing_mi1_profile() -> None:
         "vix-daily",
         "us-10y-yield-daily",
     )
-    kinds = {definition.series_id: definition.transform_kind for definition in MI2A_SPY_CONTEXT_DEFINITIONS}
+    kinds = {
+        definition.series_id: definition.transform_kind
+        for definition in MI2A_SPY_CONTEXT_DEFINITIONS
+    }
     assert kinds["qqq-daily"] == ContextTransformKind.PRICE_LEVEL
     assert kinds["iwm-daily"] == ContextTransformKind.PRICE_LEVEL
     assert kinds["vix-daily"] == ContextTransformKind.VOLATILITY_INDEX_LEVEL
