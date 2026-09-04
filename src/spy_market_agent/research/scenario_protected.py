@@ -31,9 +31,7 @@ MI1I_PROTECTED_POLICY_ID = "mi1i-protected-evaluation-v1"
 
 
 class MI1ProtectedScientificStatus(StrEnum):
-    PROTECTED_EVALUATION_COMPLETED_NO_PROMOTION = (
-        "protected_evaluation_completed_no_promotion"
-    )
+    PROTECTED_EVALUATION_COMPLETED_NO_PROMOTION = "protected_evaluation_completed_no_promotion"
     ELIGIBLE_FOR_SEPARATE_PROMOTION_REVIEW = "eligible_for_separate_promotion_review"
 
 
@@ -54,24 +52,18 @@ class MI1FrozenPolicyBundle:
             self.candidate_id != MI1D_CANDIDATE_ID
             or self.feature_policy_id != MI1D_FEATURE_POLICY_ID
         ):
-            raise ValueError(
-                "frozen bundle must use the MI-1D candidate and feature policy."
-            )
+            raise ValueError("frozen bundle must use the MI-1D candidate and feature policy.")
         if self.calibration_policy_id != MI1E_CALIBRATION_POLICY_ID:
             raise ValueError("frozen bundle must use the MI-1E calibration policy.")
         if self.calibration_temperature not in MI1E_TEMPERATURE_GRID:
-            raise ValueError(
-                "calibration_temperature must belong to the frozen MI-1E grid."
-            )
+            raise ValueError("calibration_temperature must belong to the frozen MI-1E grid.")
         if (
             self.selectivity_policy is not None
             and self.selectivity_policy.policy_id != MI1F_SELECTIVITY_POLICY_ID
         ):
             raise ValueError("selectivity policy must be the frozen MI-1F policy.")
         if self.development_through_session >= self.protected_start_session:
-            raise ValueError(
-                "development period must end before protected evaluation begins."
-            )
+            raise ValueError("development period must end before protected evaluation begins.")
         object.__setattr__(
             self,
             "frozen_at",
@@ -111,13 +103,10 @@ class MI1ProtectedPrediction:
         if self.anchor_session >= self.outcome_session:
             raise ValueError("protected prediction anchor must precede outcome session.")
         by_outcome = {item.outcome: item for item in self.probabilities}
-        if (
-            set(by_outcome) != set(ScenarioOutcome)
-            or len(self.probabilities) != len(ScenarioOutcome)
+        if set(by_outcome) != set(ScenarioOutcome) or len(self.probabilities) != len(
+            ScenarioOutcome
         ):
-            raise ValueError(
-                "protected prediction must contain all three scenario probabilities."
-            )
+            raise ValueError("protected prediction must contain all three scenario probabilities.")
         total = sum(item.probability for item in self.probabilities)
         if not math.isclose(total, 1.0, abs_tol=1e-12):
             raise ValueError("protected probabilities must sum to one.")
@@ -162,9 +151,7 @@ class MI1ProtectedEvaluationResult:
             raise ValueError("selected_coverage must match selected rows.")
         if self.selected_rows == 0:
             if self.selected_precision is not None:
-                raise ValueError(
-                    "selected_precision must be None when no rows are selected."
-                )
+                raise ValueError("selected_precision must be None when no rows are selected.")
         elif self.selected_precision is None or not math.isclose(
             self.selected_precision,
             self.selected_correct_rows / self.selected_rows,
@@ -188,17 +175,11 @@ def evaluate_mi1_protected_predictions(
     anchors = tuple(item.anchor_session for item in predictions)
     if anchors != tuple(sorted(set(anchors))):
         raise ValueError("protected predictions must have unique ordered anchors.")
-    if (
-        anchors[0] < permit.protected_start_session
-        or anchors[-1] > permit.protected_end_session
-    ):
+    if anchors[0] < permit.protected_start_session or anchors[-1] > permit.protected_end_session:
         raise ValueError("protected prediction anchors must lie within the permit interval.")
     if any(item.outcome_session > permit.protected_end_session for item in predictions):
         raise ValueError("protected outcomes must lie within the permit interval.")
-    if any(
-        item.model_fingerprint != frozen_policy.model_fingerprint
-        for item in predictions
-    ):
+    if any(item.model_fingerprint != frozen_policy.model_fingerprint for item in predictions):
         raise ValueError("protected predictions must use the frozen model fingerprint.")
 
     outcomes = tuple(item.outcome for item in predictions)
@@ -256,9 +237,7 @@ def _evaluation_id(
         "anchors": [item.anchor_session.isoformat() for item in predictions],
         "outcomes": [item.outcome.value for item in predictions],
     }
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode(
-        "utf-8"
-    )
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return f"mi1-protected-{hashlib.sha256(encoded).hexdigest()[:32]}"
 
 
@@ -269,7 +248,5 @@ def _aware_utc(value: datetime, *, field_name: str) -> datetime:
 
 
 def _require_sha256(value: str, *, field_name: str) -> None:
-    if len(value) != 64 or any(
-        character not in "0123456789abcdef" for character in value
-    ):
+    if len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
         raise ValueError(f"{field_name} must be a lowercase SHA-256 digest.")
