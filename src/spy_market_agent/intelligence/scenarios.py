@@ -74,7 +74,9 @@ class ScenarioForecast:
             raise ValueError("scenario forecast must contain exactly three probabilities.")
         by_outcome = {item.outcome: item for item in self.probabilities}
         if set(by_outcome) != set(ScenarioOutcome):
-            raise ValueError("scenario forecast must contain DOWNSIDE, RANGE, and UPSIDE once each.")
+            raise ValueError(
+                "scenario forecast must contain DOWNSIDE, RANGE, and UPSIDE once each."
+            )
         total = sum(item.probability for item in self.probabilities)
         if not math.isclose(total, 1.0, rel_tol=0.0, abs_tol=1e-12):
             raise ValueError("scenario probabilities must sum to 1.0.")
