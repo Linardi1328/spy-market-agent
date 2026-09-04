@@ -205,16 +205,13 @@ def _perfect_probability_row(
 
 def _uniform_probability_row() -> tuple[ScenarioProbability, ...]:
     return tuple(
-        ScenarioProbability(outcome=item, probability=1.0 / 3.0)
-        for item in ScenarioOutcome
+        ScenarioProbability(outcome=item, probability=1.0 / 3.0) for item in ScenarioOutcome
     )
 
 
 def _manual_calibration(*, perfect: bool) -> ScenarioCalibrationEvaluation:
     calibration_start = date(2024, 1, 2)
-    calibration_outcomes = tuple(
-        _outcome(index) for index in range(MI1E_CALIBRATION_ROWS)
-    )
+    calibration_outcomes = tuple(_outcome(index) for index in range(MI1E_CALIBRATION_ROWS))
     calibration_rows = tuple(
         _perfect_probability_row(outcome) if perfect else _uniform_probability_row()
         for outcome in calibration_outcomes
@@ -369,12 +366,10 @@ def test_mi1e_real_synthetic_walk_forward_calibration_is_causal_and_canonical() 
         assert fold.core_fit_row_count >= 756
         assert fold.calibration.calibration_row_count == MI1E_CALIBRATION_ROWS
         assert (
-            fold.core_fit_last_outcome_session
-            <= fold.calibration.calibration_first_anchor_session
+            fold.core_fit_last_outcome_session <= fold.calibration.calibration_first_anchor_session
         )
         assert (
-            fold.calibration.calibration_last_outcome_session
-            <= fold.assessment_anchor_sessions[0]
+            fold.calibration.calibration_last_outcome_session <= fold.assessment_anchor_sessions[0]
         )
         assert fold.calibration.temperature in MI1E_TEMPERATURE_GRID
         assert all(
@@ -431,10 +426,7 @@ def test_mi1g_analogues_are_causal_and_horizon_spaced() -> None:
     assert all(item.anchor_session < query for item in summary.analogues)
     assert all(item.outcome_session <= query for item in summary.analogues)
     positions = sorted((item.anchor_session - _START).days for item in summary.analogues)
-    assert all(
-        later - earlier >= _HORIZON.length
-        for earlier, later in pairwise(positions)
-    )
+    assert all(later - earlier >= _HORIZON.length for earlier, later in pairwise(positions))
 
 
 def test_mi1g_regime_classification_and_robustness_use_causal_history() -> None:
