@@ -185,7 +185,7 @@ def test_market_state_rejects_duplicates_and_available_dimension_without_evidenc
 
 
 def test_scenario_forecast_requires_exact_three_way_probability_distribution() -> None:
-    with pytest.raises(ValueError, match="sum to 1.0"):
+    with pytest.raises(ValueError, match=r"sum to 1\.0"):
         _forecast(downside=0.20, range_probability=0.20, upside=0.70)
     with pytest.raises(ValueError, match="DOWNSIDE, RANGE, and UPSIDE"):
         ScenarioForecast(
