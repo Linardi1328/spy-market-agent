@@ -19,7 +19,6 @@ def test_mi1_spec_preserves_non_execution_boundary() -> None:
     assert "model inference" in spec
     assert "broker communication" in spec
     assert "paper-order submission" in spec
-    assert "No version bump" not in spec
     assert "No version bump and no release tag" in spec
 
 
