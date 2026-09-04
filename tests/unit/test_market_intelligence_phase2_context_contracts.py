@@ -48,6 +48,12 @@ def _missing_last_overrides() -> dict[str, object]:
     }
 
 
+def _with_overrides(base: dict[str, object], **overrides: object) -> dict[str, object]:
+    payload = dict(base)
+    payload.update(overrides)
+    return payload
+
+
 def test_context_definition_contract_rejects_invalid_types() -> None:
     with pytest.raises(ValueError, match="path-safe"):
         ContextSeriesDefinition(
@@ -99,19 +105,22 @@ def test_context_assessment_contract_enforces_context_sets() -> None:
     missing_id = MI2A_REQUIRED_CONTEXT_IDS[-1]
     missing = _missing_last_overrides()
     with pytest.raises(ValueError, match="subset of present_context_ids"):
-        _assessment(**missing, unverified_context_ids=(missing_id,))
+        _assessment(**_with_overrides(missing, unverified_context_ids=(missing_id,)))
     with pytest.raises(ValueError, match="subset of present_context_ids"):
-        _assessment(**missing, future_available_context_ids=(missing_id,))
+        _assessment(**_with_overrides(missing, future_available_context_ids=(missing_id,)))
 
 
 def test_context_assessment_contract_enforces_reason_lineage() -> None:
     missing = _missing_last_overrides()
     missing_id = MI2A_REQUIRED_CONTEXT_IDS[-1]
 
+    duplicate_reason = f"missing context: {missing_id}"
     with pytest.raises(ValueError, match="duplicates"):
         _assessment(
-            **missing,
-            reasons=(f"missing context: {missing_id}", f"missing context: {missing_id}"),
+            **_with_overrides(
+                missing,
+                reasons=(duplicate_reason, duplicate_reason),
+            )
         )
     with pytest.raises(ValueError, match="undeclared MI-2A readiness failure"):
         _assessment(
@@ -120,15 +129,14 @@ def test_context_assessment_contract_enforces_reason_lineage() -> None:
             reasons=("invented readiness failure",),
         )
     with pytest.raises(ValueError, match="include every structural"):
-        _assessment(
-            **missing,
-            reasons=(),
-        )
+        _assessment(**_with_overrides(missing, reasons=()))
     with pytest.raises(ValueError, match="canonical order"):
         _assessment(
-            **missing,
-            status=ContextBundleStatus.INELIGIBLE,
-            reasons=(f"missing context: {missing_id}", "target data not verified"),
+            **_with_overrides(
+                missing,
+                status=ContextBundleStatus.INELIGIBLE,
+                reasons=(f"missing context: {missing_id}", "target data not verified"),
+            )
         )
 
     unverified_id = MI2A_REQUIRED_CONTEXT_IDS[0]
@@ -153,14 +161,16 @@ def test_context_assessment_contract_enforces_reason_lineage() -> None:
 def test_context_assessment_status_is_determined_by_fail_closed_rule() -> None:
     missing = _missing_last_overrides()
     with pytest.raises(ValueError, match="status must match"):
-        _assessment(**missing, status=ContextBundleStatus.INELIGIBLE)
+        _assessment(**_with_overrides(missing, status=ContextBundleStatus.INELIGIBLE))
 
     missing_id = MI2A_REQUIRED_CONTEXT_IDS[-1]
     with pytest.raises(ValueError, match="status must match"):
         _assessment(
-            **missing,
-            status=ContextBundleStatus.INCOMPLETE,
-            reasons=("target data not verified", f"missing context: {missing_id}"),
+            **_with_overrides(
+                missing,
+                status=ContextBundleStatus.INCOMPLETE,
+                reasons=("target data not verified", f"missing context: {missing_id}"),
+            )
         )
 
     with pytest.raises(ValueError, match="eligibility must match"):
