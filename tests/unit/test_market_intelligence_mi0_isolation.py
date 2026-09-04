@@ -23,8 +23,7 @@ def test_mi0_specification_records_non_execution_boundary() -> None:
 
 def test_mi0_intelligence_package_is_execution_isolated() -> None:
     source = "\n".join(
-        path.read_text(encoding="utf-8")
-        for path in sorted(INTELLIGENCE_ROOT.glob("*.py"))
+        path.read_text(encoding="utf-8") for path in sorted(INTELLIGENCE_ROOT.glob("*.py"))
     )
     forbidden = (
         "alpaca.trading",
