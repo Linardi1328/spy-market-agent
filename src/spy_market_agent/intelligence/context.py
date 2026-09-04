@@ -159,13 +159,18 @@ class SPYContextBundleAssessment:
         )
         if self.missing_context_ids != expected_missing:
             raise ValueError("missing_context_ids must complement present_context_ids.")
-        if any(series_id not in self.present_context_ids for series_id in self.unverified_context_ids):
+        if any(
+            series_id not in self.present_context_ids
+            for series_id in self.unverified_context_ids
+        ):
             raise ValueError("unverified_context_ids must be a subset of present_context_ids.")
         if any(
             series_id not in self.present_context_ids
             for series_id in self.future_available_context_ids
         ):
-            raise ValueError("future_available_context_ids must be a subset of present_context_ids.")
+            raise ValueError(
+                "future_available_context_ids must be a subset of present_context_ids."
+            )
 
         expected_eligible = (
             not self.missing_context_ids
