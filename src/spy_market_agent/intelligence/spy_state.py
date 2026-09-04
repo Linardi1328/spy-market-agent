@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from datetime import date, datetime
+from typing import SupportsFloat
 
 from spy_market_agent.features.models import FeatureSet
 from spy_market_agent.intelligence.contracts import IntelligenceRunIdentity
@@ -167,7 +168,7 @@ def _validate_derivation_inputs(
         raise ValueError("latest SPY session must be complete by run as_of.")
 
 
-def _finite_latest_value(value: object, field_name: str) -> float:
+def _finite_latest_value(value: SupportsFloat | str, field_name: str) -> float:
     try:
         parsed = float(value)
     except (TypeError, ValueError, OverflowError) as exc:
