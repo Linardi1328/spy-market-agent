@@ -28,8 +28,8 @@ from spy_market_agent.research.scenario_evaluation import (
 )
 from spy_market_agent.research.scenario_selectivity import (
     MI1F_MINIMUM_SELECTED_ROWS,
-    MI1F_SEPARATION_GRID,
     MI1F_SELECTIVITY_POLICY_ID,
+    MI1F_SEPARATION_GRID,
     MI1F_TARGET_PRECISION,
     MI1F_TOP_PROBABILITY_GRID,
     ScenarioSelectivityPolicy,
@@ -170,7 +170,9 @@ class ForwardContextFoldEvaluation:
                 raise ValueError("selected precision must be None when all rows abstain.")
         else:
             if self.assessment_selected_precision is None:
-                raise ValueError("selected precision is required when assessment rows are selected.")
+                raise ValueError(
+                    "selected precision is required when assessment rows are selected."
+                )
             expected_precision = (
                 self.assessment_correct_selected_rows / self.assessment_selected_rows
             )
