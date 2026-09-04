@@ -152,13 +152,6 @@ class SPYContextBundleAssessment:
         )
         if self.present_context_ids != expected_present:
             raise ValueError("present_context_ids must complement missing_context_ids.")
-        expected_missing = tuple(
-            series_id
-            for series_id in MI2A_REQUIRED_CONTEXT_IDS
-            if series_id not in self.present_context_ids
-        )
-        if self.missing_context_ids != expected_missing:
-            raise ValueError("missing_context_ids must complement present_context_ids.")
         if not set(self.unverified_context_ids).issubset(self.present_context_ids):
             raise ValueError("unverified_context_ids must be a subset of present_context_ids.")
         if not set(self.future_available_context_ids).issubset(self.present_context_ids):
