@@ -33,7 +33,7 @@ jobs:
           python -m ruff check .
           python -m ruff format --check .
           python -m mypy src tests
-          python -m pytest
+          python -m pytest --cov-fail-under=85
       - name: Diff whitespace checks
         run: |
           git diff --check
