@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 from spy_market_agent.intelligence import (
+    LEGACY_SPY_INSTRUMENT_PROFILE,
     AnalysisHorizon,
     AnalysisProfile,
     AssetClass,
@@ -13,7 +14,6 @@ from spy_market_agent.intelligence import (
     DataQualityStatus,
     HorizonUnit,
     InstrumentProfile,
-    LEGACY_SPY_INSTRUMENT_PROFILE,
     SeriesSnapshot,
     SessionModel,
     derive_intelligence_run_identity,
