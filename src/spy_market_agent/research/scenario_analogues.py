@@ -5,9 +5,10 @@ import statistics
 from dataclasses import dataclass
 from datetime import date
 from enum import StrEnum
+from typing import Any, cast
 
 from spy_market_agent.features.models import FeatureSet
-from spy_market_agent.intelligence.scenarios import ScenarioOutcome
+from spy_market_agent.intelligence.scenarios import ScenarioOutcome, ScenarioProbability
 from spy_market_agent.research.scenario_calibration import (
     ScenarioCalibrationEvaluation,
     calculate_multiclass_ece,
@@ -138,7 +139,7 @@ def find_historical_analogues(
         raise ValueError("top_k must be a positive integer.")
     if feature_set.source_market_data_checksum != label_set.source_market_data_checksum:
         raise ValueError("feature and label source checksums must match.")
-    records = feature_set.data.to_dict(orient="records")
+    records = cast(list[dict[str, Any]], feature_set.data.to_dict(orient="records"))
     sessions = tuple(record["session"] for record in records)
     if query_anchor_session not in sessions:
         raise ValueError("query anchor must exist in the feature set.")
@@ -154,7 +155,9 @@ def find_historical_analogues(
     if not eligible_indexes:
         raise ValueError("no causal analogue history is available for the query anchor.")
     means, scales = _standardization(records, eligible_indexes)
-    query_vector = tuple(float(records[query_index][column]) for column in MI1D_FEATURE_COLUMNS)
+    query_vector = tuple(
+        float(records[query_index][column]) for column in MI1D_FEATURE_COLUMNS
+    )
     ranked = sorted(
         (
             (_distance(query_vector, _vector(records[index]), means, scales), index)
@@ -182,7 +185,7 @@ def find_historical_analogues(
         for distance, index in selected
     )
     returns = tuple(item.forward_return for item in analogues)
-    counts = {outcome: 0 for outcome in ScenarioOutcome}
+    counts = dict.fromkeys(ScenarioOutcome, 0)
     for item in analogues:
         counts[item.outcome] += 1
     return HistoricalAnalogueSummary(
@@ -201,15 +204,20 @@ def find_historical_analogues(
 
 
 def classify_spy_regime(feature_set: FeatureSet, *, anchor_session: date) -> SPYRegime:
-    records = feature_set.data.to_dict(orient="records")
+    records = cast(list[dict[str, Any]], feature_set.data.to_dict(orient="records"))
     sessions = tuple(record["session"] for record in records)
     if anchor_session not in sessions:
         raise ValueError("anchor_session must exist in the feature set.")
     index = sessions.index(anchor_session)
     if index < MI1G_MINIMUM_REGIME_HISTORY:
-        raise ValueError("insufficient prior history for causal volatility regime classification.")
+        raise ValueError(
+            "insufficient prior history for causal volatility regime classification."
+        )
     start = max(0, index - MI1G_REGIME_TRAILING_WINDOW)
-    prior_volatility = tuple(float(records[position]["realized_volatility_20"]) for position in range(start, index))
+    prior_volatility = tuple(
+        float(records[position]["realized_volatility_20"])
+        for position in range(start, index)
+    )
     threshold = statistics.median(prior_volatility)
     current_volatility = float(records[index]["realized_volatility_20"])
     current_trend = float(records[index]["close_return_20d"])
@@ -228,8 +236,12 @@ def evaluate_calibrated_regime_robustness(
     feature_set: FeatureSet,
     calibration: ScenarioCalibrationEvaluation,
 ) -> RegimeRobustnessEvaluation:
-    grouped_outcomes: dict[SPYRegime, list[ScenarioOutcome]] = {regime: [] for regime in SPYRegime}
-    grouped_rows = {regime: [] for regime in SPYRegime}
+    grouped_outcomes: dict[SPYRegime, list[ScenarioOutcome]] = {
+        regime: [] for regime in SPYRegime
+    }
+    grouped_rows: dict[SPYRegime, list[tuple[ScenarioProbability, ...]]] = {
+        regime: [] for regime in SPYRegime
+    }
     for fold in calibration.folds:
         for anchor, outcome, probability_row in zip(
             fold.assessment_anchor_sessions,
@@ -264,15 +276,18 @@ def evaluate_calibrated_regime_robustness(
     )
 
 
-def _vector(record: dict[str, object]) -> tuple[float, ...]:
+def _vector(record: dict[str, Any]) -> tuple[float, ...]:
     return tuple(float(record[column]) for column in MI1D_FEATURE_COLUMNS)
 
 
 def _standardization(
-    records: list[dict[str, object]],
+    records: list[dict[str, Any]],
     indexes: tuple[int, ...],
 ) -> tuple[tuple[float, ...], tuple[float, ...]]:
-    columns = tuple(tuple(float(records[index][column]) for index in indexes) for column in MI1D_FEATURE_COLUMNS)
+    columns = tuple(
+        tuple(float(records[index][column]) for index in indexes)
+        for column in MI1D_FEATURE_COLUMNS
+    )
     means = tuple(statistics.fmean(values) for values in columns)
     scales = tuple(statistics.pstdev(values) or 1.0 for values in columns)
     return means, scales
@@ -286,7 +301,11 @@ def _distance(
 ) -> float:
     return math.sqrt(
         sum(
-            (((left[index] - means[index]) / scales[index]) - ((right[index] - means[index]) / scales[index])) ** 2
+            (
+                (left[index] - means[index]) / scales[index]
+                - (right[index] - means[index]) / scales[index]
+            )
+            ** 2
             for index in range(len(MI1D_FEATURE_COLUMNS))
         )
     )
