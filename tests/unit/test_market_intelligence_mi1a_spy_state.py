@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import replace
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import UTC, date, datetime, time
 
 import pandas as pd
 import pytest
@@ -11,11 +11,14 @@ from spy_market_agent.features.engineering import build_trailing_feature_set
 from spy_market_agent.features.models import FeatureSet
 from spy_market_agent.intelligence import (
     MI1_SPY_ANALYSIS_PROFILE,
+    IntelligenceRunIdentity,
+    MarketStateDimension,
+    SPYMarketStateDerivation,
     StateAvailability,
     derive_intelligence_run_identity,
+    derive_spy_market_state,
     legacy_spy_market_data_to_snapshot,
 )
-from spy_market_agent.intelligence.spy_state import derive_spy_market_state
 from spy_market_agent.market_data.calendar import XNYSCalendar
 from spy_market_agent.market_data.models import CANONICAL_COLUMNS, MarketDataBatch
 from spy_market_agent.validation.market_data_checks import validate_daily_spy_data
@@ -82,7 +85,7 @@ def _run_identity(
     *,
     as_of: datetime | None = None,
     snapshot_id: str | None = None,
-):
+) -> IntelligenceRunIdentity:
     snapshot = legacy_spy_market_data_to_snapshot(batch)
     return derive_intelligence_run_identity(
         target_instrument_id=MI1_SPY_ANALYSIS_PROFILE.target_instrument_id,
@@ -94,7 +97,7 @@ def _run_identity(
     )
 
 
-def _dimension_map(result) -> dict[str, object]:
+def _dimension_map(result: SPYMarketStateDerivation) -> dict[str, MarketStateDimension]:
     return {dimension.dimension_id: dimension for dimension in result.state.dimensions}
 
 
@@ -167,7 +170,10 @@ def test_evidence_ids_and_timestamps_are_deterministic() -> None:
     )
     assert all(item.observed_at == run_identity.as_of for item in first.evidence)
     assert all(item.available_at == run_identity.as_of for item in first.evidence)
-    assert all(item.evidence_id.startswith(f"mi1-spy-{first.session.isoformat()}-") for item in first.evidence)
+    assert all(
+        item.evidence_id.startswith(f"mi1-spy-{first.session.isoformat()}-")
+        for item in first.evidence
+    )
 
 
 def test_relative_strength_and_rates_remain_explicitly_unavailable() -> None:
@@ -281,6 +287,25 @@ def test_incomplete_latest_session_fails_closed() -> None:
         derive_spy_market_state(batch, features, run_identity=run_identity)
 
 
+def test_run_identity_target_and_profile_must_match_mi1_spy() -> None:
+    batch = _validated_batch(_frame(45))
+    features = _feature_set(batch)
+    run_identity = _run_identity(batch)
+
+    with pytest.raises(ValueError, match="target must match"):
+        derive_spy_market_state(
+            batch,
+            features,
+            run_identity=replace(run_identity, target_instrument_id="QQQ"),
+        )
+    with pytest.raises(ValueError, match="analysis profile must match"):
+        derive_spy_market_state(
+            batch,
+            features,
+            run_identity=replace(run_identity, analysis_profile_id="other-profile"),
+        )
+
+
 def test_derivation_does_not_mutate_market_data_or_feature_frames() -> None:
     batch = _validated_batch(_frame(45))
     features = _feature_set(batch)
@@ -341,4 +366,8 @@ def test_state_numeric_outputs_are_finite_when_available() -> None:
             assert dimension.value is not None
             assert math.isfinite(dimension.value)
     assert all(item.numeric_value is not None for item in result.evidence)
-    assert all(math.isfinite(item.numeric_value) for item in result.evidence if item.numeric_value is not None)
+    assert all(
+        math.isfinite(item.numeric_value)
+        for item in result.evidence
+        if item.numeric_value is not None
+    )
