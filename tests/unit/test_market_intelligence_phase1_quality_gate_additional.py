@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import cast
+from typing import Any, cast
 
 import pytest
 
@@ -168,7 +168,7 @@ def test_profile_snapshot_quality_and_identity_fail_closed() -> None:
             scenario_schema_id="scenario-v1",
         )
 
-    snapshot_args = {
+    snapshot_args: dict[str, object] = {
         "snapshot_id": "snapshot-spy",
         "series_id": "spy-daily",
         "provider": "synthetic",
@@ -182,18 +182,21 @@ def test_profile_snapshot_quality_and_identity_fail_closed() -> None:
         "quality_status": DataQualityStatus.VERIFIED,
     }
     with pytest.raises(ValueError, match="DataQualityStatus"):
-        SeriesSnapshot(**{**snapshot_args, "quality_status": "verified"})  # type: ignore[arg-type]
+        SeriesSnapshot(**cast(Any, {**snapshot_args, "quality_status": "verified"}))
     with pytest.raises(ValueError, match="retrieved_at must not be after"):
         SeriesSnapshot(
-            **{
-                **snapshot_args,
-                "retrieved_at": _NOW + timedelta(minutes=1),
-            }
+            **cast(
+                Any,
+                {
+                    **snapshot_args,
+                    "retrieved_at": _NOW + timedelta(minutes=1),
+                },
+            )
         )
     with pytest.raises(ValueError, match="positive integer"):
-        SeriesSnapshot(**{**snapshot_args, "row_count": 0})
+        SeriesSnapshot(**cast(Any, {**snapshot_args, "row_count": 0}))
     with pytest.raises(ValueError, match="SHA-256"):
-        SeriesSnapshot(**{**snapshot_args, "canonical_checksum": "bad"})
+        SeriesSnapshot(**cast(Any, {**snapshot_args, "canonical_checksum": "bad"}))
 
     with pytest.raises(ValueError, match="DataQualityStatus"):
         DataQualityDecision(status=cast(DataQualityStatus, "verified"), eligible=True)
