@@ -138,13 +138,15 @@ class ScenarioCandidateFoldEvaluation:
             or self.metrics.row_count != row_count
         ):
             raise ValueError("candidate fold fields must have matching row counts.")
-        if self.assessment_anchor_sessions != tuple(sorted(self.assessment_anchor_sessions)) or len(
-            set(self.assessment_anchor_sessions)
-        ) != row_count:
+        if (
+            self.assessment_anchor_sessions != tuple(sorted(self.assessment_anchor_sessions))
+            or len(set(self.assessment_anchor_sessions)) != row_count
+        ):
             raise ValueError("candidate assessment anchors must be unique and strictly increasing.")
-        if self.assessment_outcome_sessions != tuple(
-            sorted(self.assessment_outcome_sessions)
-        ) or len(set(self.assessment_outcome_sessions)) != row_count:
+        if (
+            self.assessment_outcome_sessions != tuple(sorted(self.assessment_outcome_sessions))
+            or len(set(self.assessment_outcome_sessions)) != row_count
+        ):
             raise ValueError(
                 "candidate assessment outcomes must be unique and strictly increasing."
             )
@@ -609,8 +611,7 @@ def _baseline_comparisons(
                 evaluated_fold_indexes=retained_fold_indexes,
                 baseline_metrics=baseline_metrics,
                 candidate_minus_baseline_log_loss=(
-                    candidate_metrics.multiclass_log_loss
-                    - baseline_metrics.multiclass_log_loss
+                    candidate_metrics.multiclass_log_loss - baseline_metrics.multiclass_log_loss
                 ),
                 candidate_minus_baseline_brier_score=(
                     candidate_metrics.multiclass_brier_score
