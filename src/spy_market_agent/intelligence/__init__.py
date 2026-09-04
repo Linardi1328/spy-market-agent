@@ -19,6 +19,8 @@ from spy_market_agent.intelligence.legacy_spy import (
 )
 
 __all__ = [
+    "LEGACY_SPY_INSTRUMENT_PROFILE",
+    "LEGACY_SPY_SERIES_ID",
     "AnalysisHorizon",
     "AnalysisProfile",
     "AssetClass",
@@ -27,8 +29,6 @@ __all__ = [
     "HorizonUnit",
     "InstrumentProfile",
     "IntelligenceRunIdentity",
-    "LEGACY_SPY_INSTRUMENT_PROFILE",
-    "LEGACY_SPY_SERIES_ID",
     "SeriesSnapshot",
     "SessionModel",
     "derive_intelligence_run_identity",
