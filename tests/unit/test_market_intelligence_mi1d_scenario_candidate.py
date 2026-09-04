@@ -32,10 +32,12 @@ from spy_market_agent.research.scenario_candidate import (
 )
 from spy_market_agent.research.scenario_evaluation import (
     MI1C_MINIMUM_INITIAL_FIT_ROWS,
+    ScenarioBaselineBenchmark,
     evaluate_development_naive_scenario_baselines,
 )
 from spy_market_agent.research.scenario_labels import (
     MI1B_5_SESSION_RANGE_BAND,
+    ScenarioBaselineKind,
     ScenarioLabel,
     ScenarioLabelSet,
 )
@@ -136,7 +138,7 @@ def _feature_set(
     )
 
 
-def _benchmark(label_set: ScenarioLabelSet):  # type: ignore[no-untyped-def]
+def _benchmark(label_set: ScenarioLabelSet) -> ScenarioBaselineBenchmark:
     return evaluate_development_naive_scenario_baselines(
         label_set,
         development_through_session=label_set.labels[-1].outcome_session,
@@ -171,7 +173,7 @@ def test_candidate_retains_only_feature_eligible_mi1c_folds_and_compares_like_fo
 
     evaluation = evaluate_development_multinomial_candidate(features, labels, benchmark)
 
-    baseline_folds = benchmark.evaluation_for(next(iter(benchmark.evaluations)).baseline_kind).folds
+    baseline_folds = benchmark.evaluation_for(ScenarioBaselineKind.EMPIRICAL_PRIOR).folds
     assert evaluation.folds[0].baseline_fold_index == baseline_folds[1].fold_index
     assert tuple(fold.baseline_fold_index for fold in evaluation.folds) == (1, 2)
     assert evaluation.folds[0].assessment_anchor_sessions == baseline_folds[1].assessment_anchor_sessions
@@ -182,7 +184,7 @@ def test_candidate_retains_only_feature_eligible_mi1c_folds_and_compares_like_fo
         fold.assessment_row_count for fold in evaluation.folds
     )
     assert tuple(item.baseline_kind for item in evaluation.baseline_comparisons) == tuple(
-        comparison.baseline_kind for comparison in evaluation.baseline_comparisons
+        ScenarioBaselineKind
     )
     assert all(
         comparison.evaluated_fold_indexes == (1, 2)
