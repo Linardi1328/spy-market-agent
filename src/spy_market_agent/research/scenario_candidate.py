@@ -5,6 +5,7 @@ import statistics
 import warnings
 from dataclasses import dataclass
 from datetime import date
+from itertools import pairwise
 from typing import Any, cast
 
 import pandas as pd
@@ -51,7 +52,9 @@ _SCENARIO_TO_CLASS: dict[ScenarioOutcome, int] = {
     ScenarioOutcome.RANGE: 1,
     ScenarioOutcome.UPSIDE: 2,
 }
-_CANONICAL_CLASSES: tuple[int, ...] = tuple(_SCENARIO_TO_CLASS[outcome] for outcome in ScenarioOutcome)
+_CANONICAL_CLASSES: tuple[int, ...] = tuple(
+    _SCENARIO_TO_CLASS[outcome] for outcome in ScenarioOutcome
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,7 +145,9 @@ class ScenarioCandidateFoldEvaluation:
         if self.assessment_outcome_sessions != tuple(
             sorted(self.assessment_outcome_sessions)
         ) or len(set(self.assessment_outcome_sessions)) != row_count:
-            raise ValueError("candidate assessment outcomes must be unique and strictly increasing.")
+            raise ValueError(
+                "candidate assessment outcomes must be unique and strictly increasing."
+            )
         if self.model_snapshot.fit_last_outcome_session > self.assessment_anchor_sessions[0]:
             raise ValueError("candidate fit outcomes must be observable by assessment start.")
         for row in self.probability_rows:
@@ -230,9 +235,7 @@ class ScenarioCandidateEvaluation:
         fold_indexes = tuple(fold.baseline_fold_index for fold in self.folds)
         if fold_indexes != tuple(sorted(set(fold_indexes))):
             raise ValueError("candidate fold indexes must be unique and strictly increasing.")
-        if any(
-            later != earlier + 1 for earlier, later in zip(fold_indexes, fold_indexes[1:])
-        ):
+        if any(later != earlier + 1 for earlier, later in pairwise(fold_indexes)):
             raise ValueError("retained candidate fold indexes must be consecutive.")
         if any(
             max(fold.assessment_outcome_sessions) > self.development_through_session
