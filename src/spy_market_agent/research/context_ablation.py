@@ -125,9 +125,7 @@ class SPYContextFeatureHistory:
         if anchors != tuple(sorted(anchors)) or len(set(anchors)) != len(anchors):
             raise ValueError("historical context anchors must be unique and strictly increasing.")
         if any(bundle.as_of.date() != bundle.anchor_session for bundle in self.bundles):
-            raise ValueError(
-                "historical context as_of date must match its anchor session."
-            )
+            raise ValueError("historical context as_of date must match its anchor session.")
         if any(bundle.policy_id != MI2B_CONTEXT_FEATURE_POLICY_ID for bundle in self.bundles):
             raise ValueError("historical context must use the frozen MI-2B feature policy.")
 
