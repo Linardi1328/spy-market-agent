@@ -14,6 +14,7 @@ from spy_market_agent.research.scenario_labels import (
     MI1B_5_SESSION_RANGE_BAND,
     MI1B_20_SESSION_RANGE_BAND,
     ScenarioBaselineKind,
+    ScenarioLabelSet,
     build_spy_scenario_label_set,
     classify_scenario_return,
     fit_naive_scenario_baseline,
@@ -65,7 +66,7 @@ def _batch(frame: pd.DataFrame) -> MarketDataBatch:
     )
 
 
-def _labels(batch: MarketDataBatch, horizon: AnalysisHorizon):
+def _labels(batch: MarketDataBatch, horizon: AnalysisHorizon) -> ScenarioLabelSet:
     return build_spy_scenario_label_set(
         batch,
         horizon=horizon,
