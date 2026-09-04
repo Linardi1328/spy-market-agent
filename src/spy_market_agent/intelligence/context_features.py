@@ -250,6 +250,8 @@ class SPYContextFeatureBundle:
         object.__setattr__(self, "as_of", normalized_as_of)
         if isinstance(self.anchor_session, datetime) or not isinstance(self.anchor_session, date):
             raise ValueError("anchor_session must be a date.")
+        if self.anchor_session > normalized_as_of.date():
+            raise ValueError("anchor_session must not be after the bundle as_of date.")
         if self.target_series_id != LEGACY_SPY_SERIES_ID:
             raise ValueError("target_series_id must be the approved legacy SPY series.")
         normalized_target_snapshot = require_safe_identifier(
@@ -266,6 +268,9 @@ class SPYContextFeatureBundle:
         if len(set(normalized_context_snapshots)) != len(normalized_context_snapshots):
             raise ValueError("context_snapshot_ids must not contain duplicates.")
         object.__setattr__(self, "context_snapshot_ids", normalized_context_snapshots)
+        context_snapshot_by_series = dict(
+            zip(MI2A_REQUIRED_CONTEXT_IDS, normalized_context_snapshots, strict=True)
+        )
         feature_ids = tuple(feature.feature_id for feature in self.features)
         if feature_ids != MI2B_FEATURE_IDS:
             raise ValueError("features must exactly match the canonical MI-2B feature order.")
@@ -278,6 +283,8 @@ class SPYContextFeatureBundle:
                 raise ValueError("feature anchor lineage must match the bundle anchor session.")
             if feature.target_snapshot_id != normalized_target_snapshot:
                 raise ValueError("feature target lineage must match the bundle target snapshot.")
+            if feature.source_snapshot_id != context_snapshot_by_series[feature.source_series_id]:
+                raise ValueError("feature source lineage must match the bundle context snapshot.")
 
 
 def derive_spy_context_features(
@@ -296,6 +303,8 @@ def derive_spy_context_features(
 
     by_id = {series.series_id: series for series in contexts}
     anchor_session = target.sessions[-1]
+    if anchor_session > normalized_as_of.date():
+        raise ValueError("SPY anchor session must not be after the analysis as_of date.")
     for series_id in MI2A_REQUIRED_CONTEXT_IDS:
         if anchor_session not in by_id[series_id].sessions:
             raise ValueError(f"{series_id} must contain the SPY anchor session.")
