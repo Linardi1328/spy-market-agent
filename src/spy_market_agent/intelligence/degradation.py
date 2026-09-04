@@ -59,7 +59,9 @@ class DegradationReference:
             object.__setattr__(self, field_name, value)
         for field_name in ("selected_precision", "selected_coverage"):
             value = getattr(self, field_name)
-            if value is not None and (not math.isfinite(float(value)) or not 0.0 <= float(value) <= 1.0):
+            if value is not None and (
+                not math.isfinite(float(value)) or not 0.0 <= float(value) <= 1.0
+            ):
                 raise ValueError(f"{field_name} must lie in [0, 1] when present.")
 
 
@@ -70,9 +72,13 @@ class RealizedScenarioPrediction:
 
     def __post_init__(self) -> None:
         by_outcome = {item.outcome: item for item in self.probabilities}
-        if set(by_outcome) != set(ScenarioOutcome) or len(self.probabilities) != len(ScenarioOutcome):
+        if (
+            set(by_outcome) != set(ScenarioOutcome)
+            or len(self.probabilities) != len(ScenarioOutcome)
+        ):
             raise ValueError("prediction must contain all three scenario probabilities.")
-        if not math.isclose(sum(item.probability for item in self.probabilities), 1.0, abs_tol=1e-12):
+        total = sum(item.probability for item in self.probabilities)
+        if not math.isclose(total, 1.0, abs_tol=1e-12):
             raise ValueError("prediction probabilities must sum to one.")
         object.__setattr__(
             self,
@@ -101,8 +107,14 @@ class DegradationAssessment:
         if self.status == DegradationStatus.INSUFFICIENT_EVIDENCE:
             if self.recent_row_count >= MI1J_MINIMUM_RECENT_ROWS:
                 raise ValueError("insufficient status is invalid with enough recent rows.")
-            if self.recent_metrics is not None or self.recent_ece is not None or self.breached_metrics:
-                raise ValueError("insufficient assessment must not expose reliability conclusions.")
+            if (
+                self.recent_metrics is not None
+                or self.recent_ece is not None
+                or self.breached_metrics
+            ):
+                raise ValueError(
+                    "insufficient assessment must not expose reliability conclusions."
+                )
         else:
             if self.recent_row_count < MI1J_MINIMUM_RECENT_ROWS:
                 raise ValueError("non-insufficient status requires enough recent rows.")
@@ -179,14 +191,21 @@ def assess_scenario_degradation(
         breached.append("log_loss")
     if metrics.multiclass_brier_score > reference.brier_score + MI1J_BRIER_DETERIORATION:
         breached.append("brier_score")
-    if ece > max(MI1J_ECE_ABSOLUTE_LIMIT, reference.ece + MI1J_ECE_DETERIORATION):
+    if ece > max(
+        MI1J_ECE_ABSOLUTE_LIMIT,
+        reference.ece + MI1J_ECE_DETERIORATION,
+    ):
         breached.append("ece")
-    if reference.selected_precision is not None:
-        if precision is None or precision < reference.selected_precision - MI1J_PRECISION_DETERIORATION:
-            breached.append("selected_precision")
-    if reference.selected_coverage is not None:
-        if coverage < max(0.0, reference.selected_coverage - MI1J_COVERAGE_DETERIORATION):
-            breached.append("selected_coverage")
+    if reference.selected_precision is not None and (
+        precision is None
+        or precision < reference.selected_precision - MI1J_PRECISION_DETERIORATION
+    ):
+        breached.append("selected_precision")
+    if reference.selected_coverage is not None and coverage < max(
+        0.0,
+        reference.selected_coverage - MI1J_COVERAGE_DETERIORATION,
+    ):
+        breached.append("selected_coverage")
     status = (
         DegradationStatus.STABLE
         if not breached
