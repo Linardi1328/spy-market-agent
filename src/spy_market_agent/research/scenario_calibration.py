@@ -66,9 +66,7 @@ class TemperatureCalibration:
         if self.temperature not in MI1E_TEMPERATURE_GRID:
             raise ValueError("temperature must belong to the frozen MI-1E grid.")
         if self.calibration_row_count != MI1E_CALIBRATION_ROWS:
-            raise ValueError(
-                "calibration_row_count must match the frozen MI-1E tail size."
-            )
+            raise ValueError("calibration_row_count must match the frozen MI-1E tail size.")
         if self.calibration_first_anchor_session > self.calibration_last_anchor_session:
             raise ValueError("calibration anchor bounds are invalid.")
         if self.calibration_last_outcome_session <= self.calibration_last_anchor_session:
@@ -117,17 +115,9 @@ class ScenarioCalibrationFoldEvaluation:
             or self.calibrated_metrics.row_count != row_count
         ):
             raise ValueError("assessment metrics must cover every assessment row.")
-        if (
-            self.core_fit_last_outcome_session
-            > self.calibration.calibration_first_anchor_session
-        ):
-            raise ValueError(
-                "core-fit outcomes must be observable before calibration begins."
-            )
-        if (
-            self.calibration.calibration_last_outcome_session
-            > self.assessment_anchor_sessions[0]
-        ):
+        if self.core_fit_last_outcome_session > self.calibration.calibration_first_anchor_session:
+            raise ValueError("core-fit outcomes must be observable before calibration begins.")
+        if self.calibration.calibration_last_outcome_session > self.assessment_anchor_sessions[0]:
             raise ValueError("calibration outcomes must be observable by assessment start.")
         for field_name in ("raw_ece", "calibrated_ece"):
             value = float(getattr(self, field_name))
@@ -208,8 +198,7 @@ def calculate_multiclass_ece(
             bucket_correct[bucket] += 1
     total = len(outcomes)
     return sum(
-        (count / total)
-        * abs(bucket_correct[index] / count - bucket_confidence[index] / count)
+        (count / total) * abs(bucket_correct[index] / count - bucket_confidence[index] / count)
         for index, count in enumerate(bucket_counts)
         if count
     )
@@ -254,9 +243,7 @@ def evaluate_development_temperature_calibration(
     reference_folds = benchmark.evaluations[0].folds
     records = cast(list[dict[str, Any]], feature_set.data.to_dict(orient="records"))
     feature_by_session: dict[date, tuple[float, ...]] = {
-        cast(date, row["session"]): tuple(
-            float(row[column]) for column in MI1D_FEATURE_COLUMNS
-        )
+        cast(date, row["session"]): tuple(float(row[column]) for column in MI1D_FEATURE_COLUMNS)
         for row in records
     }
     label_by_anchor = {label.anchor_session: label for label in label_set.labels}
@@ -276,10 +263,7 @@ def evaluate_development_temperature_calibration(
         assessment_labels = tuple(
             label_by_anchor[session] for session in reference.assessment_anchor_sessions
         )
-        if any(
-            label.anchor_session not in feature_by_session
-            for label in assessment_labels
-        ):
+        if any(label.anchor_session not in feature_by_session for label in assessment_labels):
             raise ValueError("every retained assessment anchor must have a feature row.")
         folds.append(
             _fit_calibration_fold(
@@ -294,9 +278,7 @@ def evaluate_development_temperature_calibration(
         raise ValueError("development history has no fold eligible for MI-1E calibration.")
     outcomes = tuple(outcome for fold in folds for outcome in fold.assessment_outcomes)
     raw_rows = tuple(row for fold in folds for row in fold.raw_probability_rows)
-    calibrated_rows = tuple(
-        row for fold in folds for row in fold.calibrated_probability_rows
-    )
+    calibrated_rows = tuple(row for fold in folds for row in fold.calibrated_probability_rows)
     temperatures = sorted(fold.calibration.temperature for fold in folds)
     median = statistics.median(temperatures)
     if median not in MI1E_TEMPERATURE_GRID:
@@ -418,12 +400,8 @@ def _fit_calibration_fold(
                 calibration_scaled,
             ),
         ),
-        assessment_anchor_sessions=tuple(
-            label.anchor_session for label in assessment_labels
-        ),
-        assessment_outcome_sessions=tuple(
-            label.outcome_session for label in assessment_labels
-        ),
+        assessment_anchor_sessions=tuple(label.anchor_session for label in assessment_labels),
+        assessment_outcome_sessions=tuple(label.outcome_session for label in assessment_labels),
         assessment_outcomes=assessment_outcomes,
         raw_probability_rows=assessment_raw,
         calibrated_probability_rows=assessment_scaled,
