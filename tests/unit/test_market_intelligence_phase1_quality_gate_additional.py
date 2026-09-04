@@ -310,7 +310,7 @@ def test_scenario_contracts_and_abstention_validation() -> None:
         ScenarioProbability(ScenarioOutcome.RANGE, 0.2),
         ScenarioProbability(ScenarioOutcome.UPSIDE, 0.2),
     )
-    with pytest.raises(ValueError, match="sum to 1.0"):
+    with pytest.raises(ValueError, match=r"sum to 1\.0"):
         ScenarioForecast(
             run_identity=_run_identity(),
             horizon=_horizon(),
