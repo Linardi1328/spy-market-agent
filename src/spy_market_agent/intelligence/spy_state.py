@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 
 from spy_market_agent.features.models import FeatureSet
 from spy_market_agent.intelligence.contracts import IntelligenceRunIdentity
@@ -162,7 +162,10 @@ def _validate_derivation_inputs(
         raise ValueError("market_data source snapshot was not available by run as_of.")
     if feature_set.created_at > run_identity.as_of:
         raise ValueError("feature_set was not available by run as_of.")
-    if not calendar.is_session_complete(feature_set.last_feature_session, as_of=run_identity.as_of):
+    if not calendar.is_session_complete(
+        feature_set.last_feature_session,
+        as_of=run_identity.as_of,
+    ):
         raise ValueError("latest SPY session must be complete by run as_of.")
 
 
@@ -189,7 +192,7 @@ def _latest_drawdown_from_peak(market_data: MarketDataBatch) -> float:
 def _build_evidence(
     *,
     session: date,
-    as_of: object,
+    as_of: datetime,
     values: dict[str, float],
 ) -> tuple[EvidenceItem, ...]:
     session_id = session.isoformat()
@@ -235,8 +238,8 @@ def _build_evidence(
             evidence_id=f"mi1-spy-{session_id}-{methodology_id}",
             source_id=LEGACY_SPY_SERIES_ID,
             methodology_id=methodology_id,
-            observed_at=as_of,  # type: ignore[arg-type]
-            available_at=as_of,  # type: ignore[arg-type]
+            observed_at=as_of,
+            available_at=as_of,
             summary=summary,
             numeric_value=value,
         )
