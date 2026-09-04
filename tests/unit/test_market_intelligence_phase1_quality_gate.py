@@ -33,13 +33,13 @@ from spy_market_agent.research.scenario_analogues import (
     RegimeRobustnessEvaluation,
     SPYRegime,
 )
+from spy_market_agent.research.scenario_calibration import (
+    MI1E_CALIBRATION_POLICY_ID,
+)
 from spy_market_agent.research.scenario_candidate import (
     MI1D_CANDIDATE_ID,
     MI1D_FEATURE_COLUMNS,
     MI1D_FEATURE_POLICY_ID,
-)
-from spy_market_agent.research.scenario_calibration import (
-    MI1E_CALIBRATION_POLICY_ID,
 )
 from spy_market_agent.research.scenario_evaluation import (
     ScenarioEvaluationMetrics,
@@ -56,8 +56,8 @@ from spy_market_agent.research.scenario_protected import (
 )
 from spy_market_agent.research.scenario_selectivity import (
     MI1F_MINIMUM_SELECTED_ROWS,
-    MI1F_SEPARATION_GRID,
     MI1F_SELECTIVITY_POLICY_ID,
+    MI1F_SEPARATION_GRID,
     MI1F_TOP_PROBABILITY_GRID,
     ScenarioSelectivityCandidate,
     ScenarioSelectivityEvaluation,
@@ -271,7 +271,9 @@ def _protected_result(**overrides: object) -> MI1ProtectedEvaluationResult:
         "selected_correct_rows": 1,
         "selected_coverage": 1.0,
         "selected_precision": 1.0,
-        "scientific_status": MI1ProtectedScientificStatus.PROTECTED_EVALUATION_COMPLETED_NO_PROMOTION,
+        "scientific_status": (
+            MI1ProtectedScientificStatus.PROTECTED_EVALUATION_COMPLETED_NO_PROMOTION
+        ),
     }
     payload.update(overrides)
     return MI1ProtectedEvaluationResult(**cast(Any, payload))
