@@ -110,7 +110,10 @@ class ScenarioBaseline:
         if self.fit_last_outcome_session > self.fit_through_session:
             raise ValueError("baseline fit must not use outcomes after fit_through_session.")
         by_outcome = {item.outcome: item for item in self.probabilities}
-        if set(by_outcome) != set(ScenarioOutcome) or len(self.probabilities) != len(ScenarioOutcome):
+        if (
+            set(by_outcome) != set(ScenarioOutcome)
+            or len(self.probabilities) != len(ScenarioOutcome)
+        ):
             raise ValueError("baseline probabilities must contain all three scenario outcomes.")
         total = sum(item.probability for item in self.probabilities)
         if not math.isclose(total, 1.0, rel_tol=0.0, abs_tol=1e-12):
@@ -204,7 +207,7 @@ def fit_naive_scenario_baseline(
     if not eligible:
         raise ValueError("fit_through_session does not include any observable scenario labels.")
 
-    counts = {outcome: 0 for outcome in ScenarioOutcome}
+    counts = dict.fromkeys(ScenarioOutcome, 0)
     for label in eligible:
         counts[label.outcome] += 1
 
@@ -215,7 +218,11 @@ def fit_naive_scenario_baseline(
             outcome: counts[outcome] / len(eligible) for outcome in ScenarioOutcome
         }
     else:
-        majority = max(ScenarioOutcome, key=lambda outcome: (counts[outcome], -list(ScenarioOutcome).index(outcome)))
+        outcome_order = tuple(ScenarioOutcome)
+        majority = max(
+            outcome_order,
+            key=lambda outcome: (counts[outcome], -outcome_order.index(outcome)),
+        )
         probabilities = {
             outcome: 1.0 if outcome == majority else 0.0 for outcome in ScenarioOutcome
         }
