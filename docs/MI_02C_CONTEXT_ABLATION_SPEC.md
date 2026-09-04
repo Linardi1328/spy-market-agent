@@ -118,7 +118,8 @@ A dedicated immutable historical-context contract must bind the bundle sequence 
   `ScenarioLabelSet`;
 - the same source schema version used by the supplied SPY features and labels;
 - unique, strictly increasing anchor sessions;
-- strictly increasing point-in-time `as_of` timestamps;
+- an `as_of` calendar date equal to the bundle's own anchor session, so a later/revised
+  snapshot cannot be back-cast into an earlier modeled row;
 - valid MI-2B bundle lineage at every anchor.
 
 The source checksum binding closes the research-lineage boundary between historical context
@@ -150,6 +151,8 @@ fold membership or metrics.
 - Only development labels admitted by the frozen MI-1C benchmark may be used.
 - Protected labels or protected evaluation helpers must not be accessed.
 - Context bundles are consumed only at their own historical anchor session.
+- Each historical bundle's normalized `as_of` calendar date must equal its anchor session;
+  delayed/revised context is rejected instead of being back-cast into an earlier row.
 - No context bundle with an anchor after the relevant model row may be substituted.
 - Scalers are fit only on each fold's training rows.
 - Logistic regression is fit only on each fold's observable training outcomes.
@@ -266,7 +269,7 @@ Tests must cover at least:
 
 1. exact frozen ablation variants and context feature groups;
 2. historical-context checksum/schema binding;
-3. historical-context unique/increasing anchors and `as_of` chronology;
+3. historical-context unique/increasing anchors and exact anchor-date `as_of` binding;
 4. SPY-only output is the frozen MI-1D evaluation;
 5. all contextual variants use exactly the MI-1D retained fold indexes;
 6. all contextual variants use exactly the MI-1D fit and assessment row counts;
