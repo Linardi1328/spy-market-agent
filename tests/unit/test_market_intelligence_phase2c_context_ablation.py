@@ -245,9 +245,7 @@ def ablation_inputs() -> tuple[
 
 def test_mi2c_ablation_surface_is_frozen() -> None:
     assert MI2C_POLICY_ID == "mi2c-context-ablation-v1"
-    assert MI2C_CONTEXT_CANDIDATE_ID == (
-        "mi2c-context-multinomial-logistic-regression-v1"
-    )
+    assert MI2C_CONTEXT_CANDIDATE_ID == ("mi2c-context-multinomial-logistic-regression-v1")
     assert tuple(item.variant for item in MI2C_ABLATION_DEFINITIONS) == tuple(
         ContextAblationVariant
     )
@@ -312,15 +310,14 @@ def test_ablation_reuses_spy_only_and_exact_retained_rows(
     )
     assert study.spy_only == frozen_spy
     assert tuple(fold.baseline_fold_index for fold in study.spy_only.folds) == (1, 2)
-    assert tuple(item.variant for item in study.contextual_evaluations) == tuple(
-        ContextAblationVariant
-    )[1:]
+    assert (
+        tuple(item.variant for item in study.contextual_evaluations)
+        == tuple(ContextAblationVariant)[1:]
+    )
 
     for evaluation in study.contextual_evaluations:
         definition = next(
-            item
-            for item in MI2C_ABLATION_DEFINITIONS
-            if item.variant == evaluation.variant
+            item for item in MI2C_ABLATION_DEFINITIONS if item.variant == evaluation.variant
         )
         assert evaluation.feature_columns == (
             *MI1D_FEATURE_COLUMNS,
@@ -333,8 +330,7 @@ def test_ablation_reuses_spy_only_and_exact_retained_rows(
             strict=True,
         ):
             assert (
-                context_fold.model_snapshot.fit_row_count
-                == spy_fold.model_snapshot.fit_row_count
+                context_fold.model_snapshot.fit_row_count == spy_fold.model_snapshot.fit_row_count
             )
             assert (
                 context_fold.model_snapshot.fit_first_anchor_session
@@ -344,9 +340,7 @@ def test_ablation_reuses_spy_only_and_exact_retained_rows(
                 context_fold.model_snapshot.fit_last_anchor_session
                 == spy_fold.model_snapshot.fit_last_anchor_session
             )
-            assert context_fold.assessment_anchor_sessions == (
-                spy_fold.assessment_anchor_sessions
-            )
+            assert context_fold.assessment_anchor_sessions == (spy_fold.assessment_anchor_sessions)
             assert context_fold.assessment_outcome_sessions == (
                 spy_fold.assessment_outcome_sessions
             )
@@ -381,8 +375,7 @@ def test_probabilities_and_comparison_arithmetic_are_consistent(
             abs=1e-12,
         )
         assert comparison.context_minus_spy_accuracy == pytest.approx(
-            evaluation.pooled_metrics.accuracy
-            - study.spy_only.pooled_metrics.accuracy,
+            evaluation.pooled_metrics.accuracy - study.spy_only.pooled_metrics.accuracy,
             abs=1e-12,
         )
         assert 0 <= comparison.lower_log_loss_fold_count <= 2
