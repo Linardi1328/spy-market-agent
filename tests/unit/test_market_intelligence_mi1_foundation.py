@@ -17,6 +17,7 @@ from spy_market_agent.intelligence import (
     DataQualityStatus,
     EvidenceItem,
     HorizonUnit,
+    IntelligenceRunIdentity,
     MarketStateDimension,
     MarketStateSnapshot,
     ScenarioDecisionStatus,
@@ -30,7 +31,7 @@ from spy_market_agent.intelligence import (
 )
 
 
-def _run_identity():
+def _run_identity() -> IntelligenceRunIdentity:
     return derive_intelligence_run_identity(
         target_instrument_id=MI1_SPY_ANALYSIS_PROFILE.target_instrument_id,
         as_of=datetime(2026, 9, 3, 20, 0, tzinfo=UTC),
@@ -160,7 +161,10 @@ def test_market_state_snapshot_normalizes_dimensions_and_evidence_refs() -> None
             ),
         ),
     )
-    assert [dimension.dimension_id for dimension in snapshot.dimensions] == ["trend", "volatility"]
+    assert [dimension.dimension_id for dimension in snapshot.dimensions] == [
+        "trend",
+        "volatility",
+    ]
     assert snapshot.evidence_refs == ("evidence-trend", "evidence-volatility")
 
 
