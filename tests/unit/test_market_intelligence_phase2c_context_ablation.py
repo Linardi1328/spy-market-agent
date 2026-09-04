@@ -115,10 +115,7 @@ def _feature_values(index: int) -> dict[str, float]:
 
 def _feature_set(*, checksum: str = _CHECKSUM) -> FeatureSet:
     rows = [
-        {
-            "session": _START + timedelta(days=index),
-            **_feature_values(index),
-        }
+        {"session": _START + timedelta(days=index), **_feature_values(index)}
         for index in range(TRAILING_WARMUP_ROWS, _LABEL_COUNT)
     ]
     frame = pd.DataFrame(rows, columns=["session", *FEATURE_COLUMNS])
@@ -164,9 +161,7 @@ def _context_value(feature_id: str, index: int, *, mutation: float = 0.0) -> flo
         "us10y_yield_change_20bp": math.cos(index * 0.027) * 18.0,
     }
     value = values[feature_id]
-    if feature_id == "qqq_return_5":
-        value += mutation
-    return value
+    return value + mutation if feature_id == "qqq_return_5" else value
 
 
 def _context_bundle(
@@ -194,7 +189,11 @@ def _context_bundle(
             as_of=bundle_as_of,
             lookback_sessions=definition.lookback_sessions,
             unit=definition.unit,
-            value=_context_value(definition.feature_id, index, mutation=mutation),
+            value=_context_value(
+                definition.feature_id,
+                index,
+                mutation=mutation,
+            ),
         )
         for definition in MI2B_SPY_CONTEXT_FEATURE_DEFINITIONS
     )
@@ -246,11 +245,13 @@ def ablation_inputs() -> tuple[
 
 def test_mi2c_ablation_surface_is_frozen() -> None:
     assert MI2C_POLICY_ID == "mi2c-context-ablation-v1"
-    assert MI2C_CONTEXT_CANDIDATE_ID == "mi2c-context-multinomial-logistic-regression-v1"
-    assert tuple(definition.variant for definition in MI2C_ABLATION_DEFINITIONS) == tuple(
+    assert MI2C_CONTEXT_CANDIDATE_ID == (
+        "mi2c-context-multinomial-logistic-regression-v1"
+    )
+    assert tuple(item.variant for item in MI2C_ABLATION_DEFINITIONS) == tuple(
         ContextAblationVariant
     )
-    assert MI2C_QQQ_IWM_FEATURE_IDS == MI2B_FEATURE_IDS[:8]
+    assert MI2B_FEATURE_IDS[:8] == MI2C_QQQ_IWM_FEATURE_IDS
     assert MI2C_VIX_FEATURE_IDS == (
         "vix_level",
         "vix_change_5",
@@ -289,7 +290,7 @@ def test_context_history_binds_checksum_schema_and_chronology() -> None:
         replace(history, bundles=(first, second_early))
 
 
-def test_context_ablation_reuses_spy_only_and_exact_retained_rows(
+def test_ablation_reuses_spy_only_and_exact_retained_rows(
     ablation_inputs: tuple[
         FeatureSet,
         ScenarioLabelSet,
@@ -297,32 +298,44 @@ def test_context_ablation_reuses_spy_only_and_exact_retained_rows(
         SPYContextFeatureHistory,
     ],
 ) -> None:
-    features, labels, benchmark, context_history = ablation_inputs
+    features, labels, benchmark, history = ablation_inputs
     study = evaluate_development_context_ablation(
         features,
         labels,
         benchmark,
-        context_history,
+        history,
     )
-    frozen_spy = evaluate_development_multinomial_candidate(features, labels, benchmark)
-
+    frozen_spy = evaluate_development_multinomial_candidate(
+        features,
+        labels,
+        benchmark,
+    )
     assert study.spy_only == frozen_spy
     assert tuple(fold.baseline_fold_index for fold in study.spy_only.folds) == (1, 2)
-    assert tuple(evaluation.variant for evaluation in study.contextual_evaluations) == tuple(
+    assert tuple(item.variant for item in study.contextual_evaluations) == tuple(
         ContextAblationVariant
     )[1:]
 
     for evaluation in study.contextual_evaluations:
         definition = next(
-            item for item in MI2C_ABLATION_DEFINITIONS if item.variant == evaluation.variant
+            item
+            for item in MI2C_ABLATION_DEFINITIONS
+            if item.variant == evaluation.variant
         )
         assert evaluation.feature_columns == (
             *MI1D_FEATURE_COLUMNS,
             *definition.context_feature_ids,
         )
         assert tuple(fold.baseline_fold_index for fold in evaluation.folds) == (1, 2)
-        for spy_fold, context_fold in zip(study.spy_only.folds, evaluation.folds, strict=True):
-            assert context_fold.model_snapshot.fit_row_count == spy_fold.model_snapshot.fit_row_count
+        for spy_fold, context_fold in zip(
+            study.spy_only.folds,
+            evaluation.folds,
+            strict=True,
+        ):
+            assert (
+                context_fold.model_snapshot.fit_row_count
+                == spy_fold.model_snapshot.fit_row_count
+            )
             assert (
                 context_fold.model_snapshot.fit_first_anchor_session
                 == spy_fold.model_snapshot.fit_first_anchor_session
@@ -331,13 +344,17 @@ def test_context_ablation_reuses_spy_only_and_exact_retained_rows(
                 context_fold.model_snapshot.fit_last_anchor_session
                 == spy_fold.model_snapshot.fit_last_anchor_session
             )
-            assert context_fold.assessment_anchor_sessions == spy_fold.assessment_anchor_sessions
-            assert context_fold.assessment_outcome_sessions == spy_fold.assessment_outcome_sessions
+            assert context_fold.assessment_anchor_sessions == (
+                spy_fold.assessment_anchor_sessions
+            )
+            assert context_fold.assessment_outcome_sessions == (
+                spy_fold.assessment_outcome_sessions
+            )
             assert context_fold.assessment_outcomes == spy_fold.assessment_outcomes
             assert len(context_fold.model_snapshot.fit_context_digest) == 64
 
 
-def test_context_ablation_probabilities_and_comparison_arithmetic_are_consistent(
+def test_probabilities_and_comparison_arithmetic_are_consistent(
     ablation_inputs: tuple[
         FeatureSet,
         ScenarioLabelSet,
@@ -346,7 +363,6 @@ def test_context_ablation_probabilities_and_comparison_arithmetic_are_consistent
     ],
 ) -> None:
     study = evaluate_development_context_ablation(*ablation_inputs)
-
     for evaluation, comparison in zip(
         study.contextual_evaluations,
         study.comparisons,
@@ -365,7 +381,8 @@ def test_context_ablation_probabilities_and_comparison_arithmetic_are_consistent
             abs=1e-12,
         )
         assert comparison.context_minus_spy_accuracy == pytest.approx(
-            evaluation.pooled_metrics.accuracy - study.spy_only.pooled_metrics.accuracy,
+            evaluation.pooled_metrics.accuracy
+            - study.spy_only.pooled_metrics.accuracy,
             abs=1e-12,
         )
         assert 0 <= comparison.lower_log_loss_fold_count <= 2
@@ -373,16 +390,22 @@ def test_context_ablation_probabilities_and_comparison_arithmetic_are_consistent
         for fold in evaluation.folds:
             for row in fold.probability_rows:
                 assert tuple(item.outcome for item in row) == tuple(ScenarioOutcome)
-                assert sum(item.probability for item in row) == pytest.approx(1.0, abs=1e-12)
+                assert sum(item.probability for item in row) == pytest.approx(
+                    1.0,
+                    abs=1e-12,
+                )
 
 
-def test_context_ablation_fails_closed_instead_of_shrinking_reference_sample() -> None:
+def test_ablation_fails_closed_instead_of_shrinking_reference_sample() -> None:
     labels = _label_set()
     benchmark = _benchmark(labels)
-    spy_only = evaluate_development_multinomial_candidate(_feature_set(), labels, benchmark)
+    spy_only = evaluate_development_multinomial_candidate(
+        _feature_set(),
+        labels,
+        benchmark,
+    )
     required_anchor = spy_only.folds[0].assessment_anchor_sessions[0]
     omit_index = (required_anchor - _START).days
-
     with pytest.raises(ValueError, match="missing MI-2B historical context"):
         evaluate_development_context_ablation(
             _feature_set(),
@@ -392,7 +415,7 @@ def test_context_ablation_fails_closed_instead_of_shrinking_reference_sample() -
         )
 
 
-def test_context_ablation_rejects_history_lineage_mismatch() -> None:
+def test_ablation_rejects_history_lineage_mismatch() -> None:
     labels = _label_set()
     benchmark = _benchmark(labels)
     with pytest.raises(ValueError, match="context and feature market-data checksums"):
@@ -403,7 +426,7 @@ def test_context_ablation_rejects_history_lineage_mismatch() -> None:
             _context_history(checksum="b" * 64),
         )
 
-    wrong_schema_history = replace(
+    wrong_schema = replace(
         _context_history(),
         source_schema_version="wrong-schema",
     )
@@ -412,7 +435,7 @@ def test_context_ablation_rejects_history_lineage_mismatch() -> None:
             _feature_set(),
             labels,
             benchmark,
-            wrong_schema_history,
+            wrong_schema,
         )
 
 
