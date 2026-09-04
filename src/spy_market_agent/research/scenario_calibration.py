@@ -66,7 +66,9 @@ class TemperatureCalibration:
         if self.temperature not in MI1E_TEMPERATURE_GRID:
             raise ValueError("temperature must belong to the frozen MI-1E grid.")
         if self.calibration_row_count != MI1E_CALIBRATION_ROWS:
-            raise ValueError("calibration_row_count must match the frozen MI-1E tail size.")
+            raise ValueError(
+                "calibration_row_count must match the frozen MI-1E tail size."
+            )
         if self.calibration_first_anchor_session > self.calibration_last_anchor_session:
             raise ValueError("calibration anchor bounds are invalid.")
         if self.calibration_last_outcome_session <= self.calibration_last_anchor_session:
@@ -110,11 +112,22 @@ class ScenarioCalibrationFoldEvaluation:
             )
         ):
             raise ValueError("assessment fields must have matching non-zero row counts.")
-        if self.raw_metrics.row_count != row_count or self.calibrated_metrics.row_count != row_count:
+        if (
+            self.raw_metrics.row_count != row_count
+            or self.calibrated_metrics.row_count != row_count
+        ):
             raise ValueError("assessment metrics must cover every assessment row.")
-        if self.core_fit_last_outcome_session > self.calibration.calibration_first_anchor_session:
-            raise ValueError("core-fit outcomes must be observable before calibration begins.")
-        if self.calibration.calibration_last_outcome_session > self.assessment_anchor_sessions[0]:
+        if (
+            self.core_fit_last_outcome_session
+            > self.calibration.calibration_first_anchor_session
+        ):
+            raise ValueError(
+                "core-fit outcomes must be observable before calibration begins."
+            )
+        if (
+            self.calibration.calibration_last_outcome_session
+            > self.assessment_anchor_sessions[0]
+        ):
             raise ValueError("calibration outcomes must be observable by assessment start.")
         for field_name in ("raw_ece", "calibrated_ece"):
             value = float(getattr(self, field_name))
@@ -143,7 +156,10 @@ class ScenarioCalibrationEvaluation:
     def __post_init__(self) -> None:
         if self.policy_id != MI1E_CALIBRATION_POLICY_ID:
             raise ValueError("policy_id must match the frozen MI-1E policy.")
-        if self.candidate_id != MI1D_CANDIDATE_ID or self.feature_policy_id != MI1D_FEATURE_POLICY_ID:
+        if (
+            self.candidate_id != MI1D_CANDIDATE_ID
+            or self.feature_policy_id != MI1D_FEATURE_POLICY_ID
+        ):
             raise ValueError("MI-1E must calibrate the frozen MI-1D candidate.")
         if self.horizon_length not in {5, 20}:
             raise ValueError("horizon_length must be 5 or 20 sessions.")
@@ -210,13 +226,19 @@ def apply_temperature_scaling(
     scaled_rows: list[tuple[ScenarioProbability, ...]] = []
     for row in probability_rows:
         probabilities = _probability_values(row)
-        logits = [math.log(max(probability, MI1C_PROBABILITY_FLOOR)) / value for probability in probabilities]
+        logits = [
+            math.log(max(probability, MI1C_PROBABILITY_FLOOR)) / value
+            for probability in probabilities
+        ]
         maximum = max(logits)
         exponentials = [math.exp(logit - maximum) for logit in logits]
         denominator = sum(exponentials)
         scaled_rows.append(
             tuple(
-                ScenarioProbability(outcome=outcome, probability=exponentials[index] / denominator)
+                ScenarioProbability(
+                    outcome=outcome,
+                    probability=exponentials[index] / denominator,
+                )
                 for index, outcome in enumerate(ScenarioOutcome)
             )
         )
@@ -230,9 +252,12 @@ def evaluate_development_temperature_calibration(
 ) -> ScenarioCalibrationEvaluation:
     _validate_alignment(feature_set, label_set, benchmark)
     reference_folds = benchmark.evaluations[0].folds
-    feature_by_session = {
-        row["session"]: tuple(float(row[column]) for column in MI1D_FEATURE_COLUMNS)
-        for row in feature_set.data.to_dict(orient="records")
+    records = cast(list[dict[str, Any]], feature_set.data.to_dict(orient="records"))
+    feature_by_session: dict[date, tuple[float, ...]] = {
+        cast(date, row["session"]): tuple(
+            float(row[column]) for column in MI1D_FEATURE_COLUMNS
+        )
+        for row in records
     }
     label_by_anchor = {label.anchor_session: label for label in label_set.labels}
     folds: list[ScenarioCalibrationFoldEvaluation] = []
@@ -241,14 +266,20 @@ def evaluate_development_temperature_calibration(
         fit_labels = tuple(
             label
             for label in label_set.labels
-            if label.outcome_session <= assessment_start and label.anchor_session in feature_by_session
+            if label.outcome_session <= assessment_start
+            and label.anchor_session in feature_by_session
         )
         if len(fit_labels) < MI1E_MINIMUM_TOTAL_FIT_ROWS:
             continue
         core_labels = fit_labels[:-MI1E_CALIBRATION_ROWS]
         calibration_labels = fit_labels[-MI1E_CALIBRATION_ROWS:]
-        assessment_labels = tuple(label_by_anchor[session] for session in reference.assessment_anchor_sessions)
-        if any(label.anchor_session not in feature_by_session for label in assessment_labels):
+        assessment_labels = tuple(
+            label_by_anchor[session] for session in reference.assessment_anchor_sessions
+        )
+        if any(
+            label.anchor_session not in feature_by_session
+            for label in assessment_labels
+        ):
             raise ValueError("every retained assessment anchor must have a feature row.")
         folds.append(
             _fit_calibration_fold(
@@ -263,11 +294,16 @@ def evaluate_development_temperature_calibration(
         raise ValueError("development history has no fold eligible for MI-1E calibration.")
     outcomes = tuple(outcome for fold in folds for outcome in fold.assessment_outcomes)
     raw_rows = tuple(row for fold in folds for row in fold.raw_probability_rows)
-    calibrated_rows = tuple(row for fold in folds for row in fold.calibrated_probability_rows)
+    calibrated_rows = tuple(
+        row for fold in folds for row in fold.calibrated_probability_rows
+    )
     temperatures = sorted(fold.calibration.temperature for fold in folds)
     median = statistics.median(temperatures)
     if median not in MI1E_TEMPERATURE_GRID:
-        median = min(MI1E_TEMPERATURE_GRID, key=lambda item: (abs(item - median), item))
+        median = min(
+            MI1E_TEMPERATURE_GRID,
+            key=lambda item: (abs(item - median), item),
+        )
     return ScenarioCalibrationEvaluation(
         policy_id=MI1E_CALIBRATION_POLICY_ID,
         candidate_id=MI1D_CANDIDATE_ID,
@@ -279,7 +315,10 @@ def evaluate_development_temperature_calibration(
         sklearn_version=sklearn.__version__,
         folds=tuple(folds),
         pooled_raw_metrics=calculate_scenario_probability_metrics(outcomes, raw_rows),
-        pooled_calibrated_metrics=calculate_scenario_probability_metrics(outcomes, calibrated_rows),
+        pooled_calibrated_metrics=calculate_scenario_probability_metrics(
+            outcomes,
+            calibrated_rows,
+        ),
         pooled_raw_ece=calculate_multiclass_ece(outcomes, raw_rows),
         pooled_calibrated_ece=calculate_multiclass_ece(outcomes, calibrated_rows),
         median_temperature=float(median),
@@ -308,20 +347,31 @@ def _fit_calibration_fold(
     )
     with warnings.catch_warnings(record=True) as captured:
         warnings.simplefilter("always", ConvergenceWarning)
-        classifier.fit(transformed, [_SCENARIO_TO_CLASS[label.outcome] for label in core_labels])
+        classifier.fit(
+            transformed,
+            [_SCENARIO_TO_CLASS[label.outcome] for label in core_labels],
+        )
     if any(issubclass(item.category, ConvergenceWarning) for item in captured):
         raise ValueError("MI-1E candidate did not converge.")
     if tuple(int(item) for item in classifier.classes_) != (0, 1, 2):
         raise ValueError("MI-1E fit must contain all three scenario classes.")
 
-    calibration_raw = _predict_rows(classifier, scaler, calibration_labels, feature_by_session)
+    calibration_raw = _predict_rows(
+        classifier,
+        scaler,
+        calibration_labels,
+        feature_by_session,
+    )
     calibration_outcomes = tuple(label.outcome for label in calibration_labels)
     best_temperature = min(
         MI1E_TEMPERATURE_GRID,
         key=lambda temperature: (
             calculate_scenario_probability_metrics(
                 calibration_outcomes,
-                apply_temperature_scaling(calibration_raw, temperature=temperature),
+                apply_temperature_scaling(
+                    calibration_raw,
+                    temperature=temperature,
+                ),
             ).multiclass_log_loss,
             temperature,
         ),
@@ -330,7 +380,12 @@ def _fit_calibration_fold(
         calibration_raw,
         temperature=best_temperature,
     )
-    assessment_raw = _predict_rows(classifier, scaler, assessment_labels, feature_by_session)
+    assessment_raw = _predict_rows(
+        classifier,
+        scaler,
+        assessment_labels,
+        feature_by_session,
+    )
     assessment_scaled = apply_temperature_scaling(
         assessment_raw,
         temperature=best_temperature,
@@ -346,26 +401,45 @@ def _fit_calibration_fold(
             calibration_first_anchor_session=calibration_labels[0].anchor_session,
             calibration_last_anchor_session=calibration_labels[-1].anchor_session,
             calibration_last_outcome_session=calibration_labels[-1].outcome_session,
-            raw_metrics=calculate_scenario_probability_metrics(calibration_outcomes, calibration_raw),
+            raw_metrics=calculate_scenario_probability_metrics(
+                calibration_outcomes,
+                calibration_raw,
+            ),
             calibrated_metrics=calculate_scenario_probability_metrics(
                 calibration_outcomes,
                 calibration_scaled,
             ),
-            raw_ece=calculate_multiclass_ece(calibration_outcomes, calibration_raw),
-            calibrated_ece=calculate_multiclass_ece(calibration_outcomes, calibration_scaled),
+            raw_ece=calculate_multiclass_ece(
+                calibration_outcomes,
+                calibration_raw,
+            ),
+            calibrated_ece=calculate_multiclass_ece(
+                calibration_outcomes,
+                calibration_scaled,
+            ),
         ),
-        assessment_anchor_sessions=tuple(label.anchor_session for label in assessment_labels),
-        assessment_outcome_sessions=tuple(label.outcome_session for label in assessment_labels),
+        assessment_anchor_sessions=tuple(
+            label.anchor_session for label in assessment_labels
+        ),
+        assessment_outcome_sessions=tuple(
+            label.outcome_session for label in assessment_labels
+        ),
         assessment_outcomes=assessment_outcomes,
         raw_probability_rows=assessment_raw,
         calibrated_probability_rows=assessment_scaled,
-        raw_metrics=calculate_scenario_probability_metrics(assessment_outcomes, assessment_raw),
+        raw_metrics=calculate_scenario_probability_metrics(
+            assessment_outcomes,
+            assessment_raw,
+        ),
         calibrated_metrics=calculate_scenario_probability_metrics(
             assessment_outcomes,
             assessment_scaled,
         ),
         raw_ece=calculate_multiclass_ece(assessment_outcomes, assessment_raw),
-        calibrated_ece=calculate_multiclass_ece(assessment_outcomes, assessment_scaled),
+        calibrated_ece=calculate_multiclass_ece(
+            assessment_outcomes,
+            assessment_scaled,
+        ),
     )
 
 
@@ -382,7 +456,10 @@ def _predict_rows(
     raw = cast(Any, classifier).predict_proba(scaler.transform(frame))
     return tuple(
         tuple(
-            ScenarioProbability(outcome=_CLASS_TO_SCENARIO[index], probability=float(values[index]))
+            ScenarioProbability(
+                outcome=_CLASS_TO_SCENARIO[index],
+                probability=float(values[index]),
+            )
             for index in range(3)
         )
         for values in raw
