@@ -113,9 +113,7 @@ def test_derives_latest_spy_state_from_existing_features_and_market_data() -> No
     assert result.session == batch.metadata.last_session
     assert dimensions["trend_5"].value == pytest.approx(float(latest["close_return_5d"]))
     assert dimensions["trend_20"].value == pytest.approx(float(latest["close_return_20d"]))
-    assert dimensions["volatility_5"].value == pytest.approx(
-        float(latest["realized_volatility_5"])
-    )
+    assert dimensions["volatility_5"].value == pytest.approx(float(latest["realized_volatility_5"]))
     assert dimensions["volatility_20"].value == pytest.approx(
         float(latest["realized_volatility_20"])
     )
