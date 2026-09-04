@@ -280,12 +280,12 @@ def test_context_history_binds_checksum_schema_and_chronology() -> None:
     with pytest.raises(ValueError, match="anchors"):
         replace(history, bundles=(first, first))
 
-    first_late = _context_bundle(
+    delayed_first = _context_bundle(
         TRAILING_WARMUP_ROWS,
-        as_of=second.as_of + timedelta(minutes=1),
+        as_of=first.as_of + timedelta(days=1),
     )
-    with pytest.raises(ValueError, match="as_of"):
-        replace(history, bundles=(first_late, second))
+    with pytest.raises(ValueError, match="match its anchor session"):
+        replace(history, bundles=(delayed_first, second))
 
 
 def test_ablation_reuses_spy_only_and_exact_retained_rows(
