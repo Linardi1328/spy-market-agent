@@ -75,8 +75,6 @@ class MarketStateSnapshot:
     @property
     def evidence_refs(self) -> tuple[str, ...]:
         references = {
-            reference
-            for dimension in self.dimensions
-            for reference in dimension.evidence_refs
+            reference for dimension in self.dimensions for reference in dimension.evidence_refs
         }
         return tuple(sorted(references))
