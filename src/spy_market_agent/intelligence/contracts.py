@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -361,7 +362,7 @@ def derive_intelligence_run_identity(
     )
 
 
-def _canonical_digest(payload: dict[str, object]) -> str:
+def _canonical_digest(payload: Mapping[str, object]) -> str:
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode(
         "utf-8"
     )
