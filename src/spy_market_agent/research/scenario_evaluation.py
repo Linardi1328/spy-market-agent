@@ -106,6 +106,12 @@ class ScenarioBaselineFoldEvaluation:
             raise ValueError("assessment anchor sessions must be unique.")
         if self.assessment_outcome_sessions != tuple(sorted(self.assessment_outcome_sessions)):
             raise ValueError("assessment outcome sessions must be strictly increasing.")
+        if len(set(self.assessment_outcome_sessions)) != row_count:
+            raise ValueError("assessment outcome sessions must be unique.")
+        if self.baseline.fit_through_session != self.assessment_anchor_sessions[0]:
+            raise ValueError("baseline fit cutoff must equal the first assessment anchor.")
+        if self.baseline.fit_row_count < MI1C_MINIMUM_INITIAL_FIT_ROWS:
+            raise ValueError("baseline fit must meet the MI-1C minimum observable row count.")
         if self.baseline.fit_last_outcome_session > self.assessment_anchor_sessions[0]:
             raise ValueError("baseline fit outcomes must be observable by assessment start.")
 
@@ -152,14 +158,26 @@ class ScenarioBaselineEvaluation:
             raise ValueError("fold indexes must be contiguous from zero.")
         if any(fold.baseline.baseline_kind != self.baseline_kind for fold in self.folds):
             raise ValueError("all folds must use the evaluation baseline kind.")
-        pooled_rows = sum(fold.assessment_row_count for fold in self.folds)
+        if any(fold.baseline.horizon.length != self.horizon_length for fold in self.folds):
+            raise ValueError("all fold baselines must use the evaluation horizon.")
+        if any(
+            max(fold.assessment_outcome_sessions) > self.development_through_session
+            for fold in self.folds
+        ):
+            raise ValueError("assessment outcomes must not exceed the development cutoff.")
+        fold_sizes = tuple(fold.assessment_row_count for fold in self.folds)
+        if any(size != MI1C_ASSESSMENT_WINDOW_ROWS for size in fold_sizes[:-1]):
+            raise ValueError("all non-final MI-1C folds must use the standard assessment size.")
+        if not MI1C_MINIMUM_FINAL_ASSESSMENT_ROWS <= fold_sizes[-1] <= MI1C_ASSESSMENT_WINDOW_ROWS:
+            raise ValueError("the final MI-1C fold must satisfy the approved size bounds.")
+        pooled_rows = sum(fold_sizes)
         if pooled_rows != self.pooled_metrics.row_count:
             raise ValueError("pooled metric rows must equal all assessment rows.")
         anchors = tuple(
             session for fold in self.folds for session in fold.assessment_anchor_sessions
         )
-        if len(anchors) != len(set(anchors)):
-            raise ValueError("assessment anchors must not overlap across folds.")
+        if anchors != tuple(sorted(anchors)) or len(anchors) != len(set(anchors)):
+            raise ValueError("assessment anchors must be unique, ordered, and non-overlapping.")
         for field_name in (
             "median_fold_log_loss",
             "worst_fold_log_loss",
@@ -196,6 +214,10 @@ class ScenarioBaselineBenchmark:
                 raise ValueError("evaluation development cutoff must match benchmark cutoff.")
             if evaluation.source_market_data_checksum != self.source_market_data_checksum:
                 raise ValueError("evaluation checksum must match benchmark checksum.")
+            if evaluation.scenario_schema_id != self.scenario_schema_id:
+                raise ValueError("evaluation scenario schema must match benchmark schema.")
+            if evaluation.policy_id != self.policy_id:
+                raise ValueError("evaluation policy must match benchmark policy.")
         object.__setattr__(
             self,
             "evaluations",
@@ -284,9 +306,9 @@ def evaluate_development_naive_scenario_baselines(
     pooled_outcomes: dict[ScenarioBaselineKind, list[ScenarioOutcome]] = {
         kind: [] for kind in ScenarioBaselineKind
     }
-    pooled_probability_rows: dict[
-        ScenarioBaselineKind, list[tuple[ScenarioProbability, ...]]
-    ] = {kind: [] for kind in ScenarioBaselineKind}
+    pooled_probability_rows: dict[ScenarioBaselineKind, list[tuple[ScenarioProbability, ...]]] = {
+        kind: [] for kind in ScenarioBaselineKind
+    }
 
     assessment_start = first_assessment_index
     fold_index = 0
@@ -295,9 +317,7 @@ def evaluate_development_naive_scenario_baselines(
             MI1C_ASSESSMENT_WINDOW_ROWS,
             len(development_labels) - assessment_start,
         )
-        assessment = development_labels[
-            assessment_start : assessment_start + assessment_size
-        ]
+        assessment = development_labels[assessment_start : assessment_start + assessment_size]
         fit_through_session = assessment[0].anchor_session
 
         for kind in ScenarioBaselineKind:
@@ -316,9 +336,7 @@ def evaluate_development_naive_scenario_baselines(
                 ScenarioBaselineFoldEvaluation(
                     fold_index=fold_index,
                     baseline=baseline,
-                    assessment_anchor_sessions=tuple(
-                        label.anchor_session for label in assessment
-                    ),
+                    assessment_anchor_sessions=tuple(label.anchor_session for label in assessment),
                     assessment_outcome_sessions=tuple(
                         label.outcome_session for label in assessment
                     ),
@@ -375,9 +393,7 @@ def _development_labels(
     development_through_session: date,
 ) -> tuple[ScenarioLabel, ...]:
     labels = tuple(
-        label
-        for label in label_set.labels
-        if label.outcome_session <= development_through_session
+        label for label in label_set.labels if label.outcome_session <= development_through_session
     )
     if not labels:
         raise ValueError("development cutoff does not include any observable scenario labels.")
