@@ -155,9 +155,7 @@ def find_historical_analogues(
     if not eligible_indexes:
         raise ValueError("no causal analogue history is available for the query anchor.")
     means, scales = _standardization(records, eligible_indexes)
-    query_vector = tuple(
-        float(records[query_index][column]) for column in MI1D_FEATURE_COLUMNS
-    )
+    query_vector = tuple(float(records[query_index][column]) for column in MI1D_FEATURE_COLUMNS)
     ranked = sorted(
         (
             (_distance(query_vector, _vector(records[index]), means, scales), index)
@@ -210,13 +208,10 @@ def classify_spy_regime(feature_set: FeatureSet, *, anchor_session: date) -> SPY
         raise ValueError("anchor_session must exist in the feature set.")
     index = sessions.index(anchor_session)
     if index < MI1G_MINIMUM_REGIME_HISTORY:
-        raise ValueError(
-            "insufficient prior history for causal volatility regime classification."
-        )
+        raise ValueError("insufficient prior history for causal volatility regime classification.")
     start = max(0, index - MI1G_REGIME_TRAILING_WINDOW)
     prior_volatility = tuple(
-        float(records[position]["realized_volatility_20"])
-        for position in range(start, index)
+        float(records[position]["realized_volatility_20"]) for position in range(start, index)
     )
     threshold = statistics.median(prior_volatility)
     current_volatility = float(records[index]["realized_volatility_20"])
@@ -236,9 +231,7 @@ def evaluate_calibrated_regime_robustness(
     feature_set: FeatureSet,
     calibration: ScenarioCalibrationEvaluation,
 ) -> RegimeRobustnessEvaluation:
-    grouped_outcomes: dict[SPYRegime, list[ScenarioOutcome]] = {
-        regime: [] for regime in SPYRegime
-    }
+    grouped_outcomes: dict[SPYRegime, list[ScenarioOutcome]] = {regime: [] for regime in SPYRegime}
     grouped_rows: dict[SPYRegime, list[tuple[ScenarioProbability, ...]]] = {
         regime: [] for regime in SPYRegime
     }
@@ -285,8 +278,7 @@ def _standardization(
     indexes: tuple[int, ...],
 ) -> tuple[tuple[float, ...], tuple[float, ...]]:
     columns = tuple(
-        tuple(float(records[index][column]) for index in indexes)
-        for column in MI1D_FEATURE_COLUMNS
+        tuple(float(records[index][column]) for index in indexes) for column in MI1D_FEATURE_COLUMNS
     )
     means = tuple(statistics.fmean(values) for values in columns)
     scales = tuple(statistics.pstdev(values) or 1.0 for values in columns)
