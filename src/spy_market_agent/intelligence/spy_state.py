@@ -17,7 +17,7 @@ from spy_market_agent.intelligence.state import (
     MarketStateSnapshot,
     StateAvailability,
 )
-from spy_market_agent.market_data.calendar import TradingCalendar, XNYSCalendar
+from spy_market_agent.market_data.calendar import XNYSCalendar
 from spy_market_agent.market_data.models import MarketDataBatch
 
 
@@ -33,7 +33,6 @@ def derive_spy_market_state(
     feature_set: FeatureSet,
     *,
     run_identity: IntelligenceRunIdentity,
-    calendar: TradingCalendar | None = None,
 ) -> SPYMarketStateDerivation:
     """Derive latest-session SPY state from accepted deterministic source contracts."""
 
@@ -41,7 +40,6 @@ def derive_spy_market_state(
         market_data=market_data,
         feature_set=feature_set,
         run_identity=run_identity,
-        calendar=calendar or XNYSCalendar(),
     )
 
     latest = feature_set.data.iloc[-1]
@@ -144,7 +142,6 @@ def _validate_derivation_inputs(
     market_data: MarketDataBatch,
     feature_set: FeatureSet,
     run_identity: IntelligenceRunIdentity,
-    calendar: TradingCalendar,
 ) -> None:
     if run_identity.target_instrument_id != MI1_SPY_ANALYSIS_PROFILE.target_instrument_id:
         raise ValueError("run_identity target must match the MI-1 SPY target.")
@@ -162,6 +159,7 @@ def _validate_derivation_inputs(
         raise ValueError("market_data source snapshot was not available by run as_of.")
     if feature_set.created_at > run_identity.as_of:
         raise ValueError("feature_set was not available by run as_of.")
+    calendar = XNYSCalendar()
     if not calendar.is_session_complete(
         feature_set.last_feature_session,
         as_of=run_identity.as_of,
