@@ -497,7 +497,15 @@ def test_mi2b_bundle_contract_enforces_canonical_lineage() -> None:
     with pytest.raises(ValueError, match="duplicates"):
         SPYContextFeatureBundle(**cast(Any, {**payload, "context_snapshot_ids": duplicated}))
     with pytest.raises(ValueError, match="canonical MI-2B feature order"):
-        SPYContextFeatureBundle(**cast(Any, {**payload, "features": tuple(reversed(bundle.features))}))
+        SPYContextFeatureBundle(
+            **cast(
+                Any,
+                {
+                    **payload,
+                    "features": tuple(reversed(bundle.features)),
+                },
+            )
+        )
 
     bad_feature = ContextFeatureValue(
         policy_id=MI2B_CONTEXT_FEATURE_POLICY_ID,
