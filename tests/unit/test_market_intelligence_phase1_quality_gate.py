@@ -396,7 +396,7 @@ def test_relationship_evaluation_fail_closed_branches() -> None:
     assert unavailable.reason == "insufficient aligned history"
     assert unavailable.aligned_observation_count == 2
 
-    zero_values = (0.0, *tuple(float(index + 1) for index in range(29)))
+    zero_values = tuple(0.0 if index == 10 else float(index + 1) for index in range(30))
     zero_context = _series("qqq-daily", values=zero_values)
     with pytest.raises(ValueError, match="divide by zero"):
         evaluate_cross_asset_relationship(
@@ -825,9 +825,9 @@ def test_protected_prediction_result_and_evaluator_fail_closed_branches() -> Non
         evaluate_mi1_protected_predictions(duplicate, frozen_policy=frozen, permit=permit)
     with pytest.raises(ValueError, match="permit interval"):
         evaluate_mi1_protected_predictions(
-            (_prediction(0),),
+            (_prediction(2),),
             frozen_policy=frozen,
-            permit=_permit(end=_START - timedelta(days=1)),
+            permit=_permit(end=_START + timedelta(days=1)),
         )
     with pytest.raises(ValueError, match="outcomes must lie"):
         evaluate_mi1_protected_predictions(
@@ -919,8 +919,18 @@ def test_analogue_and_regime_contract_validation_branches() -> None:
         summary(upside_count=0)
     with pytest.raises(ValueError, match="precede the query"):
         summary(query_anchor_session=_START)
+    delayed_analogue = HistoricalAnalogue(
+        anchor_session=_START,
+        outcome_session=_START + timedelta(days=2),
+        distance=0.2,
+        outcome=ScenarioOutcome.UPSIDE,
+        forward_return=0.1,
+    )
     with pytest.raises(ValueError, match="observable"):
-        summary(query_anchor_session=_START + timedelta(hours=12))
+        summary(
+            query_anchor_session=_START + timedelta(days=1),
+            analogues=(delayed_analogue,),
+        )
     with pytest.raises(ValueError, match="finite"):
         summary(mean_forward_return=float("inf"))
 
