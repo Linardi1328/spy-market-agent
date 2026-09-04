@@ -36,6 +36,10 @@ from spy_market_agent.intelligence.scenarios import (
     ScenarioProbability,
     assess_scenario_actionability,
 )
+from spy_market_agent.intelligence.spy_state import (
+    SPYMarketStateDerivation,
+    derive_spy_market_state,
+)
 from spy_market_agent.intelligence.state import (
     MarketStateDimension,
     MarketStateSnapshot,
@@ -64,6 +68,7 @@ __all__ = [
     "IntelligenceRunIdentity",
     "MarketStateDimension",
     "MarketStateSnapshot",
+    "SPYMarketStateDerivation",
     "ScenarioActionabilityDecision",
     "ScenarioDecisionStatus",
     "ScenarioForecast",
@@ -75,6 +80,7 @@ __all__ = [
     "assess_scenario_actionability",
     "derive_intelligence_run_identity",
     "derive_series_snapshot_id",
+    "derive_spy_market_state",
     "evidence_reference_ids",
     "legacy_spy_market_data_to_snapshot",
 ]
