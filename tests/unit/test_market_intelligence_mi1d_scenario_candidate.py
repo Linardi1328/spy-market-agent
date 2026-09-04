@@ -176,8 +176,14 @@ def test_candidate_retains_only_feature_eligible_mi1c_folds_and_compares_like_fo
     baseline_folds = benchmark.evaluation_for(ScenarioBaselineKind.EMPIRICAL_PRIOR).folds
     assert evaluation.folds[0].baseline_fold_index == baseline_folds[1].fold_index
     assert tuple(fold.baseline_fold_index for fold in evaluation.folds) == (1, 2)
-    assert evaluation.folds[0].assessment_anchor_sessions == baseline_folds[1].assessment_anchor_sessions
-    assert evaluation.folds[1].assessment_anchor_sessions == baseline_folds[2].assessment_anchor_sessions
+    assert (
+        evaluation.folds[0].assessment_anchor_sessions
+        == baseline_folds[1].assessment_anchor_sessions
+    )
+    assert (
+        evaluation.folds[1].assessment_anchor_sessions
+        == baseline_folds[2].assessment_anchor_sessions
+    )
     assert all(fold.model_snapshot.fit_row_count >= 756 for fold in evaluation.folds)
     assert evaluation.folds[0].model_snapshot.fit_row_count == 862
     assert evaluation.pooled_metrics.row_count == sum(
