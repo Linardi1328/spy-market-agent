@@ -72,9 +72,8 @@ class RealizedScenarioPrediction:
 
     def __post_init__(self) -> None:
         by_outcome = {item.outcome: item for item in self.probabilities}
-        if (
-            set(by_outcome) != set(ScenarioOutcome)
-            or len(self.probabilities) != len(ScenarioOutcome)
+        if set(by_outcome) != set(ScenarioOutcome) or len(self.probabilities) != len(
+            ScenarioOutcome
         ):
             raise ValueError("prediction must contain all three scenario probabilities.")
         total = sum(item.probability for item in self.probabilities)
@@ -112,9 +111,7 @@ class DegradationAssessment:
                 or self.recent_ece is not None
                 or self.breached_metrics
             ):
-                raise ValueError(
-                    "insufficient assessment must not expose reliability conclusions."
-                )
+                raise ValueError("insufficient assessment must not expose reliability conclusions.")
         else:
             if self.recent_row_count < MI1J_MINIMUM_RECENT_ROWS:
                 raise ValueError("non-insufficient status requires enough recent rows.")
@@ -197,8 +194,7 @@ def assess_scenario_degradation(
     ):
         breached.append("ece")
     if reference.selected_precision is not None and (
-        precision is None
-        or precision < reference.selected_precision - MI1J_PRECISION_DETERIORATION
+        precision is None or precision < reference.selected_precision - MI1J_PRECISION_DETERIORATION
     ):
         breached.append("selected_precision")
     if reference.selected_coverage is not None and coverage < max(
