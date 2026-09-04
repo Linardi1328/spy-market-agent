@@ -138,6 +138,7 @@ reviewed policy revision rather than silent mutation.
 - `as_of` must be timezone-aware.
 - MI-2A snapshot-availability checks remain mandatory.
 - The SPY target's final session is the MI-2B anchor session.
+- The SPY anchor session date must not be after the `as_of` date.
 - Every context must contain that anchor session exactly; stale carry-forward is prohibited.
 - Observations after the anchor session must never enter a feature calculation, even if the
   supplied snapshot contains later rows.
@@ -164,7 +165,8 @@ Every derived feature must record at least:
 - finite numeric value.
 
 The bundle must expose all 14 features in canonical order and the four context snapshot IDs in
-the MI-2A canonical context order.
+the MI-2A canonical context order. Each feature's source snapshot must match the corresponding
+context snapshot recorded by the bundle.
 
 ## 8. Explicit Non-Goals
 
@@ -202,14 +204,15 @@ Tests must cover at least:
 5. VIX level, change, and empirical percentile;
 6. yield level and basis-point changes;
 7. observations after the SPY anchor do not affect values;
-8. rejection of a context missing the SPY anchor session;
-9. rejection of insufficient declared lookback history;
-10. rejection of non-positive selected price levels;
-11. MI-2A readiness failures block feature derivation;
-12. immutable feature and bundle lineage invariants;
-13. static isolation from provider, broker, execution, paper-operation, credential, and
+8. rejection of an anchor session after `as_of`;
+9. rejection of a context missing the SPY anchor session;
+10. rejection of insufficient declared lookback history;
+11. rejection of non-positive selected price levels;
+12. MI-2A readiness failures block feature derivation;
+13. immutable feature and bundle lineage invariants, including source snapshot consistency;
+14. static isolation from provider, broker, execution, paper-operation, credential, and
     scheduler paths;
-14. the full repository quality gate, including `pytest --cov-fail-under=85`.
+15. the full repository quality gate, including `pytest --cov-fail-under=85`.
 
 ## 10. Acceptance Criteria
 
