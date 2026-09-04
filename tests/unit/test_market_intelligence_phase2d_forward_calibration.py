@@ -35,7 +35,6 @@ from spy_market_agent.research.context_forward import (
     evaluate_forward_contextual_calibration_robustness,
 )
 from spy_market_agent.research.scenario_calibration import MI1E_TEMPERATURE_GRID
-from spy_market_agent.research.scenario_candidate import MI1D_FEATURE_COLUMNS
 from spy_market_agent.research.scenario_evaluation import (
     calculate_scenario_probability_metrics,
 )
