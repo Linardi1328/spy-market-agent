@@ -17,6 +17,7 @@ from spy_market_agent.research.context_forward import (
 )
 from spy_market_agent.research.scenario_analogues import SPYRegime
 from spy_market_agent.research.scenario_evaluation import (
+    ScenarioEvaluationMetrics,
     calculate_scenario_probability_metrics,
 )
 from spy_market_agent.research.scenario_selectivity import (
@@ -38,7 +39,7 @@ def _probability_row() -> tuple[ScenarioProbability, ...]:
     )
 
 
-def _metrics(row_count: int):
+def _metrics(row_count: int) -> ScenarioEvaluationMetrics:
     outcomes = tuple(ScenarioOutcome.RANGE for _ in range(row_count))
     rows = tuple(_probability_row() for _ in range(row_count))
     return calculate_scenario_probability_metrics(outcomes, rows)
