@@ -119,9 +119,9 @@ def test_builds_exact_close_to_close_20_session_labels() -> None:
 def test_labels_depend_only_on_adjusted_closes() -> None:
     original = _frame(30)
     changed = original.copy(deep=True)
-    changed["open"] += 25.0
-    changed["high"] += 30.0
-    changed["low"] += 20.0
+    changed["open"] = changed["close"] - 5.0
+    changed["high"] = changed["close"] + 7.0
+    changed["low"] = changed["open"] - 4.0
     changed["volume"] += 9_000_000
 
     original_labels = _labels(_batch(original), FIVE_SESSIONS)
