@@ -154,8 +154,7 @@ def test_mi2b_fixed_feature_policy_is_canonical_and_unit_coherent() -> None:
     assert len(set(MI2B_FEATURE_IDS)) == 14
 
     definitions = {
-        definition.feature_id: definition
-        for definition in MI2B_SPY_CONTEXT_FEATURE_DEFINITIONS
+        definition.feature_id: definition for definition in MI2B_SPY_CONTEXT_FEATURE_DEFINITIONS
     }
     assert definitions["qqq_return_5"].kind == ContextFeatureKind.TRAILING_RETURN
     assert definitions["qqq_return_20"].lookback_sessions == 20
@@ -189,20 +188,12 @@ def test_mi2b_derives_deterministic_price_vix_and_yield_measurements() -> None:
 
     assert features["qqq_return_5"] == pytest.approx(qqq_return_5)
     assert features["qqq_return_20"] == pytest.approx(qqq_return_20)
-    assert features["qqq_relative_strength_5"] == pytest.approx(
-        qqq_return_5 - spy_return_5
-    )
-    assert features["qqq_relative_strength_20"] == pytest.approx(
-        qqq_return_20 - spy_return_20
-    )
+    assert features["qqq_relative_strength_5"] == pytest.approx(qqq_return_5 - spy_return_5)
+    assert features["qqq_relative_strength_20"] == pytest.approx(qqq_return_20 - spy_return_20)
     assert features["iwm_return_5"] == pytest.approx(iwm_return_5)
     assert features["iwm_return_20"] == pytest.approx(iwm_return_20)
-    assert features["iwm_relative_strength_5"] == pytest.approx(
-        iwm_return_5 - spy_return_5
-    )
-    assert features["iwm_relative_strength_20"] == pytest.approx(
-        iwm_return_20 - spy_return_20
-    )
+    assert features["iwm_relative_strength_5"] == pytest.approx(iwm_return_5 - spy_return_5)
+    assert features["iwm_relative_strength_20"] == pytest.approx(iwm_return_20 - spy_return_20)
 
     assert features["vix_level"] == vix_values[-1]
     assert features["vix_change_5"] == pytest.approx(vix_values[-1] - vix_values[-6])
@@ -437,9 +428,7 @@ def test_mi2b_feature_value_contract_enforces_frozen_lineage() -> None:
     with pytest.raises(ValueError, match="anchor_session"):
         ContextFeatureValue(**cast(Any, {**payload, "anchor_session": _AS_OF}))
     with pytest.raises(ValueError, match="timezone-aware"):
-        ContextFeatureValue(
-            **cast(Any, {**payload, "as_of": datetime(2026, 9, 5, 4, 0)})
-        )
+        ContextFeatureValue(**cast(Any, {**payload, "as_of": datetime(2026, 9, 5, 4, 0)}))
     with pytest.raises(ValueError, match="lookback_sessions"):
         ContextFeatureValue(**cast(Any, {**payload, "lookback_sessions": 20}))
     with pytest.raises(ValueError, match="unit"):
@@ -482,9 +471,7 @@ def test_mi2b_bundle_contract_enforces_canonical_lineage() -> None:
     with pytest.raises(ValueError, match="policy_id"):
         SPYContextFeatureBundle(**cast(Any, {**payload, "policy_id": "wrong"}))
     with pytest.raises(ValueError, match="timezone-aware"):
-        SPYContextFeatureBundle(
-            **cast(Any, {**payload, "as_of": datetime(2026, 9, 5, 4, 0)})
-        )
+        SPYContextFeatureBundle(**cast(Any, {**payload, "as_of": datetime(2026, 9, 5, 4, 0)}))
     with pytest.raises(ValueError, match="anchor_session"):
         SPYContextFeatureBundle(**cast(Any, {**payload, "anchor_session": _AS_OF}))
     with pytest.raises(ValueError, match="approved legacy SPY"):
