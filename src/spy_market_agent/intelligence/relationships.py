@@ -28,9 +28,8 @@ class PointInTimeSeries:
             raise ValueError("series_id must match the snapshot series identifier.")
         if not self.sessions or len(self.sessions) != len(self.values):
             raise ValueError("series sessions and values must have matching non-zero lengths.")
-        if (
-            self.sessions != tuple(sorted(self.sessions))
-            or len(set(self.sessions)) != len(self.sessions)
+        if self.sessions != tuple(sorted(self.sessions)) or len(set(self.sessions)) != len(
+            self.sessions
         ):
             raise ValueError("series sessions must be unique and strictly increasing.")
         normalized = tuple(float(value) for value in self.values)
@@ -85,9 +84,7 @@ class CrossAssetRelationshipSummary:
                     "available relationships require context lineage and no refusal reason."
                 )
             if self.aligned_observation_count < self.trailing_window + 1:
-                raise ValueError(
-                    "available relationship has insufficient aligned observations."
-                )
+                raise ValueError("available relationship has insufficient aligned observations.")
             for field_name in (
                 "return_correlation",
                 "target_return",
@@ -109,9 +106,7 @@ def evaluate_cross_asset_relationship(
 ) -> CrossAssetRelationshipSummary:
     normalized_as_of = _aware_utc(as_of)
     expected_context_id = (
-        context.series_id
-        if context is not None
-        else (context_series_id or "unavailable")
+        context.series_id if context is not None else (context_series_id or "unavailable")
     )
     if target.snapshot.quality_status != DataQualityStatus.VERIFIED:
         return _unavailable(
