@@ -238,7 +238,7 @@ def test_actionability_abstains_for_low_quality_or_bad_calibration() -> None:
 
 def test_actionability_abstains_for_low_confidence_and_low_separation() -> None:
     decision = assess_scenario_actionability(
-        _forecast(downside=0.20, range_probability=0.30, upside=0.50),
+        _forecast(downside=0.20, range_probability=0.35, upside=0.45),
         data_quality=_verified_quality(),
     )
     assert decision.status == ScenarioDecisionStatus.ABSTAIN
