@@ -126,9 +126,7 @@ class ScenarioSelectivityEvaluation:
 def evaluate_selective_scenario_policy(
     calibration: ScenarioCalibrationEvaluation,
 ) -> ScenarioSelectivityEvaluation:
-    outcomes = tuple(
-        outcome for fold in calibration.folds for outcome in fold.assessment_outcomes
-    )
+    outcomes = tuple(outcome for fold in calibration.folds for outcome in fold.assessment_outcomes)
     probability_rows = tuple(
         row for fold in calibration.folds for row in fold.calibrated_probability_rows
     )
