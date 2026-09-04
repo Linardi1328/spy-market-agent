@@ -65,13 +65,12 @@ class ContextFeatureDefinition:
             raise ValueError("source_series_id must be an approved MI-2A context series.")
         if not isinstance(self.kind, ContextFeatureKind):
             raise ValueError("kind must be a ContextFeatureKind.")
-        if self.lookback_sessions is not None:
-            if (
-                isinstance(self.lookback_sessions, bool)
-                or not isinstance(self.lookback_sessions, int)
-                or self.lookback_sessions <= 0
-            ):
-                raise ValueError("lookback_sessions must be a positive integer when provided.")
+        if self.lookback_sessions is not None and (
+            isinstance(self.lookback_sessions, bool)
+            or not isinstance(self.lookback_sessions, int)
+            or self.lookback_sessions <= 0
+        ):
+            raise ValueError("lookback_sessions must be a positive integer when provided.")
         if self.kind == ContextFeatureKind.LEVEL and self.lookback_sessions is not None:
             raise ValueError("level features must not declare a lookback.")
         if self.kind != ContextFeatureKind.LEVEL and self.lookback_sessions is None:
