@@ -67,15 +67,15 @@ class ContextAblationDefinition:
     def __post_init__(self) -> None:
         if not isinstance(self.variant, ContextAblationVariant):
             raise ValueError("variant must be a ContextAblationVariant.")
-        if len(set(self.context_feature_ids)) != len(self.context_feature_ids):
-            raise ValueError("context_feature_ids must not contain duplicates.")
-        if any(item not in MI2B_FEATURE_IDS for item in self.context_feature_ids):
-            raise ValueError("context_feature_ids must come from the frozen MI-2B policy.")
-        if self.variant == ContextAblationVariant.SPY_ONLY:
-            if self.context_feature_ids:
-                raise ValueError("SPY_ONLY must not include context features.")
-        elif not self.context_feature_ids:
-            raise ValueError("contextual variants must include context features.")
+        expected_by_variant = {
+            ContextAblationVariant.SPY_ONLY: (),
+            ContextAblationVariant.SPY_PLUS_QQQ_IWM: MI2C_QQQ_IWM_FEATURE_IDS,
+            ContextAblationVariant.SPY_PLUS_VIX: MI2C_VIX_FEATURE_IDS,
+            ContextAblationVariant.SPY_PLUS_RATES: MI2C_RATES_FEATURE_IDS,
+            ContextAblationVariant.SPY_PLUS_FULL_CONTEXT: MI2B_FEATURE_IDS,
+        }
+        if self.context_feature_ids != expected_by_variant[self.variant]:
+            raise ValueError("context_feature_ids must match the frozen MI-2C variant policy.")
 
     @property
     def model_feature_columns(self) -> tuple[str, ...]:
@@ -123,9 +123,7 @@ class SPYContextFeatureHistory:
             raise ValueError("historical context bundles must not be empty.")
         anchors = tuple(bundle.anchor_session for bundle in self.bundles)
         if anchors != tuple(sorted(anchors)) or len(set(anchors)) != len(anchors):
-            raise ValueError(
-                "historical context anchors must be unique and strictly increasing."
-            )
+            raise ValueError("historical context anchors must be unique and strictly increasing.")
         as_of_values = tuple(bundle.as_of for bundle in self.bundles)
         if as_of_values != tuple(sorted(as_of_values)) or len(set(as_of_values)) != len(
             as_of_values
@@ -133,10 +131,9 @@ class SPYContextFeatureHistory:
             raise ValueError(
                 "historical context as_of values must be unique and strictly increasing."
             )
-        if any(
-            bundle.policy_id != MI2B_CONTEXT_FEATURE_POLICY_ID
-            for bundle in self.bundles
-        ):
+        if any(bundle.as_of.date() < bundle.anchor_session for bundle in self.bundles):
+            raise ValueError("historical context as_of must not precede its anchor session.")
+        if any(bundle.policy_id != MI2B_CONTEXT_FEATURE_POLICY_ID for bundle in self.bundles):
             raise ValueError("historical context must use the frozen MI-2B feature policy.")
 
     def bundle_for(self, anchor_session: date) -> SPYContextFeatureBundle:
@@ -231,6 +228,14 @@ class ContextAblationFoldEvaluation:
         )
         if any(length != row_count for length in lengths):
             raise ValueError("contextual fold fields must have matching row counts.")
+        if self.assessment_anchor_sessions != tuple(sorted(self.assessment_anchor_sessions)):
+            raise ValueError("contextual assessment anchors must be increasing.")
+        if len(set(self.assessment_anchor_sessions)) != row_count:
+            raise ValueError("contextual assessment anchors must be unique.")
+        if self.assessment_outcome_sessions != tuple(sorted(self.assessment_outcome_sessions)):
+            raise ValueError("contextual assessment outcome sessions must be increasing.")
+        if len(set(self.assessment_outcome_sessions)) != row_count:
+            raise ValueError("contextual assessment outcome sessions must be unique.")
         if self.model_snapshot.fit_last_outcome_session > self.assessment_anchor_sessions[0]:
             raise ValueError("fit outcomes must be observable by assessment start.")
         for row in self.probability_rows:
@@ -389,13 +394,27 @@ class ContextAblationStudy:
         for variant in ordered_variants:
             evaluation = contextual[variant]
             comparison = comparisons[variant]
-            contextual_indexes = tuple(
-                fold.baseline_fold_index for fold in evaluation.folds
-            )
+            if evaluation.source_market_data_checksum != self.source_market_data_checksum:
+                raise ValueError("contextual checksum must match the MI-2C study checksum.")
+            if evaluation.source_schema_version != self.source_schema_version:
+                raise ValueError("contextual source schema must match the MI-2C study schema.")
+            if evaluation.scenario_schema_id != self.scenario_schema_id:
+                raise ValueError("contextual scenario schema must match the MI-2C study schema.")
+            if evaluation.horizon_length != self.horizon_length:
+                raise ValueError("contextual horizon must match the MI-2C study horizon.")
+            if evaluation.development_through_session != self.development_through_session:
+                raise ValueError("contextual cutoff must match the MI-2C study cutoff.")
+            contextual_indexes = tuple(fold.baseline_fold_index for fold in evaluation.folds)
             if contextual_indexes != spy_indexes:
                 raise ValueError("all variants must use the exact SPY-only retained folds.")
             if comparison.evaluated_fold_indexes != spy_indexes:
                 raise ValueError("comparison folds must match the SPY-only retained folds.")
+            for spy_fold, context_fold in zip(
+                self.spy_only.folds,
+                evaluation.folds,
+                strict=True,
+            ):
+                _validate_fold_rows_match(spy_fold, context_fold)
             _validate_comparison_arithmetic(self.spy_only, evaluation, comparison)
 
         object.__setattr__(
@@ -415,9 +434,7 @@ class ContextAblationStudy:
     ) -> ScenarioCandidateEvaluation | ContextAblationVariantEvaluation:
         if variant == ContextAblationVariant.SPY_ONLY:
             return self.spy_only
-        return next(
-            item for item in self.contextual_evaluations if item.variant == variant
-        )
+        return next(item for item in self.contextual_evaluations if item.variant == variant)
 
     def comparison_for(
         self,
@@ -444,9 +461,7 @@ def evaluate_development_context_ablation(
     _validate_history_alignment(feature_set, label_set, context_history)
     spy_rows = _spy_feature_rows_by_session(feature_set)
     labels_by_anchor = {label.anchor_session: label for label in label_set.labels}
-    context_by_anchor = {
-        bundle.anchor_session: bundle for bundle in context_history.bundles
-    }
+    context_by_anchor = {bundle.anchor_session: bundle for bundle in context_history.bundles}
 
     evaluations: list[ContextAblationVariantEvaluation] = []
     comparisons: list[ContextAblationComparison] = []
@@ -463,12 +478,8 @@ def evaluate_development_context_ablation(
             )
             for spy_fold in spy_only.folds
         )
-        pooled_outcomes = tuple(
-            outcome for fold in folds for outcome in fold.assessment_outcomes
-        )
-        pooled_probabilities = tuple(
-            row for fold in folds for row in fold.probability_rows
-        )
+        pooled_outcomes = tuple(outcome for fold in folds for outcome in fold.assessment_outcomes)
+        pooled_probabilities = tuple(row for fold in folds for row in fold.probability_rows)
         pooled_metrics = calculate_scenario_probability_metrics(
             pooled_outcomes,
             pooled_probabilities,
@@ -638,8 +649,7 @@ def _fit_and_score_contextual_fold(
     metrics = calculate_scenario_probability_metrics(outcomes, probability_rows)
     scaler_any = cast(Any, scaler)
     fit_context = tuple(
-        _required_context_bundle(label.anchor_session, context_by_anchor)
-        for label in fit_labels
+        _required_context_bundle(label.anchor_session, context_by_anchor) for label in fit_labels
     )
     snapshot = ContextAblationModelSnapshot(
         policy_id=MI2C_POLICY_ID,
@@ -658,20 +668,15 @@ def _fit_and_score_contextual_fold(
         scaler_scale=tuple(float(value) for value in scaler_any.scale_.tolist()),
         class_order=tuple(ScenarioOutcome),
         coefficients=tuple(
-            tuple(float(value) for value in row)
-            for row in estimator_any.coef_.tolist()
+            tuple(float(value) for value in row) for row in estimator_any.coef_.tolist()
         ),
         intercepts=tuple(float(value) for value in estimator_any.intercept_.tolist()),
     )
     return ContextAblationFoldEvaluation(
         baseline_fold_index=spy_fold.baseline_fold_index,
         model_snapshot=snapshot,
-        assessment_anchor_sessions=tuple(
-            label.anchor_session for label in assessment_labels
-        ),
-        assessment_outcome_sessions=tuple(
-            label.outcome_session for label in assessment_labels
-        ),
+        assessment_anchor_sessions=tuple(label.anchor_session for label in assessment_labels),
+        assessment_outcome_sessions=tuple(label.outcome_session for label in assessment_labels),
         assessment_outcomes=outcomes,
         probability_rows=probability_rows,
         metrics=metrics,
@@ -773,8 +778,7 @@ def _comparison_with_spy_only(
             contextual.pooled_metrics.accuracy - spy_only.pooled_metrics.accuracy
         ),
         lower_log_loss_fold_count=sum(
-            context_fold.metrics.multiclass_log_loss
-            < spy_fold.metrics.multiclass_log_loss
+            context_fold.metrics.multiclass_log_loss < spy_fold.metrics.multiclass_log_loss
             for spy_fold, context_fold in zip(
                 spy_only.folds,
                 contextual.folds,
@@ -782,8 +786,7 @@ def _comparison_with_spy_only(
             )
         ),
         lower_brier_fold_count=sum(
-            context_fold.metrics.multiclass_brier_score
-            < spy_fold.metrics.multiclass_brier_score
+            context_fold.metrics.multiclass_brier_score < spy_fold.metrics.multiclass_brier_score
             for spy_fold, context_fold in zip(
                 spy_only.folds,
                 contextual.folds,
@@ -817,8 +820,7 @@ def _validate_comparison_arithmetic(
     comparison: ContextAblationComparison,
 ) -> None:
     expected = (
-        contextual.pooled_metrics.multiclass_log_loss
-        - spy_only.pooled_metrics.multiclass_log_loss,
+        contextual.pooled_metrics.multiclass_log_loss - spy_only.pooled_metrics.multiclass_log_loss,
         contextual.pooled_metrics.multiclass_brier_score
         - spy_only.pooled_metrics.multiclass_brier_score,
         contextual.pooled_metrics.accuracy - spy_only.pooled_metrics.accuracy,
@@ -834,8 +836,7 @@ def _validate_comparison_arithmetic(
     ):
         raise ValueError("context-minus-SPY pooled deltas are inconsistent.")
     log_wins = sum(
-        context_fold.metrics.multiclass_log_loss
-        < spy_fold.metrics.multiclass_log_loss
+        context_fold.metrics.multiclass_log_loss < spy_fold.metrics.multiclass_log_loss
         for spy_fold, context_fold in zip(
             spy_only.folds,
             contextual.folds,
@@ -843,8 +844,7 @@ def _validate_comparison_arithmetic(
         )
     )
     brier_wins = sum(
-        context_fold.metrics.multiclass_brier_score
-        < spy_fold.metrics.multiclass_brier_score
+        context_fold.metrics.multiclass_brier_score < spy_fold.metrics.multiclass_brier_score
         for spy_fold, context_fold in zip(
             spy_only.folds,
             contextual.folds,
@@ -889,8 +889,6 @@ def _contextual_definition(
 
 
 def _require_sha256(value: str, *, field_name: str) -> None:
-    is_valid = len(value) == 64 and all(
-        character in "0123456789abcdef" for character in value
-    )
+    is_valid = len(value) == 64 and all(character in "0123456789abcdef" for character in value)
     if not is_valid:
         raise ValueError(f"{field_name} must be a lowercase SHA-256 digest.")
