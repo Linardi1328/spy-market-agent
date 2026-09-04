@@ -80,7 +80,7 @@ MI2A_REQUIRED_CONTEXT_IDS: tuple[str, ...] = tuple(
     definition.series_id for definition in MI2A_SPY_CONTEXT_DEFINITIONS
 )
 
-if tuple(MI1_SPY_ANALYSIS_PROFILE.context_series_ids) != tuple(sorted(MI2A_REQUIRED_CONTEXT_IDS)):
+if MI1_SPY_ANALYSIS_PROFILE.context_series_ids != tuple(sorted(MI2A_REQUIRED_CONTEXT_IDS)):
     raise RuntimeError("MI-2A context definitions must exactly match the MI-1 analysis profile.")
 
 
@@ -119,6 +119,9 @@ class SPYContextBundleAssessment:
             "target_snapshot_id",
             require_safe_identifier(self.target_snapshot_id, field_name="target_snapshot_id"),
         )
+        if not isinstance(self.status, ContextBundleStatus):
+            raise ValueError("status must be a ContextBundleStatus.")
+
         for field_name in (
             "present_context_ids",
             "missing_context_ids",
@@ -130,7 +133,11 @@ class SPYContextBundleAssessment:
                 raise ValueError(f"{field_name} must not contain duplicates.")
             if any(value not in MI2A_REQUIRED_CONTEXT_IDS for value in values):
                 raise ValueError(f"{field_name} contains an undeclared context series.")
+            canonical = _canonical_context_subset(values)
+            if values != canonical:
+                raise ValueError(f"{field_name} must follow the fixed MI-2A canonical order.")
             object.__setattr__(self, field_name, values)
+
         normalized_reasons = tuple(
             require_nonempty(reason, field_name="reason") for reason in self.reasons
         )
@@ -139,15 +146,26 @@ class SPYContextBundleAssessment:
         object.__setattr__(self, "reasons", normalized_reasons)
 
         expected_present = tuple(
-            series_id for series_id in MI2A_REQUIRED_CONTEXT_IDS if series_id not in self.missing_context_ids
+            series_id
+            for series_id in MI2A_REQUIRED_CONTEXT_IDS
+            if series_id not in self.missing_context_ids
         )
         if self.present_context_ids != expected_present:
-            raise ValueError("present_context_ids must follow the fixed MI-2A canonical order.")
+            raise ValueError("present_context_ids must complement missing_context_ids.")
         expected_missing = tuple(
-            series_id for series_id in MI2A_REQUIRED_CONTEXT_IDS if series_id not in self.present_context_ids
+            series_id
+            for series_id in MI2A_REQUIRED_CONTEXT_IDS
+            if series_id not in self.present_context_ids
         )
         if self.missing_context_ids != expected_missing:
             raise ValueError("missing_context_ids must complement present_context_ids.")
+        if any(series_id not in self.present_context_ids for series_id in self.unverified_context_ids):
+            raise ValueError("unverified_context_ids must be a subset of present_context_ids.")
+        if any(
+            series_id not in self.present_context_ids
+            for series_id in self.future_available_context_ids
+        ):
+            raise ValueError("future_available_context_ids must be a subset of present_context_ids.")
 
         expected_eligible = (
             not self.missing_context_ids
@@ -168,7 +186,7 @@ class SPYContextBundleAssessment:
             if self.unverified_context_ids or self.future_available_context_ids:
                 raise ValueError("quality or availability failures require INELIGIBLE status.")
         elif self.status != ContextBundleStatus.INELIGIBLE:
-            raise ValueError("status must be a ContextBundleStatus.")
+            raise ValueError("invalid context bundle status.")
 
 
 def assess_spy_context_bundle(
@@ -237,3 +255,8 @@ def assess_spy_context_bundle(
         eligible_for_complete_context_analysis=eligible,
         reasons=tuple(reasons),
     )
+
+
+def _canonical_context_subset(values: tuple[str, ...]) -> tuple[str, ...]:
+    selected = set(values)
+    return tuple(series_id for series_id in MI2A_REQUIRED_CONTEXT_IDS if series_id in selected)
