@@ -167,9 +167,7 @@ def test_all_baselines_share_identical_non_overlapping_fold_boundaries() -> None
     uniform = benchmark.evaluation_for(ScenarioBaselineKind.UNIFORM)
     anchors = [session for fold in uniform.folds for session in fold.assessment_anchor_sessions]
     assert len(anchors) == len(set(anchors))
-    assert all(
-        fold.assessment_row_count == MI1C_ASSESSMENT_WINDOW_ROWS for fold in uniform.folds
-    )
+    assert all(fold.assessment_row_count == MI1C_ASSESSMENT_WINDOW_ROWS for fold in uniform.folds)
     assert uniform.pooled_metrics.row_count == 3 * MI1C_ASSESSMENT_WINDOW_ROWS
 
 
