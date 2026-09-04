@@ -210,8 +210,7 @@ def test_empirical_prior_uses_only_outcomes_available_by_cutoff() -> None:
     for outcome in ScenarioOutcome:
         assert baseline.probability_for(outcome) == pytest.approx(expected.count(outcome) / 3)
     assert all(
-        label.outcome_session <= cutoff
-        for label in label_set.labels[: baseline.fit_row_count]
+        label.outcome_session <= cutoff for label in label_set.labels[: baseline.fit_row_count]
     )
     assert label_set.labels[baseline.fit_row_count].anchor_session <= cutoff
     assert label_set.labels[baseline.fit_row_count].outcome_session > cutoff
