@@ -110,9 +110,8 @@ class ScenarioBaseline:
         if self.fit_last_outcome_session > self.fit_through_session:
             raise ValueError("baseline fit must not use outcomes after fit_through_session.")
         by_outcome = {item.outcome: item for item in self.probabilities}
-        if (
-            set(by_outcome) != set(ScenarioOutcome)
-            or len(self.probabilities) != len(ScenarioOutcome)
+        if set(by_outcome) != set(ScenarioOutcome) or len(self.probabilities) != len(
+            ScenarioOutcome
         ):
             raise ValueError("baseline probabilities must contain all three scenario outcomes.")
         total = sum(item.probability for item in self.probabilities)
@@ -214,9 +213,7 @@ def fit_naive_scenario_baseline(
     if baseline_kind == ScenarioBaselineKind.UNIFORM:
         probabilities = {outcome: 1.0 / len(ScenarioOutcome) for outcome in ScenarioOutcome}
     elif baseline_kind == ScenarioBaselineKind.EMPIRICAL_PRIOR:
-        probabilities = {
-            outcome: counts[outcome] / len(eligible) for outcome in ScenarioOutcome
-        }
+        probabilities = {outcome: counts[outcome] / len(eligible) for outcome in ScenarioOutcome}
     else:
         outcome_order = tuple(ScenarioOutcome)
         majority = max(
