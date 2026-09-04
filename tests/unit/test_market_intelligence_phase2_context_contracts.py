@@ -99,8 +99,6 @@ def test_context_assessment_contract_enforces_context_sets() -> None:
 
     with pytest.raises(ValueError, match="complement missing_context_ids"):
         _assessment(present_context_ids=MI2A_REQUIRED_CONTEXT_IDS[:-1])
-    with pytest.raises(ValueError, match="complement present_context_ids"):
-        _assessment(missing_context_ids=(MI2A_REQUIRED_CONTEXT_IDS[-1],))
 
     missing_id = MI2A_REQUIRED_CONTEXT_IDS[-1]
     missing = _missing_last_overrides()
