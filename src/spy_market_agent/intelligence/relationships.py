@@ -28,7 +28,10 @@ class PointInTimeSeries:
             raise ValueError("series_id must match the snapshot series identifier.")
         if not self.sessions or len(self.sessions) != len(self.values):
             raise ValueError("series sessions and values must have matching non-zero lengths.")
-        if self.sessions != tuple(sorted(self.sessions)) or len(set(self.sessions)) != len(self.sessions):
+        if (
+            self.sessions != tuple(sorted(self.sessions))
+            or len(set(self.sessions)) != len(self.sessions)
+        ):
             raise ValueError("series sessions must be unique and strictly increasing.")
         normalized = tuple(float(value) for value in self.values)
         if any(not math.isfinite(value) for value in normalized):
@@ -78,9 +81,13 @@ class CrossAssetRelationshipSummary:
                 raise ValueError("unavailable relationships must not expose measurements.")
         else:
             if self.reason is not None or self.context_snapshot_id is None:
-                raise ValueError("available relationships require context lineage and no refusal reason.")
+                raise ValueError(
+                    "available relationships require context lineage and no refusal reason."
+                )
             if self.aligned_observation_count < self.trailing_window + 1:
-                raise ValueError("available relationship has insufficient aligned observations.")
+                raise ValueError(
+                    "available relationship has insufficient aligned observations."
+                )
             for field_name in (
                 "return_correlation",
                 "target_return",
@@ -101,18 +108,44 @@ def evaluate_cross_asset_relationship(
     context_series_id: str | None = None,
 ) -> CrossAssetRelationshipSummary:
     normalized_as_of = _aware_utc(as_of)
-    expected_context_id = context.series_id if context is not None else (context_series_id or "unavailable")
+    expected_context_id = (
+        context.series_id
+        if context is not None
+        else (context_series_id or "unavailable")
+    )
     if target.snapshot.quality_status != DataQualityStatus.VERIFIED:
-        return _unavailable(target, expected_context_id, normalized_as_of, trailing_window, "target data not verified")
+        return _unavailable(
+            target,
+            expected_context_id,
+            normalized_as_of,
+            trailing_window,
+            "target data not verified",
+        )
     if target.snapshot.available_as_of > normalized_as_of:
         raise ValueError("target snapshot is not point-in-time available by as_of.")
     if context is None:
-        return _unavailable(target, expected_context_id, normalized_as_of, trailing_window, "context series unavailable")
+        return _unavailable(
+            target,
+            expected_context_id,
+            normalized_as_of,
+            trailing_window,
+            "context series unavailable",
+        )
     if context.snapshot.quality_status != DataQualityStatus.VERIFIED:
-        return _unavailable(target, context.series_id, normalized_as_of, trailing_window, "context data not verified")
+        return _unavailable(
+            target,
+            context.series_id,
+            normalized_as_of,
+            trailing_window,
+            "context data not verified",
+        )
     if context.snapshot.available_as_of > normalized_as_of:
         raise ValueError("context snapshot is not point-in-time available by as_of.")
-    if isinstance(trailing_window, bool) or not isinstance(trailing_window, int) or trailing_window < 2:
+    if (
+        isinstance(trailing_window, bool)
+        or not isinstance(trailing_window, int)
+        or trailing_window < 2
+    ):
         raise ValueError("trailing_window must be an integer of at least two.")
 
     target_map = dict(zip(target.sessions, target.values, strict=True))
@@ -172,7 +205,8 @@ def _correlation(left: tuple[float, ...], right: tuple[float, ...]) -> float:
     right_norm = math.sqrt(sum(value * value for value in right_delta))
     if left_norm == 0.0 or right_norm == 0.0:
         return 0.0
-    return sum(a * b for a, b in zip(left_delta, right_delta, strict=True)) / (left_norm * right_norm)
+    numerator = sum(a * b for a, b in zip(left_delta, right_delta, strict=True))
+    return numerator / (left_norm * right_norm)
 
 
 def _aware_utc(value: datetime) -> datetime:
