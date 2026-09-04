@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from datetime import date
 from enum import StrEnum
 
 from spy_market_agent.intelligence.scenarios import ScenarioOutcome, ScenarioProbability
@@ -75,7 +76,7 @@ class ScenarioSelectivityEvaluation:
     status: ScenarioSelectivityStatus
     calibration_policy_id: str
     horizon_length: int
-    development_through_session: object
+    development_through_session: date
     candidates: tuple[ScenarioSelectivityCandidate, ...]
     selected_policy: ScenarioSelectivityPolicy | None
     selected_coverage: float | None
@@ -84,14 +85,27 @@ class ScenarioSelectivityEvaluation:
     def __post_init__(self) -> None:
         if not isinstance(self.status, ScenarioSelectivityStatus):
             raise ValueError("status must be a ScenarioSelectivityStatus.")
+        if not isinstance(self.development_through_session, date):
+            raise ValueError("development_through_session must be a date.")
         expected_count = len(MI1F_TOP_PROBABILITY_GRID) * len(MI1F_SEPARATION_GRID)
         if len(self.candidates) != expected_count:
             raise ValueError("candidates must cover the full frozen MI-1F threshold grid.")
         if self.status == ScenarioSelectivityStatus.NO_QUALIFYING_POLICY:
-            if any(value is not None for value in (self.selected_policy, self.selected_coverage, self.selected_precision)):
+            if any(
+                value is not None
+                for value in (
+                    self.selected_policy,
+                    self.selected_coverage,
+                    self.selected_precision,
+                )
+            ):
                 raise ValueError("no-qualifying-policy status must not expose a selected policy.")
         else:
-            if self.selected_policy is None or self.selected_coverage is None or self.selected_precision is None:
+            if (
+                self.selected_policy is None
+                or self.selected_coverage is None
+                or self.selected_precision is None
+            ):
                 raise ValueError("qualifying status requires selected policy metrics.")
             matching = next(
                 (item for item in self.candidates if item.policy == self.selected_policy),
