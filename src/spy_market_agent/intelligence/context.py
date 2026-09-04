@@ -166,26 +166,45 @@ class SPYContextBundleAssessment:
                 "future_available_context_ids must be a subset of present_context_ids."
             )
 
-        expected_eligible = (
-            not self.missing_context_ids
-            and not self.unverified_context_ids
-            and not self.future_available_context_ids
-            and not self.reasons
+        target_reason_order = (
+            "target data not verified",
+            "target snapshot not point-in-time available",
         )
+        structural_reasons = (
+            *(f"missing context: {series_id}" for series_id in self.missing_context_ids),
+            *(
+                f"context data not verified: {series_id}"
+                for series_id in self.unverified_context_ids
+            ),
+            *(
+                f"context snapshot not point-in-time available: {series_id}"
+                for series_id in self.future_available_context_ids
+            ),
+        )
+        allowed_reasons = set(target_reason_order).union(structural_reasons)
+        if any(reason not in allowed_reasons for reason in normalized_reasons):
+            raise ValueError("reasons contain an undeclared MI-2A readiness failure.")
+        if any(reason not in normalized_reasons for reason in structural_reasons):
+            raise ValueError("reasons must include every structural MI-2A readiness failure.")
+        canonical_reasons = (
+            *(reason for reason in target_reason_order if reason in normalized_reasons),
+            *structural_reasons,
+        )
+        if normalized_reasons != canonical_reasons:
+            raise ValueError("reasons must follow the fixed MI-2A canonical order.")
+
+        expected_eligible = not normalized_reasons
         if self.eligible_for_complete_context_analysis != expected_eligible:
             raise ValueError("eligibility must match the fail-closed MI-2A readiness rule.")
+        missing_only = bool(self.missing_context_ids) and normalized_reasons == structural_reasons
         if expected_eligible:
-            if self.status != ContextBundleStatus.VERIFIED_COMPLETE:
-                raise ValueError("eligible bundles must be VERIFIED_COMPLETE.")
-        elif self.status == ContextBundleStatus.VERIFIED_COMPLETE:
-            raise ValueError("VERIFIED_COMPLETE requires full eligibility.")
-        elif self.status == ContextBundleStatus.INCOMPLETE:
-            if not self.missing_context_ids:
-                raise ValueError("INCOMPLETE requires at least one missing context series.")
-            if self.unverified_context_ids or self.future_available_context_ids:
-                raise ValueError("quality or availability failures require INELIGIBLE status.")
-        elif self.status != ContextBundleStatus.INELIGIBLE:
-            raise ValueError("invalid context bundle status.")
+            expected_status = ContextBundleStatus.VERIFIED_COMPLETE
+        elif missing_only:
+            expected_status = ContextBundleStatus.INCOMPLETE
+        else:
+            expected_status = ContextBundleStatus.INELIGIBLE
+        if self.status != expected_status:
+            raise ValueError("status must match the fail-closed MI-2A readiness rule.")
 
 
 def assess_spy_context_bundle(
