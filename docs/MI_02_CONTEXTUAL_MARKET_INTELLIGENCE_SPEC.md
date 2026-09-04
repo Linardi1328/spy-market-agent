@@ -4,7 +4,9 @@ Status: Owner-authorized implementation
 
 Implementation branch: `review/market-intelligence-mi2-context-foundation`
 
-Base commit: `61c2d3d8226df15544b1fac342ec7f5eceb6242f`
+Initial implementation base: `61c2d3d8226df15544b1fac342ec7f5eceb6242f`
+
+Current validation base after the Phase 1 coverage-gate correction: `dade6d178b2f229298641887b06a287082862d25`
 
 Package/runtime version: `2.0.0b1`
 
