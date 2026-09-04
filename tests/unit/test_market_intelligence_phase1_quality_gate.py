@@ -540,8 +540,7 @@ def test_selectivity_evaluation_and_selection_validation_branches() -> None:
     assert (
         select_scenario_from_probabilities(
             tuple(
-                ScenarioProbability(outcome=item, probability=1.0 / 3.0)
-                for item in ScenarioOutcome
+                ScenarioProbability(outcome=item, probability=1.0 / 3.0) for item in ScenarioOutcome
             ),
             _selectivity_policy(),
         )
@@ -584,9 +583,7 @@ def test_degradation_contract_validation_branches() -> None:
             outcome=ScenarioOutcome.UPSIDE,
             probabilities=_probability_row()[:2],
         )
-    bad_sum = tuple(
-        ScenarioProbability(outcome=item, probability=0.2) for item in ScenarioOutcome
-    )
+    bad_sum = tuple(ScenarioProbability(outcome=item, probability=0.2) for item in ScenarioOutcome)
     with pytest.raises(ValueError, match="sum to one"):
         RealizedScenarioPrediction(outcome=ScenarioOutcome.UPSIDE, probabilities=bad_sum)
 
@@ -786,9 +783,7 @@ def test_protected_prediction_result_and_evaluator_fail_closed_branches() -> Non
             probabilities=_probability_row()[:2],
             model_fingerprint=_FINGERPRINT,
         )
-    bad_sum = tuple(
-        ScenarioProbability(outcome=item, probability=0.2) for item in ScenarioOutcome
-    )
+    bad_sum = tuple(ScenarioProbability(outcome=item, probability=0.2) for item in ScenarioOutcome)
     with pytest.raises(ValueError, match="sum to one"):
         MI1ProtectedPrediction(
             anchor_session=_START,
