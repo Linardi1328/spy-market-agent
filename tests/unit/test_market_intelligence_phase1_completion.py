@@ -3,6 +3,7 @@ from __future__ import annotations
 import inspect
 import math
 from datetime import UTC, date, datetime, timedelta
+from itertools import pairwise
 
 import pandas as pd
 import pytest
@@ -37,8 +38,8 @@ from spy_market_agent.intelligence.profiles import (
     MI1_SPY_SCENARIO_SCHEMA_ID,
 )
 from spy_market_agent.intelligence.relationships import (
-    RelationshipAvailability,
     PointInTimeSeries,
+    RelationshipAvailability,
     evaluate_cross_asset_relationship,
 )
 from spy_market_agent.intelligence.scenarios import (
@@ -85,6 +86,7 @@ from spy_market_agent.research.scenario_labels import (
 from spy_market_agent.research.scenario_protected import (
     MI1FrozenPolicyBundle,
     MI1ProtectedEvaluationPermit,
+    MI1ProtectedEvaluationResult,
     MI1ProtectedPrediction,
     MI1ProtectedScientificStatus,
     evaluate_mi1_protected_predictions,
@@ -182,14 +184,16 @@ def _feature_set() -> FeatureSet:
     )
 
 
-def _benchmark(labels: ScenarioLabelSet) -> ScenarioBaselineBenchmark:
+def _benchmark(label_set: ScenarioLabelSet) -> ScenarioBaselineBenchmark:
     return evaluate_development_naive_scenario_baselines(
-        labels,
-        development_through_session=labels.labels[-1].outcome_session,
+        label_set,
+        development_through_session=label_set.labels[-1].outcome_session,
     )
 
 
-def _perfect_probability_row(outcome: ScenarioOutcome) -> tuple[ScenarioProbability, ...]:
+def _perfect_probability_row(
+    outcome: ScenarioOutcome,
+) -> tuple[ScenarioProbability, ...]:
     return tuple(
         ScenarioProbability(
             outcome=item,
@@ -208,7 +212,9 @@ def _uniform_probability_row() -> tuple[ScenarioProbability, ...]:
 
 def _manual_calibration(*, perfect: bool) -> ScenarioCalibrationEvaluation:
     calibration_start = date(2024, 1, 2)
-    calibration_outcomes = tuple(_outcome(index) for index in range(MI1E_CALIBRATION_ROWS))
+    calibration_outcomes = tuple(
+        _outcome(index) for index in range(MI1E_CALIBRATION_ROWS)
+    )
     calibration_rows = tuple(
         _perfect_probability_row(outcome) if perfect else _uniform_probability_row()
         for outcome in calibration_outcomes
@@ -240,7 +246,10 @@ def _manual_calibration(*, perfect: bool) -> ScenarioCalibrationEvaluation:
         raw_metrics=calibration_metrics,
         calibrated_metrics=calibration_metrics,
         raw_ece=calculate_multiclass_ece(calibration_outcomes, calibration_rows),
-        calibrated_ece=calculate_multiclass_ece(calibration_outcomes, calibration_rows),
+        calibrated_ece=calculate_multiclass_ece(
+            calibration_outcomes,
+            calibration_rows,
+        ),
     )
     fold = ScenarioCalibrationFoldEvaluation(
         baseline_fold_index=0,
@@ -259,7 +268,10 @@ def _manual_calibration(*, perfect: bool) -> ScenarioCalibrationEvaluation:
         raw_metrics=assessment_metrics,
         calibrated_metrics=assessment_metrics,
         raw_ece=calculate_multiclass_ece(assessment_outcomes, assessment_rows),
-        calibrated_ece=calculate_multiclass_ece(assessment_outcomes, assessment_rows),
+        calibrated_ece=calculate_multiclass_ece(
+            assessment_outcomes,
+            assessment_rows,
+        ),
     )
     return ScenarioCalibrationEvaluation(
         policy_id=MI1E_CALIBRATION_POLICY_ID,
@@ -300,7 +312,7 @@ def _snapshot(
     )
 
 
-def _protected_result():  # type: ignore[no-untyped-def]
+def _protected_result() -> MI1ProtectedEvaluationResult:
     policy = ScenarioSelectivityPolicy(
         policy_id=MI1F_SELECTIVITY_POLICY_ID,
         min_top_probability=0.50,
@@ -377,7 +389,10 @@ def test_temperature_identity_and_perfect_ece() -> None:
     assert apply_temperature_scaling(rows, temperature=1.0) == rows
     exact_rows = tuple(
         tuple(
-            ScenarioProbability(outcome=item, probability=1.0 if item == outcome else 0.0)
+            ScenarioProbability(
+                outcome=item,
+                probability=1.0 if item == outcome else 0.0,
+            )
             for item in ScenarioOutcome
         )
         for outcome in outcomes
@@ -418,7 +433,7 @@ def test_mi1g_analogues_are_causal_and_horizon_spaced() -> None:
     positions = sorted((item.anchor_session - _START).days for item in summary.analogues)
     assert all(
         later - earlier >= _HORIZON.length
-        for earlier, later in zip(positions, positions[1:], strict=True)
+        for earlier, later in pairwise(positions)
     )
 
 
@@ -449,13 +464,21 @@ def test_mi1h_relationships_are_point_in_time_and_fail_closed_when_context_missi
         series_id="spy-daily",
         sessions=sessions,
         values=target_values,
-        snapshot=_snapshot("spy-daily", snapshot_id="spy-snapshot", available_as_of=as_of),
+        snapshot=_snapshot(
+            "spy-daily",
+            snapshot_id="spy-snapshot",
+            available_as_of=as_of,
+        ),
     )
     context = PointInTimeSeries(
         series_id="qqq-daily",
         sessions=sessions,
         values=context_values,
-        snapshot=_snapshot("qqq-daily", snapshot_id="qqq-snapshot", available_as_of=as_of),
+        snapshot=_snapshot(
+            "qqq-daily",
+            snapshot_id="qqq-snapshot",
+            available_as_of=as_of,
+        ),
     )
 
     available = evaluate_cross_asset_relationship(
@@ -500,10 +523,9 @@ def test_mi1i_synthetic_protected_evaluation_is_separate_review_only() -> None:
         MI1ProtectedScientificStatus.ELIGIBLE_FOR_SEPARATE_PROMOTION_REVIEW
     )
 
-    source = inspect.getsource(__import__(
-        "spy_market_agent.research.scenario_protected",
-        fromlist=["scenario_protected"],
-    ))
+    from spy_market_agent.research import scenario_protected
+
+    source = inspect.getsource(scenario_protected)
     assert "spy_market_agent.execution" not in source
     assert "spy_market_agent.paper_ops" not in source
     assert "alpaca.trading" not in source
@@ -598,7 +620,10 @@ def test_mi1k_brief_is_deterministic_and_acceptance_separates_implementation_fro
         run_identity=run,
         horizon=_HORIZON,
         probabilities=(
-            ScenarioProbability(outcome=ScenarioOutcome.DOWNSIDE, probability=0.10),
+            ScenarioProbability(
+                outcome=ScenarioOutcome.DOWNSIDE,
+                probability=0.10,
+            ),
             ScenarioProbability(outcome=ScenarioOutcome.RANGE, probability=0.20),
             ScenarioProbability(outcome=ScenarioOutcome.UPSIDE, probability=0.70),
         ),
