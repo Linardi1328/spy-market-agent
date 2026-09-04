@@ -65,8 +65,7 @@ def _probability_row(
 ) -> tuple[ScenarioProbability, ...]:
     if not informative:
         return tuple(
-            ScenarioProbability(outcome=item, probability=1.0 / 3.0)
-            for item in ScenarioOutcome
+            ScenarioProbability(outcome=item, probability=1.0 / 3.0) for item in ScenarioOutcome
         )
     return tuple(
         ScenarioProbability(
@@ -108,9 +107,7 @@ def _fold(
     informative: bool,
     outcome_start_index: int | None = None,
 ) -> ContextAblationFoldEvaluation:
-    anchors = tuple(
-        _START + timedelta(days=anchor_start_index + offset) for offset in range(100)
-    )
+    anchors = tuple(_START + timedelta(days=anchor_start_index + offset) for offset in range(100))
     if outcome_start_index is None:
         outcomes_sessions = tuple(anchor + timedelta(days=5) for anchor in anchors)
     else:
@@ -229,12 +226,12 @@ def test_forward_evaluation_skips_leading_fold_and_uses_prior_evidence_only() ->
     assert first.assessment_selected_precision == pytest.approx(1.0)
     assert result.pooled_selected_precision == pytest.approx(1.0)
     assert result.pooled_calibrated_metrics.row_count == 200
-    assert {item.regime for item in result.regimes}.union(
-        result.omitted_small_regimes
-    ) == set(__import__(
-        "spy_market_agent.research.scenario_analogues",
-        fromlist=["SPYRegime"],
-    ).SPYRegime)
+    assert {item.regime for item in result.regimes}.union(result.omitted_small_regimes) == set(
+        __import__(
+            "spy_market_agent.research.scenario_analogues",
+            fromlist=["SPYRegime"],
+        ).SPYRegime
+    )
 
 
 def test_no_qualifying_prior_policy_abstains_on_entire_current_fold() -> None:
@@ -302,8 +299,9 @@ def test_unobservable_prior_outcomes_are_excluded_from_next_fold_history() -> No
 
     assert result.folds[0].source_fold_index == 3
     assert result.folds[0].history_row_count == 200
-    assert result.folds[0].history_last_outcome_session <= (
-        result.folds[0].assessment_anchor_sessions[0]
+    assert (
+        result.folds[0].history_last_outcome_session
+        <= (result.folds[0].assessment_anchor_sessions[0])
     )
 
 
