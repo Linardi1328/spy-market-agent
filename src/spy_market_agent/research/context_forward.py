@@ -68,12 +68,7 @@ class ForwardSelectivityEvidence:
         if self.status == ForwardSelectivityStatus.NO_QUALIFYING_POLICY:
             if self.policy is not None:
                 raise ValueError("no-qualifying status must not expose a policy.")
-            if any(
-                value is not None
-                for value in (
-                    self.precision,
-                )
-            ):
+            if any(value is not None for value in (self.precision,)):
                 raise ValueError("no-qualifying status must not expose selected precision.")
             if self.selected_rows != 0 or self.correct_selected_rows != 0 or self.coverage != 0.0:
                 raise ValueError("no-qualifying status must encode an all-abstain policy.")
@@ -151,10 +146,7 @@ class ForwardContextFoldEvaluation:
                 raise ValueError(f"{field_name} must lie in [0, 1].")
             object.__setattr__(self, field_name, value)
         if not (
-            0
-            <= self.assessment_correct_selected_rows
-            <= self.assessment_selected_rows
-            <= row_count
+            0 <= self.assessment_correct_selected_rows <= self.assessment_selected_rows <= row_count
         ):
             raise ValueError("assessment selected counts are inconsistent.")
         expected_coverage = self.assessment_selected_rows / row_count
@@ -365,9 +357,7 @@ def evaluate_forward_contextual_calibration_robustness(
     pooled_outcomes = tuple(
         outcome for fold in forward_folds for outcome in fold.assessment_outcomes
     )
-    pooled_rows = tuple(
-        row for fold in forward_folds for row in fold.calibrated_probability_rows
-    )
+    pooled_rows = tuple(row for fold in forward_folds for row in fold.calibrated_probability_rows)
     pooled_selected = sum(fold.assessment_selected_rows for fold in forward_folds)
     pooled_correct = sum(fold.assessment_correct_selected_rows for fold in forward_folds)
     regimes, omitted = _evaluate_regimes(feature_set, tuple(forward_folds))
@@ -517,9 +507,7 @@ def _evaluate_regimes(
     feature_set: FeatureSet,
     folds: tuple[ForwardContextFoldEvaluation, ...],
 ) -> tuple[tuple[ContextRegimeRobustness, ...], tuple[SPYRegime, ...]]:
-    grouped_outcomes: dict[SPYRegime, list[ScenarioOutcome]] = {
-        regime: [] for regime in SPYRegime
-    }
+    grouped_outcomes: dict[SPYRegime, list[ScenarioOutcome]] = {regime: [] for regime in SPYRegime}
     grouped_rows: dict[SPYRegime, list[tuple[ScenarioProbability, ...]]] = {
         regime: [] for regime in SPYRegime
     }
@@ -590,8 +578,6 @@ def _validate_probability_row(row: tuple[ScenarioProbability, ...]) -> None:
 
 
 def _require_sha256(value: str, *, field_name: str) -> None:
-    is_valid = len(value) == 64 and all(
-        character in "0123456789abcdef" for character in value
-    )
+    is_valid = len(value) == 64 and all(character in "0123456789abcdef" for character in value)
     if not is_valid:
         raise ValueError(f"{field_name} must be a lowercase SHA-256 digest.")
