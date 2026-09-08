@@ -18,8 +18,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.10"
+          enable-cache: true
       - name: Install dependencies
-        run: python -m pip install -e ".[dev]"
+        run: uv sync --extra dev --locked
       - name: Node syntax checks
         shell: bash
         run: |
@@ -30,10 +35,10 @@ jobs:
           while IFS= read -r -d '' file; do bash -n "$file"; done < <(find . -path ./.git -prune -o -type f -name '*.sh' -print0)
       - name: Full regression suite
         run: |
-          python -m ruff check .
-          python -m ruff format --check .
-          python -m mypy src tests
-          python -m pytest --cov-fail-under=85
+          uv run --no-sync ruff check .
+          uv run --no-sync ruff format --check .
+          uv run --no-sync mypy src tests
+          uv run --no-sync pytest --cov-fail-under=85
       - name: Diff whitespace checks
         run: |
           git diff --check
